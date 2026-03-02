@@ -17,6 +17,9 @@ export interface ArticleRow {
   aiSummary: string | null;
   aiSummaryModel: string | null;
   aiSummarizedAt: string | null;
+  aiTranslationZhHtml: string | null;
+  aiTranslationModel: string | null;
+  aiTranslatedAt: string | null;
   summary: string | null;
   isRead: boolean;
   readAt: string | null;
@@ -70,6 +73,9 @@ export async function insertArticleIgnoreDuplicate(
         ai_summary as "aiSummary",
         ai_summary_model as "aiSummaryModel",
         ai_summarized_at as "aiSummarizedAt",
+        ai_translation_zh_html as "aiTranslationZhHtml",
+        ai_translation_model as "aiTranslationModel",
+        ai_translated_at as "aiTranslatedAt",
         summary,
         is_read as "isRead",
         read_at as "readAt",
@@ -114,6 +120,9 @@ export async function getArticleById(
         ai_summary as "aiSummary",
         ai_summary_model as "aiSummaryModel",
         ai_summarized_at as "aiSummarizedAt",
+        ai_translation_zh_html as "aiTranslationZhHtml",
+        ai_translation_model as "aiTranslationModel",
+        ai_translated_at as "aiTranslatedAt",
         summary,
         is_read as "isRead",
         read_at as "readAt",
@@ -223,6 +232,24 @@ export async function setArticleAiSummary(
       where id = $1
     `,
     [id, input.aiSummary, input.aiSummaryModel],
+  );
+}
+
+export async function setArticleAiTranslationZh(
+  pool: Pool,
+  id: string,
+  input: { aiTranslationZhHtml: string; aiTranslationModel: string },
+): Promise<void> {
+  await pool.query(
+    `
+      update articles
+      set
+        ai_translation_zh_html = $2,
+        ai_translation_model = $3,
+        ai_translated_at = now()
+      where id = $1
+    `,
+    [id, input.aiTranslationZhHtml, input.aiTranslationModel],
   );
 }
 
