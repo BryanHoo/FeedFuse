@@ -75,6 +75,7 @@ export interface ReaderSnapshotDto {
     enabled: boolean;
     fullTextOnOpenEnabled: boolean;
     aiSummaryOnOpenEnabled: boolean;
+    articleListDisplayMode: 'card' | 'list';
     categoryId: string | null;
     fetchIntervalMinutes: number;
     unreadCount: number;
@@ -150,6 +151,7 @@ export interface FeedRowDto {
   enabled: boolean;
   fullTextOnOpenEnabled: boolean;
   aiSummaryOnOpenEnabled: boolean;
+  articleListDisplayMode: 'card' | 'list';
   categoryId: string | null;
   fetchIntervalMinutes: number;
 }
@@ -164,6 +166,7 @@ export async function patchFeed(
     categoryId?: string | null;
     fullTextOnOpenEnabled?: boolean;
     aiSummaryOnOpenEnabled?: boolean;
+    articleListDisplayMode?: 'card' | 'list';
   },
 ): Promise<FeedRowDto> {
   return requestApi(`/api/feeds/${encodeURIComponent(feedId)}`, {
@@ -318,6 +321,7 @@ export function mapFeedDto(dto: ReaderSnapshotDto['feeds'][number], categories: 
     enabled: dto.enabled,
     fullTextOnOpenEnabled: dto.fullTextOnOpenEnabled,
     aiSummaryOnOpenEnabled: dto.aiSummaryOnOpenEnabled,
+    articleListDisplayMode: dto.articleListDisplayMode,
     categoryId: dto.categoryId,
     category: dto.categoryId ? categoryNameById.get(dto.categoryId) ?? null : null,
   };

@@ -240,6 +240,7 @@ describe('/api/feeds', () => {
       enabled: false,
       fullTextOnOpenEnabled: true,
       aiSummaryOnOpenEnabled: true,
+      articleListDisplayMode: 'list',
       categoryId: null,
       fetchIntervalMinutes: 30,
     });
@@ -254,6 +255,7 @@ describe('/api/feeds', () => {
           title: 'Updated',
           fullTextOnOpenEnabled: true,
           aiSummaryOnOpenEnabled: true,
+          articleListDisplayMode: 'list',
         }),
       }),
       { params: Promise.resolve({ id: feedId }) },
@@ -263,7 +265,11 @@ describe('/api/feeds', () => {
     expect(updateFeedMock).toHaveBeenCalledWith(
       pool,
       feedId,
-      expect.objectContaining({ fullTextOnOpenEnabled: true, aiSummaryOnOpenEnabled: true }),
+      expect.objectContaining({
+        fullTextOnOpenEnabled: true,
+        aiSummaryOnOpenEnabled: true,
+        articleListDisplayMode: 'list',
+      }),
     );
     expect(json.ok).toBe(true);
     expect(json.data.enabled).toBe(false);

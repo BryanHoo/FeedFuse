@@ -35,6 +35,7 @@ describe('/api/reader/snapshot', () => {
 	          enabled: true,
 	          fullTextOnOpenEnabled: false,
 	          aiSummaryOnOpenEnabled: false,
+	          articleListDisplayMode: 'card',
 	          categoryId: null,
 	          fetchIntervalMinutes: 30,
 	          unreadCount: 0,
@@ -50,6 +51,7 @@ describe('/api/reader/snapshot', () => {
     expect(json.ok).toBe(true);
     expect(json.data.categories).toBeTruthy();
     expect(json.data.feeds).toBeTruthy();
+    expect(json.data.feeds[0].articleListDisplayMode).toBe('card');
     expect(json.data.articles.items).toBeTruthy();
     expect(json.data.articles.nextCursor).toBeNull();
   });
