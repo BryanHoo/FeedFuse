@@ -282,6 +282,14 @@ export async function enqueueArticleAiSummary(
   });
 }
 
+export async function enqueueArticleAiTranslate(
+  articleId: string,
+): Promise<{ enqueued: boolean; jobId?: string; reason?: string }> {
+  return requestApi(`/api/articles/${encodeURIComponent(articleId)}/ai-translate`, {
+    method: 'POST',
+  });
+}
+
 export async function getSettings(): Promise<PersistedSettings> {
   return requestApi('/api/settings');
 }
