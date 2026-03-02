@@ -8,7 +8,12 @@ import {
   listEnabledFeedsForFetch,
   recordFeedFetchResult,
 } from '../server/repositories/feedsRepo';
-import { getArticleById, insertArticleIgnoreDuplicate, setArticleAiSummary } from '../server/repositories/articlesRepo';
+import {
+  getArticleById,
+  insertArticleIgnoreDuplicate,
+  setArticleAiSummary,
+  setArticleAiTranslationZh,
+} from '../server/repositories/articlesRepo';
 import { getAiApiKey, getAppSettings, getUiSettings } from '../server/repositories/settingsRepo';
 import { fetchFeedXml } from '../server/rss/fetchFeedXml';
 import { parseFeed } from '../server/rss/parseFeed';
@@ -16,14 +21,23 @@ import { sanitizeContent } from '../server/rss/sanitizeContent';
 import { isSafeExternalUrl } from '../server/rss/ssrfGuard';
 import { fetchFulltextAndStore } from '../server/fulltext/fetchFulltextAndStore';
 import { summarizeText } from '../server/ai/summarizeText';
+import { translateHtml } from '../server/ai/translateHtml';
 import { startBoss } from '../server/queue/boss';
-import { JOB_AI_SUMMARIZE, JOB_ARTICLE_FULLTEXT_FETCH, JOB_FEED_FETCH, JOB_REFRESH_ALL } from '../server/queue/jobs';
+import {
+  JOB_AI_SUMMARIZE,
+  JOB_AI_TRANSLATE,
+  JOB_ARTICLE_FULLTEXT_FETCH,
+  JOB_FEED_FETCH,
+  JOB_REFRESH_ALL,
+} from '../server/queue/jobs';
 import { normalizePersistedSettings } from '../features/settings/settingsSchema';
 import { buildFeedFetchJobData, selectFeedsForRefreshAll } from './refreshAll';
 import { isFeedDue } from './rssScheduler';
 
 const DEFAULT_SUMMARY_MODEL = 'gpt-4o-mini';
 const DEFAULT_SUMMARY_API_BASE_URL = 'https://api.openai.com/v1';
+const DEFAULT_TRANSLATION_MODEL = 'gpt-4o-mini';
+const DEFAULT_TRANSLATION_API_BASE_URL = 'https://api.openai.com/v1';
 const MAX_SUMMARY_SOURCE_LENGTH = 16_000;
 
 function sha256(value: string): string {
@@ -172,6 +186,7 @@ async function main() {
   await boss.createQueue(JOB_FEED_FETCH);
   await boss.createQueue(JOB_ARTICLE_FULLTEXT_FETCH);
   await boss.createQueue(JOB_AI_SUMMARIZE);
+  await boss.createQueue(JOB_AI_TRANSLATE);
 
   await boss.work(JOB_REFRESH_ALL, async (jobs) => {
     const force = jobs.some((job) => {
@@ -268,6 +283,59 @@ async function main() {
       });
 
       await setArticleAiSummary(pool, articleId, { aiSummary, aiSummaryModel: model });
+    }
+  });
+
+  await boss.work(JOB_AI_TRANSLATE, async (jobs) => {
+    const pool = getPool();
+    for (const job of jobs) {
+      const articleId =
+        typeof job.data === 'object' &&
+        job.data !== null &&
+        'articleId' in job.data &&
+        typeof (job.data as { articleId?: unknown }).articleId === 'string'
+          ? (job.data as { articleId: string }).articleId
+          : null;
+
+      if (!articleId) throw new Error('Missing articleId');
+
+      const article = await getArticleById(pool, articleId);
+      if (!article) continue;
+      if (article.aiTranslationZhHtml?.trim()) continue;
+
+      const aiApiKey = await getAiApiKey(pool);
+      if (!aiApiKey.trim()) continue;
+
+      const fullTextOnOpenEnabled = await getFeedFullTextOnOpenEnabled(pool, article.feedId);
+      if (fullTextOnOpenEnabled === true && !article.contentFullHtml && !article.contentFullError) {
+        throw new Error('Fulltext pending');
+      }
+
+      const htmlSource = article.contentFullHtml ?? article.contentHtml;
+      if (!htmlSource?.trim()) continue;
+
+      const uiSettings = await getUiSettings(pool);
+      const normalizedSettings = normalizePersistedSettings(uiSettings);
+      const model = normalizedSettings.ai.model.trim() || DEFAULT_TRANSLATION_MODEL;
+      const apiBaseUrl = normalizedSettings.ai.apiBaseUrl.trim() || DEFAULT_TRANSLATION_API_BASE_URL;
+
+      const translated = await translateHtml({
+        apiBaseUrl,
+        apiKey: aiApiKey,
+        model,
+        html: htmlSource,
+      });
+
+      const baseUrl = article.contentFullSourceUrl ?? article.link ?? null;
+      const sanitized = sanitizeContent(translated, baseUrl ? { baseUrl } : undefined);
+      if (!sanitized) {
+        throw new Error('Invalid translation: empty result after sanitize');
+      }
+
+      await setArticleAiTranslationZh(pool, articleId, {
+        aiTranslationZhHtml: sanitized,
+        aiTranslationModel: model,
+      });
     }
   });
 
