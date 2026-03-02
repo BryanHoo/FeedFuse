@@ -155,6 +155,19 @@ describe('FeedList manage', () => {
     expect(screen.getByText('保存成功')).toBeInTheDocument();
   });
 
+  it('uses same form fields as add flow and pre-fills existing values in edit flow', async () => {
+    renderWithNotifications();
+
+    fireEvent.contextMenu(screen.getByRole('button', { name: /My Feed.*2/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: '编辑' }));
+    expect(screen.getByRole('dialog', { name: '编辑 RSS 源' })).toBeInTheDocument();
+
+    expect(screen.getByLabelText('名称')).toHaveValue('My Feed');
+    expect(screen.getByLabelText('URL')).toHaveValue('https://example.com/rss.xml');
+    expect(screen.getByRole('combobox', { name: '分类' })).toHaveTextContent('未分类');
+    expect(screen.queryByRole('combobox', { name: '状态' })).not.toBeInTheDocument();
+  });
+
   it('renders feed icon from persisted icon url instead of feed url derived value', () => {
     useAppStore.setState((state) => ({
       feeds: state.feeds.map((feed) =>

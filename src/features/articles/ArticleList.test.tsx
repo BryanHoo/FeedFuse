@@ -499,6 +499,15 @@ describe('ArticleList', () => {
     expect(screen.getByRole('button', { name: 'refresh-feeds' })).toBeDisabled();
   });
 
+  it('shows selected feed title in header when viewing a specific feed', () => {
+    useAppStore.setState({ selectedView: 'feed-1' });
+
+    renderWithNotifications();
+
+    expect(screen.getByRole('heading', { level: 2, name: 'Example Feed' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 2, name: '文章' })).not.toBeInTheDocument();
+  });
+
   it('shows display mode toggle only in feed view and hides it in all/unread/starred views', () => {
     useAppStore.setState({ selectedView: 'feed-1' });
     renderWithNotifications();
