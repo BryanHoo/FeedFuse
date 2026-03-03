@@ -4,9 +4,11 @@ import { defaultPersistedSettings } from '../features/settings/settingsSchema';
 
 describe('settingsStore', () => {
   let remoteHasApiKey = false;
+  let remoteHasTranslationApiKey = false;
 
   beforeEach(() => {
     remoteHasApiKey = false;
+    remoteHasTranslationApiKey = false;
 
     useSettingsStore.setState((state) => ({
       ...state,
@@ -35,6 +37,12 @@ describe('settingsStore', () => {
               headers: { 'content-type': 'application/json' },
             });
           }
+          if (url.includes('/api/settings/translation/api-key')) {
+            return new Response(JSON.stringify({ ok: true, data: { hasApiKey: Boolean(body.apiKey) } }), {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            });
+          }
           return new Response(JSON.stringify({ ok: true, data: body }), {
             status: 200,
             headers: { 'content-type': 'application/json' },
@@ -53,6 +61,16 @@ describe('settingsStore', () => {
             status: 200,
             headers: { 'content-type': 'application/json' },
           });
+        }
+
+        if (url.includes('/api/settings/translation/api-key')) {
+          return new Response(
+            JSON.stringify({ ok: true, data: { hasApiKey: remoteHasTranslationApiKey } }),
+            {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            },
+          );
         }
 
         if (url.includes('/api/settings')) {
@@ -87,6 +105,27 @@ describe('settingsStore', () => {
     });
     expect(apiKeyCall).toBeTruthy();
     expect(apiKeyCall?.[1]?.body).toContain('sk-test');
+  });
+
+  it('saves dedicated translation apiKey when translation uses dedicated config', async () => {
+    useSettingsStore.getState().loadDraft();
+    useSettingsStore.getState().updateDraft((draft) => {
+      draft.persisted.ai.translation.useSharedAi = false;
+      draft.persisted.ai.translation.apiBaseUrl = 'https://api.openai.com/v1';
+      (draft.session.ai as typeof draft.session.ai & { translationApiKey: string }).translationApiKey =
+        'sk-translation-test';
+    });
+
+    await useSettingsStore.getState().saveDraft();
+
+    const calls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const translationApiKeyCall = calls.find(([input, init]) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      return url.includes('/api/settings/translation/api-key') && init?.method === 'PUT';
+    });
+
+    expect(translationApiKeyCall).toBeTruthy();
+    expect(translationApiKeyCall?.[1]?.body).toContain('sk-translation-test');
   });
 
   it('saves draft with rss sources without requiring per-row verification state', async () => {

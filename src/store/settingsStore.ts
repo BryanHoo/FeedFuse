@@ -3,13 +3,25 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import { normalizePersistedSettings, defaultPersistedSettings } from '../features/settings/settingsSchema';
 import { validateSettingsDraft } from '../features/settings/validateSettingsDraft';
 import type { PersistedSettings, UserSettings } from '../types';
-import { deleteAiApiKey, getAiApiKeyStatus, getSettings, putAiApiKey, putSettings } from '../lib/apiClient';
+import {
+  deleteAiApiKey,
+  deleteTranslationApiKey,
+  getAiApiKeyStatus,
+  getSettings,
+  getTranslationApiKeyStatus,
+  putAiApiKey,
+  putSettings,
+  putTranslationApiKey,
+} from '../lib/apiClient';
 
 interface SessionSettings {
   ai: {
     apiKey: string;
     hasApiKey: boolean;
     clearApiKey: boolean;
+    translationApiKey?: string;
+    hasTranslationApiKey?: boolean;
+    clearTranslationApiKey?: boolean;
   };
   rssValidation: Record<
     string,
@@ -46,6 +58,9 @@ const defaultSessionSettings: SessionSettings = {
     apiKey: '',
     hasApiKey: false,
     clearApiKey: false,
+    translationApiKey: '',
+    hasTranslationApiKey: false,
+    clearTranslationApiKey: false,
   },
   rssValidation: {},
 };
@@ -134,17 +149,25 @@ export const useSettingsStore = create<SettingsState>()(
         }
 
         try {
-          const [remoteSettingsResult, apiKeyStatusResult] = await Promise.allSettled([
+          const [remoteSettingsResult, apiKeyStatusResult, translationApiKeyStatusResult] = await Promise.allSettled([
             getSettings(),
             getAiApiKeyStatus(),
+            getTranslationApiKeyStatus(),
           ]);
 
           const remoteSettings =
             remoteSettingsResult.status === 'fulfilled' ? remoteSettingsResult.value : null;
           const hasApiKey =
-            apiKeyStatusResult.status === 'fulfilled' ? apiKeyStatusResult.value.hasApiKey : null;
+            apiKeyStatusResult.status === 'fulfilled' && typeof apiKeyStatusResult.value.hasApiKey === 'boolean'
+              ? apiKeyStatusResult.value.hasApiKey
+              : null;
+          const hasTranslationApiKey =
+            translationApiKeyStatusResult.status === 'fulfilled' &&
+            typeof translationApiKeyStatusResult.value.hasApiKey === 'boolean'
+              ? translationApiKeyStatusResult.value.hasApiKey
+              : null;
 
-          if (!remoteSettings && hasApiKey === null) {
+          if (!remoteSettings && hasApiKey === null && hasTranslationApiKey === null) {
             return;
           }
 
@@ -155,14 +178,17 @@ export const useSettingsStore = create<SettingsState>()(
                   settings: pickUserSettings(remoteSettings),
                 }
               : {}),
-            ...(hasApiKey === null
+            ...(hasApiKey === null && hasTranslationApiKey === null
               ? {}
               : {
                   sessionSettings: {
                     ...state.sessionSettings,
                     ai: {
                       ...state.sessionSettings.ai,
-                      hasApiKey,
+                      ...(hasApiKey === null ? {} : { hasApiKey }),
+                      ...(hasTranslationApiKey === null
+                        ? {}
+                        : { hasTranslationApiKey }),
                     },
                   },
                 }),
@@ -205,9 +231,13 @@ export const useSettingsStore = create<SettingsState>()(
           const savedSettings = await putSettings(nextPersistedSettings);
           const shouldClearApiKey = state.draft.session.ai.clearApiKey;
           const apiKey = state.draft.session.ai.apiKey.trim();
+          const shouldClearTranslationApiKey = state.draft.session.ai.clearTranslationApiKey ?? false;
+          const translationApiKey = (state.draft.session.ai.translationApiKey ?? '').trim();
 
           let hasApiKey = state.draft.session.ai.hasApiKey;
+          let hasTranslationApiKey = state.draft.session.ai.hasTranslationApiKey ?? false;
           let clearDraftApiKey = false;
+          let clearDraftTranslationApiKey = false;
 
           if (shouldClearApiKey) {
             const result = await deleteAiApiKey();
@@ -219,11 +249,28 @@ export const useSettingsStore = create<SettingsState>()(
             clearDraftApiKey = true;
           }
 
+          if (!nextPersistedSettings.ai.translation.useSharedAi) {
+            if (shouldClearTranslationApiKey) {
+              const result = await deleteTranslationApiKey();
+              hasTranslationApiKey = result.hasApiKey;
+              clearDraftTranslationApiKey = true;
+            } else if (translationApiKey) {
+              const result = await putTranslationApiKey({ apiKey: translationApiKey });
+              hasTranslationApiKey = result.hasApiKey;
+              clearDraftTranslationApiKey = true;
+            }
+          }
+
           const nextSessionSettings: SessionSettings = {
             ai: {
               apiKey: clearDraftApiKey ? '' : state.draft.session.ai.apiKey,
               hasApiKey,
               clearApiKey: false,
+              translationApiKey: clearDraftTranslationApiKey
+                ? ''
+                : (state.draft.session.ai.translationApiKey ?? ''),
+              hasTranslationApiKey,
+              clearTranslationApiKey: false,
             },
             rssValidation: {},
           };

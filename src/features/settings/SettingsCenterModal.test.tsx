@@ -10,7 +10,17 @@ function resetSettingsStore() {
   useSettingsStore.setState((state) => ({
     ...state,
     persistedSettings: structuredClone(defaultPersistedSettings),
-    sessionSettings: { ai: { apiKey: '', hasApiKey: false, clearApiKey: false }, rssValidation: {} },
+    sessionSettings: {
+      ai: {
+        apiKey: '',
+        hasApiKey: false,
+        clearApiKey: false,
+        translationApiKey: '',
+        hasTranslationApiKey: false,
+        clearTranslationApiKey: false,
+      },
+      rssValidation: {},
+    },
     draft: null,
     validationErrors: {},
     settings: structuredClone(defaultPersistedSettings.general),
@@ -40,6 +50,7 @@ describe('SettingsCenterModal', () => {
   beforeEach(() => {
     let remoteSettings = structuredClone(defaultPersistedSettings);
     let remoteHasApiKey = false;
+    let remoteHasTranslationApiKey = false;
     let createdCategoryCount = 0;
 
     vi.stubGlobal(
@@ -84,6 +95,36 @@ describe('SettingsCenterModal', () => {
             status: 200,
             headers: { 'content-type': 'application/json' },
           });
+        }
+
+        if (url.includes('/api/settings/translation/api-key')) {
+          if (init?.method === 'PUT') {
+            const body = typeof init.body === 'string' ? JSON.parse(init.body) : {};
+            remoteHasTranslationApiKey = Boolean(String(body.apiKey ?? '').trim());
+            return new Response(
+              JSON.stringify({ ok: true, data: { hasApiKey: remoteHasTranslationApiKey } }),
+              {
+                status: 200,
+                headers: { 'content-type': 'application/json' },
+              },
+            );
+          }
+
+          if (init?.method === 'DELETE') {
+            remoteHasTranslationApiKey = false;
+            return new Response(JSON.stringify({ ok: true, data: { hasApiKey: false } }), {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            });
+          }
+
+          return new Response(
+            JSON.stringify({ ok: true, data: { hasApiKey: remoteHasTranslationApiKey } }),
+            {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            },
+          );
         }
 
         if (!url.includes('/api/settings')) {
@@ -296,6 +337,13 @@ describe('SettingsCenterModal', () => {
         const url = typeof input === 'string' ? input : input.toString();
 
         if (url.includes('/api/settings/ai/api-key')) {
+          return new Response(JSON.stringify({ ok: true, data: { hasApiKey: false } }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+
+        if (url.includes('/api/settings/translation/api-key')) {
           return new Response(JSON.stringify({ ok: true, data: { hasApiKey: false } }), {
             status: 200,
             headers: { 'content-type': 'application/json' },
