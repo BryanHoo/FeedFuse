@@ -23,6 +23,8 @@ export default function EditFeedDialog({ open, feed, categories, onOpenChange, o
         categoryId: feed.categoryId ?? null,
         fullTextOnOpenEnabled: feed.fullTextOnOpenEnabled,
         aiSummaryOnOpenEnabled: feed.aiSummaryOnOpenEnabled,
+        titleTranslateEnabled: feed.titleTranslateEnabled,
+        bodyTranslateEnabled: feed.bodyTranslateEnabled,
       }}
       onSubmit={onSubmit}
     />

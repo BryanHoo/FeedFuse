@@ -75,6 +75,8 @@ export interface ReaderSnapshotDto {
     enabled: boolean;
     fullTextOnOpenEnabled: boolean;
     aiSummaryOnOpenEnabled: boolean;
+    titleTranslateEnabled: boolean;
+    bodyTranslateEnabled: boolean;
     articleListDisplayMode: 'card' | 'list';
     categoryId: string | null;
     fetchIntervalMinutes: number;
@@ -118,6 +120,8 @@ export async function createFeed(input: {
   categoryId: string | null;
   fullTextOnOpenEnabled?: boolean;
   aiSummaryOnOpenEnabled?: boolean;
+  titleTranslateEnabled?: boolean;
+  bodyTranslateEnabled?: boolean;
 }): Promise<
   ReaderSnapshotDto['feeds'][number] & {
     unreadCount: number;
@@ -151,6 +155,8 @@ export interface FeedRowDto {
   enabled: boolean;
   fullTextOnOpenEnabled: boolean;
   aiSummaryOnOpenEnabled: boolean;
+  titleTranslateEnabled: boolean;
+  bodyTranslateEnabled: boolean;
   articleListDisplayMode: 'card' | 'list';
   categoryId: string | null;
   fetchIntervalMinutes: number;
@@ -166,6 +172,8 @@ export async function patchFeed(
     categoryId?: string | null;
     fullTextOnOpenEnabled?: boolean;
     aiSummaryOnOpenEnabled?: boolean;
+    titleTranslateEnabled?: boolean;
+    bodyTranslateEnabled?: boolean;
     articleListDisplayMode?: 'card' | 'list';
   },
 ): Promise<FeedRowDto> {
@@ -241,6 +249,8 @@ export interface ArticleDto {
   feedId: string;
   dedupeKey: string;
   title: string;
+  titleOriginal: string;
+  titleZh: string | null;
   link: string | null;
   author: string | null;
   publishedAt: string | null;
@@ -252,6 +262,7 @@ export interface ArticleDto {
   aiSummary: string | null;
   aiSummaryModel: string | null;
   aiSummarizedAt: string | null;
+  aiTranslationBilingualHtml: string | null;
   aiTranslationZhHtml: string | null;
   aiTranslationModel: string | null;
   aiTranslatedAt: string | null;
@@ -320,6 +331,24 @@ export async function deleteAiApiKey(): Promise<{ hasApiKey: boolean }> {
   });
 }
 
+export async function putTranslationApiKey(input: { apiKey: string }): Promise<{ hasApiKey: boolean }> {
+  return requestApi('/api/settings/translation/api-key', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getTranslationApiKeyStatus(): Promise<{ hasApiKey: boolean }> {
+  return requestApi('/api/settings/translation/api-key');
+}
+
+export async function deleteTranslationApiKey(): Promise<{ hasApiKey: boolean }> {
+  return requestApi('/api/settings/translation/api-key', {
+    method: 'DELETE',
+  });
+}
+
 export function mapFeedDto(dto: ReaderSnapshotDto['feeds'][number], categories: Category[]): Feed {
   const categoryNameById = new Map(categories.map((category) => [category.id, category.name]));
   return {
@@ -332,6 +361,8 @@ export function mapFeedDto(dto: ReaderSnapshotDto['feeds'][number], categories: 
     enabled: dto.enabled,
     fullTextOnOpenEnabled: dto.fullTextOnOpenEnabled,
     aiSummaryOnOpenEnabled: dto.aiSummaryOnOpenEnabled,
+    titleTranslateEnabled: dto.titleTranslateEnabled,
+    bodyTranslateEnabled: dto.bodyTranslateEnabled,
     articleListDisplayMode: dto.articleListDisplayMode,
     categoryId: dto.categoryId,
     category: dto.categoryId ? categoryNameById.get(dto.categoryId) ?? null : null,
@@ -359,8 +390,11 @@ export function mapArticleDto(dto: ArticleDto): Article {
     id: dto.id,
     feedId: dto.feedId,
     title: dto.title,
+    titleOriginal: dto.titleOriginal,
+    titleZh: dto.titleZh ?? undefined,
     content: dto.contentFullHtml ?? dto.contentHtml ?? '',
     aiSummary: dto.aiSummary ?? undefined,
+    aiTranslationBilingualHtml: dto.aiTranslationBilingualHtml ?? undefined,
     aiTranslationZhHtml: dto.aiTranslationZhHtml ?? undefined,
     summary: dto.summary ?? '',
     author: dto.author ?? undefined,

@@ -3,7 +3,10 @@ import { getPool } from '../../../../../server/db/pool';
 import { ok, fail } from '../../../../../server/http/apiResponse';
 import { NotFoundError, ValidationError } from '../../../../../server/http/errors';
 import { getArticleById } from '../../../../../server/repositories/articlesRepo';
-import { getFeedFullTextOnOpenEnabled } from '../../../../../server/repositories/feedsRepo';
+import {
+  getFeedBodyTranslateEnabled,
+  getFeedFullTextOnOpenEnabled,
+} from '../../../../../server/repositories/feedsRepo';
 import { getAiApiKey } from '../../../../../server/repositories/settingsRepo';
 import { enqueue } from '../../../../../server/queue/queue';
 import { JOB_AI_TRANSLATE } from '../../../../../server/queue/jobs';
@@ -48,7 +51,12 @@ export async function POST(
       return ok({ enqueued: false, reason: 'missing_api_key' });
     }
 
-    if (article.aiTranslationZhHtml?.trim()) {
+    const feedBodyTranslateEnabled = await getFeedBodyTranslateEnabled(pool, article.feedId);
+    if (feedBodyTranslateEnabled !== true) {
+      return ok({ enqueued: false, reason: 'body_translate_disabled' });
+    }
+
+    if (article.aiTranslationBilingualHtml?.trim() || article.aiTranslationZhHtml?.trim()) {
       return ok({ enqueued: false, reason: 'already_translated' });
     }
 
@@ -78,4 +86,3 @@ export async function POST(
     return fail(err);
   }
 }
-

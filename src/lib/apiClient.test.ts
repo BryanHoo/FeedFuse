@@ -30,6 +30,8 @@ it('mapArticleDto prefers contentFullHtml', () => {
     feedId: 'f',
     dedupeKey: 'k',
     title: 't',
+    titleOriginal: 't',
+    titleZh: null,
     link: 'https://example.com',
     author: null,
     publishedAt: null,
@@ -38,6 +40,13 @@ it('mapArticleDto prefers contentFullHtml', () => {
     contentFullFetchedAt: null,
     contentFullError: null,
     contentFullSourceUrl: null,
+    aiSummary: null,
+    aiSummaryModel: null,
+    aiSummarizedAt: null,
+    aiTranslationBilingualHtml: null,
+    aiTranslationZhHtml: null,
+    aiTranslationModel: null,
+    aiTranslatedAt: null,
     summary: null,
     isRead: false,
     readAt: null,
@@ -53,6 +62,8 @@ it('mapArticleDto maps aiTranslationZhHtml', () => {
     feedId: 'f',
     dedupeKey: 'k',
     title: 't',
+    titleOriginal: 't',
+    titleZh: null,
     link: 'https://example.com',
     author: null,
     publishedAt: null,
@@ -64,6 +75,7 @@ it('mapArticleDto maps aiTranslationZhHtml', () => {
     aiSummary: null,
     aiSummaryModel: null,
     aiSummarizedAt: null,
+    aiTranslationBilingualHtml: null,
     aiTranslationZhHtml: '<p>你好</p>',
     aiTranslationModel: 'gpt-4o-mini',
     aiTranslatedAt: '2026-03-02T00:00:00.000Z',
@@ -75,6 +87,41 @@ it('mapArticleDto maps aiTranslationZhHtml', () => {
   });
 
   expect(mapped.aiTranslationZhHtml).toContain('你好');
+});
+
+it('mapArticleDto maps bilingual translation and title fields', () => {
+  const mapped = mapArticleDto({
+    id: 'a',
+    feedId: 'f',
+    dedupeKey: 'k',
+    title: 't',
+    titleOriginal: 'Original title',
+    titleZh: '原始标题',
+    link: 'https://example.com',
+    author: null,
+    publishedAt: null,
+    contentHtml: '<p>rss</p>',
+    contentFullHtml: null,
+    contentFullFetchedAt: null,
+    contentFullError: null,
+    contentFullSourceUrl: null,
+    aiSummary: null,
+    aiSummaryModel: null,
+    aiSummarizedAt: null,
+    aiTranslationBilingualHtml: '<div class="ff-bilingual-block">...</div>',
+    aiTranslationZhHtml: null,
+    aiTranslationModel: 'gpt-4o-mini',
+    aiTranslatedAt: '2026-03-02T00:00:00.000Z',
+    summary: null,
+    isRead: false,
+    readAt: null,
+    isStarred: false,
+    starredAt: null,
+  });
+
+  expect(mapped.titleOriginal).toBe('Original title');
+  expect(mapped.titleZh).toBe('原始标题');
+  expect(mapped.aiTranslationBilingualHtml).toContain('ff-bilingual-block');
 });
 
 describe('refreshAllFeeds', () => {

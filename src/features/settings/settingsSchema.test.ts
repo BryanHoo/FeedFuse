@@ -59,4 +59,25 @@ describe('settingsSchema normalize', () => {
     const normalized = normalizePersistedSettings({ rss: { fetchIntervalMinutes: 999 } });
     expect(normalized.rss.fetchIntervalMinutes).toBe(30);
   });
+
+  it('normalizes ai.translation defaults with shared provider enabled', () => {
+    const normalized = normalizePersistedSettings({
+      ai: {
+        model: 'gpt-4.1-mini',
+        apiBaseUrl: 'https://api.example.com/v1',
+      },
+    });
+
+    const ai = normalized.ai as unknown as {
+      translation?: {
+        useSharedAi?: boolean;
+        model?: string;
+        apiBaseUrl?: string;
+      };
+    };
+
+    expect(ai.translation?.useSharedAi).toBe(true);
+    expect(ai.translation?.model).toBe('');
+    expect(ai.translation?.apiBaseUrl).toBe('');
+  });
 });

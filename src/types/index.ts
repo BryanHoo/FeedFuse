@@ -8,6 +8,8 @@ export interface Feed {
   enabled: boolean;
   fullTextOnOpenEnabled: boolean;
   aiSummaryOnOpenEnabled: boolean;
+  titleTranslateEnabled: boolean;
+  bodyTranslateEnabled: boolean;
   articleListDisplayMode: 'card' | 'list';
   categoryId?: string | null;
   category?: string | null;
@@ -25,9 +27,12 @@ export interface Article {
   id: string;
   feedId: string;
   title: string;
+  titleOriginal?: string;
+  titleZh?: string;
   content: string;
   aiSummary?: string;
   aiTranslationZhHtml?: string;
+  aiTranslationBilingualHtml?: string;
   previewImage?: string;
   summary: string;
   author?: string;
@@ -68,6 +73,11 @@ export interface AIPersistedSettings {
   autoSummarize: boolean;
   model: string;
   apiBaseUrl: string;
+  translation: {
+    useSharedAi: boolean;
+    model: string;
+    apiBaseUrl: string;
+  };
 }
 
 export interface RssSourceSetting {

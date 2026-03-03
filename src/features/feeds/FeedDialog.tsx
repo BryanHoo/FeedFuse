@@ -31,6 +31,8 @@ export interface FeedDialogSubmitPayload {
   categoryId: string | null;
   fullTextOnOpenEnabled: boolean;
   aiSummaryOnOpenEnabled: boolean;
+  titleTranslateEnabled: boolean;
+  bodyTranslateEnabled: boolean;
 }
 
 interface FeedDialogInitialValues {
@@ -40,6 +42,8 @@ interface FeedDialogInitialValues {
   categoryId: string | null;
   fullTextOnOpenEnabled: boolean;
   aiSummaryOnOpenEnabled: boolean;
+  titleTranslateEnabled: boolean;
+  bodyTranslateEnabled: boolean;
 }
 
 interface FeedDialogProps {
@@ -163,6 +167,12 @@ export default function FeedDialog({
   const [aiSummaryOnOpenEnabledValue, setAiSummaryOnOpenEnabledValue] = useState<'enabled' | 'disabled'>(
     initialValues?.aiSummaryOnOpenEnabled ? 'enabled' : 'disabled',
   );
+  const [titleTranslateEnabledValue, setTitleTranslateEnabledValue] = useState<'enabled' | 'disabled'>(
+    initialValues?.titleTranslateEnabled ? 'enabled' : 'disabled',
+  );
+  const [bodyTranslateEnabledValue, setBodyTranslateEnabledValue] = useState<'enabled' | 'disabled'>(
+    initialValues?.bodyTranslateEnabled ? 'enabled' : 'disabled',
+  );
   const [validationState, setValidationState] = useState<ValidationState>(
     initialTrimmedUrl ? 'verified' : 'idle',
   );
@@ -207,6 +217,8 @@ export default function FeedDialog({
           categoryId: categoryId === uncategorizedValue ? null : categoryId,
           fullTextOnOpenEnabled: fullTextOnOpenEnabledValue === 'enabled',
           aiSummaryOnOpenEnabled: aiSummaryOnOpenEnabledValue === 'enabled',
+          titleTranslateEnabled: titleTranslateEnabledValue === 'enabled',
+          bodyTranslateEnabled: bodyTranslateEnabledValue === 'enabled',
         });
         notify.success(modeMeta.successMessage);
         onOpenChange(false);
@@ -389,6 +401,58 @@ export default function FeedDialog({
                   </SelectContent>
                 </Select>
                 <p className="mt-1 text-xs text-muted-foreground">开启后将自动为文章生成中文摘要</p>
+              </div>
+
+              <div className="grid gap-1.5">
+                <Label htmlFor={`${fieldIdPrefix}-title-translate-enabled`} className="text-xs">
+                  列表标题自动翻译
+                </Label>
+                <Select
+                  value={titleTranslateEnabledValue}
+                  onValueChange={(value) => {
+                    if (value === 'enabled' || value === 'disabled') {
+                      setTitleTranslateEnabledValue(value);
+                    }
+                  }}
+                >
+                  <SelectTrigger
+                    id={`${fieldIdPrefix}-title-translate-enabled`}
+                    aria-label="列表标题自动翻译"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="disabled">关闭</SelectItem>
+                    <SelectItem value="enabled">开启</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="mt-1 text-xs text-muted-foreground">开启后会自动翻译新文章标题</p>
+              </div>
+
+              <div className="grid gap-1.5">
+                <Label htmlFor={`${fieldIdPrefix}-body-translate-enabled`} className="text-xs">
+                  正文翻译
+                </Label>
+                <Select
+                  value={bodyTranslateEnabledValue}
+                  onValueChange={(value) => {
+                    if (value === 'enabled' || value === 'disabled') {
+                      setBodyTranslateEnabledValue(value);
+                    }
+                  }}
+                >
+                  <SelectTrigger
+                    id={`${fieldIdPrefix}-body-translate-enabled`}
+                    aria-label="正文翻译"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="disabled">关闭</SelectItem>
+                    <SelectItem value="enabled">开启</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="mt-1 text-xs text-muted-foreground">开启后允许生成正文双语翻译</p>
               </div>
             </div>
           </div>

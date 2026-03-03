@@ -89,6 +89,8 @@ export interface ReaderSnapshotFeed {
   enabled: boolean;
   fullTextOnOpenEnabled: boolean;
   aiSummaryOnOpenEnabled: boolean;
+  titleTranslateEnabled: boolean;
+  bodyTranslateEnabled: boolean;
   articleListDisplayMode: 'card' | 'list';
   categoryId: string | null;
   fetchIntervalMinutes: number;

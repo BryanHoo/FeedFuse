@@ -21,6 +21,8 @@ const patchBodySchema = z
     categoryId: z.string().uuid().nullable().optional(),
     fullTextOnOpenEnabled: z.boolean().optional(),
     aiSummaryOnOpenEnabled: z.boolean().optional(),
+    titleTranslateEnabled: z.boolean().optional(),
+    bodyTranslateEnabled: z.boolean().optional(),
     articleListDisplayMode: z.enum(['card', 'list']).optional(),
   })
   .refine((v) => Object.keys(v).length > 0, {

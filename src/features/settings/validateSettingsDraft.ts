@@ -71,13 +71,28 @@ function validateRss(draft: SettingsDraft, errors: Record<string, string>) {
 }
 
 function validateAi(draft: SettingsDraft, errors: Record<string, string>) {
-  const apiBaseUrl = draft.persisted.ai?.apiBaseUrl;
+  const ai = draft.persisted.ai;
+  const apiBaseUrl = ai?.apiBaseUrl;
   if (!apiBaseUrl) {
+    // continue; translation config may still need validation
+  } else if (!isValidUrl(apiBaseUrl)) {
+    errors['ai.apiBaseUrl'] = 'API base URL must be a valid URL.';
+  }
+
+  const translation = ai?.translation;
+  if (!translation || translation.useSharedAi) {
     return;
   }
 
-  if (!isValidUrl(apiBaseUrl)) {
-    errors['ai.apiBaseUrl'] = 'API base URL must be a valid URL.';
+  const translationApiBaseUrl = translation.apiBaseUrl.trim();
+  if (!translationApiBaseUrl) {
+    errors['ai.translation.apiBaseUrl'] =
+      'Translation API base URL is required when using dedicated translation settings.';
+    return;
+  }
+
+  if (!isValidUrl(translationApiBaseUrl)) {
+    errors['ai.translation.apiBaseUrl'] = 'Translation API base URL must be a valid URL.';
   }
 }
 

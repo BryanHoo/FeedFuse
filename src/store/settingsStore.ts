@@ -63,8 +63,9 @@ function cloneDeep<T>(value: T): T {
 }
 
 function createDraft(persistedSettings: PersistedSettings, sessionSettings: SessionSettings): SettingsDraft {
+  const persistedWithTranslation = ensureAiTranslationSettings(persistedSettings);
   return {
-    persisted: cloneDeep(persistedSettings),
+    persisted: persistedWithTranslation,
     session: cloneDeep(sessionSettings),
   };
 }
@@ -92,6 +93,25 @@ function extractNormalizeInput(input: unknown): unknown {
   }
 
   return input;
+}
+
+function ensureAiTranslationSettings(persistedSettings: PersistedSettings): PersistedSettings {
+  const next = cloneDeep(persistedSettings);
+  const ai = next.ai as typeof next.ai & {
+    translation?: {
+      useSharedAi?: boolean;
+      model?: string;
+      apiBaseUrl?: string;
+    };
+  };
+
+  ai.translation = {
+    useSharedAi: ai.translation?.useSharedAi ?? true,
+    model: ai.translation?.model ?? '',
+    apiBaseUrl: ai.translation?.apiBaseUrl ?? '',
+  };
+
+  return next;
 }
 
 const noopStorage = {
@@ -131,7 +151,7 @@ export const useSettingsStore = create<SettingsState>()(
           set((state) => ({
             ...(remoteSettings
               ? {
-                  persistedSettings: cloneDeep(remoteSettings),
+                  persistedSettings: ensureAiTranslationSettings(remoteSettings),
                   settings: pickUserSettings(remoteSettings),
                 }
               : {}),
@@ -179,7 +199,7 @@ export const useSettingsStore = create<SettingsState>()(
           return { ok: false };
         }
 
-        const nextPersistedSettings = cloneDeep(state.draft.persisted);
+        const nextPersistedSettings = ensureAiTranslationSettings(state.draft.persisted);
 
         try {
           const savedSettings = await putSettings(nextPersistedSettings);

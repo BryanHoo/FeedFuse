@@ -5,6 +5,12 @@ export interface ArticleRow {
   feedId: string;
   dedupeKey: string;
   title: string;
+  titleOriginal: string;
+  titleZh: string | null;
+  titleTranslationModel: string | null;
+  titleTranslationAttempts: number;
+  titleTranslationError: string | null;
+  titleTranslatedAt: string | null;
   link: string | null;
   author: string | null;
   publishedAt: string | null;
@@ -17,6 +23,7 @@ export interface ArticleRow {
   aiSummary: string | null;
   aiSummaryModel: string | null;
   aiSummarizedAt: string | null;
+  aiTranslationBilingualHtml: string | null;
   aiTranslationZhHtml: string | null;
   aiTranslationModel: string | null;
   aiTranslatedAt: string | null;
@@ -47,6 +54,7 @@ export async function insertArticleIgnoreDuplicate(
         feed_id,
         dedupe_key,
         title,
+        title_original,
         link,
         author,
         published_at,
@@ -54,13 +62,19 @@ export async function insertArticleIgnoreDuplicate(
         summary,
         preview_image_url
       )
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       on conflict (feed_id, dedupe_key) do nothing
       returning
         id,
         feed_id as "feedId",
         dedupe_key as "dedupeKey",
         title,
+        title_original as "titleOriginal",
+        title_zh as "titleZh",
+        title_translation_model as "titleTranslationModel",
+        title_translation_attempts as "titleTranslationAttempts",
+        title_translation_error as "titleTranslationError",
+        title_translated_at as "titleTranslatedAt",
         link,
         author,
         published_at as "publishedAt",
@@ -73,6 +87,7 @@ export async function insertArticleIgnoreDuplicate(
         ai_summary as "aiSummary",
         ai_summary_model as "aiSummaryModel",
         ai_summarized_at as "aiSummarizedAt",
+        ai_translation_bilingual_html as "aiTranslationBilingualHtml",
         ai_translation_zh_html as "aiTranslationZhHtml",
         ai_translation_model as "aiTranslationModel",
         ai_translated_at as "aiTranslatedAt",
@@ -85,6 +100,7 @@ export async function insertArticleIgnoreDuplicate(
     [
       input.feedId,
       input.dedupeKey,
+      input.title,
       input.title,
       input.link ?? null,
       input.author ?? null,
@@ -108,6 +124,12 @@ export async function getArticleById(
         feed_id as "feedId",
         dedupe_key as "dedupeKey",
         title,
+        title_original as "titleOriginal",
+        title_zh as "titleZh",
+        title_translation_model as "titleTranslationModel",
+        title_translation_attempts as "titleTranslationAttempts",
+        title_translation_error as "titleTranslationError",
+        title_translated_at as "titleTranslatedAt",
         link,
         author,
         published_at as "publishedAt",
@@ -120,6 +142,7 @@ export async function getArticleById(
         ai_summary as "aiSummary",
         ai_summary_model as "aiSummaryModel",
         ai_summarized_at as "aiSummarizedAt",
+        ai_translation_bilingual_html as "aiTranslationBilingualHtml",
         ai_translation_zh_html as "aiTranslationZhHtml",
         ai_translation_model as "aiTranslationModel",
         ai_translated_at as "aiTranslatedAt",
@@ -251,6 +274,62 @@ export async function setArticleAiTranslationZh(
     `,
     [id, input.aiTranslationZhHtml, input.aiTranslationModel],
   );
+}
+
+export async function setArticleAiTranslationBilingual(
+  pool: Pool,
+  id: string,
+  input: { aiTranslationBilingualHtml: string; aiTranslationModel: string },
+): Promise<void> {
+  await pool.query(
+    `
+      update articles
+      set
+        ai_translation_bilingual_html = $2,
+        ai_translation_model = $3,
+        ai_translated_at = now()
+      where id = $1
+    `,
+    [id, input.aiTranslationBilingualHtml, input.aiTranslationModel],
+  );
+}
+
+export async function setArticleTitleTranslation(
+  pool: Pool,
+  id: string,
+  input: { titleZh: string; titleTranslationModel: string },
+): Promise<void> {
+  await pool.query(
+    `
+      update articles
+      set
+        title_zh = $2,
+        title_translation_model = $3,
+        title_translated_at = now(),
+        title_translation_error = null
+      where id = $1
+    `,
+    [id, input.titleZh, input.titleTranslationModel],
+  );
+}
+
+export async function recordArticleTitleTranslationFailure(
+  pool: Pool,
+  id: string,
+  input: { error: string },
+): Promise<number> {
+  const { rows } = await pool.query<{ titleTranslationAttempts: number }>(
+    `
+      update articles
+      set
+        title_translation_attempts = coalesce(title_translation_attempts, 0) + 1,
+        title_translation_error = $2
+      where id = $1
+      returning title_translation_attempts as "titleTranslationAttempts"
+    `,
+    [id, input.error],
+  );
+  return rows[0]?.titleTranslationAttempts ?? 0;
 }
 
 export async function setArticleFulltextError(

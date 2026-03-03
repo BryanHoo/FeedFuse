@@ -52,4 +52,31 @@ describe('validateSettingsDraft', () => {
     expect(result.valid).toBe(true);
     expect(result.errors['categories.1.name']).toBeUndefined();
   });
+
+  it('validates dedicated translation apiBaseUrl when useSharedAi is false', () => {
+    const persisted = structuredClone(defaultPersistedSettings) as unknown as {
+      ai: Record<string, unknown>;
+      rss: SettingsDraft['persisted']['rss'];
+      general: SettingsDraft['persisted']['general'];
+      categories: SettingsDraft['persisted']['categories'];
+    };
+
+    persisted.ai = {
+      ...persisted.ai,
+      translation: {
+        useSharedAi: false,
+        model: 'gpt-4.1-mini',
+        apiBaseUrl: 'not-a-url',
+      },
+    };
+
+    const draft = {
+      persisted,
+      session: { ai: { apiKey: '' } },
+    } as unknown as SettingsDraft;
+
+    const result = validateSettingsDraft(draft);
+    expect(result.valid).toBe(false);
+    expect(result.errors['ai.translation.apiBaseUrl']).toBeTruthy();
+  });
 });

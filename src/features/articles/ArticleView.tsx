@@ -56,6 +56,7 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
   const feed = article ? feeds.find((item) => item.id === article.feedId) : null;
   const feedFullTextOnOpenEnabled = feed?.fullTextOnOpenEnabled ?? false;
   const feedAiSummaryOnOpenEnabled = feed?.aiSummaryOnOpenEnabled ?? false;
+  const feedBodyTranslateEnabled = feed?.bodyTranslateEnabled ?? false;
   const currentArticleId = article?.id ?? null;
   const fulltextPending = Boolean(currentArticleId && fulltextPendingArticleId === currentArticleId);
   const fulltextLoading = fulltextPending;
@@ -105,10 +106,6 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
     lastReportedTitleVisibilityRef.current = null;
     reportTitleVisibility(true);
   }, [article?.id, reportTitleVisibility]);
-
-  useEffect(() => {
-    setAiTranslationViewingArticleId(null);
-  }, [article?.id]);
 
   useEffect(() => {
     if (!article || article.isRead) {
@@ -321,7 +318,9 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
   }, [article?.aiSummary, article?.id, feedAiSummaryOnOpenEnabled, requestAiSummary]);
 
   const aiSummaryButtonDisabled = feedFullTextOnOpenEnabled && fulltextPending;
-  const aiTranslationButtonDisabled = !aiTranslationViewing && feedFullTextOnOpenEnabled && fulltextPending;
+  const aiTranslationButtonDisabled =
+    !aiTranslationViewing &&
+    (!feedBodyTranslateEnabled || (feedFullTextOnOpenEnabled && fulltextPending));
 
   function onAiSummaryButtonClick() {
     if (!article?.id) return;
@@ -336,7 +335,9 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
       return;
     }
 
-    if (article.aiTranslationZhHtml?.trim()) {
+    if (!feedBodyTranslateEnabled) return;
+
+    if (article.aiTranslationBilingualHtml?.trim() || article.aiTranslationZhHtml?.trim()) {
       setAiTranslationViewingArticleId(article.id);
       return;
     }
@@ -392,10 +393,16 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
     .filter(Boolean);
   const aiSummaryTldrText = aiSummaryLines.slice(0, 2).join(' ');
   const aiSummaryContentId = `ai-summary-${article.id}`;
+  const hasAiTranslationContent = Boolean(
+    article.aiTranslationBilingualHtml?.trim() || article.aiTranslationZhHtml?.trim(),
+  );
   const bodyHtml =
-    aiTranslationViewing && article.aiTranslationZhHtml?.trim()
-      ? article.aiTranslationZhHtml
+    aiTranslationViewing && hasAiTranslationContent
+      ? (article.aiTranslationBilingualHtml?.trim() || article.aiTranslationZhHtml?.trim() || article.content)
       : article.content;
+  const titleOriginal = article.titleOriginal?.trim() || article.title;
+  const titleZh = article.titleZh?.trim();
+  const showBilingualTitle = aiTranslationViewing && Boolean(titleZh);
 
   return (
     <div className="flex h-full flex-col bg-background text-foreground">
@@ -413,12 +420,23 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
                   href={article.link}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="group inline-flex items-center gap-2 rounded-sm underline-offset-4 transition-colors hover:text-foreground/90 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className={cn(
+                    'group rounded-sm underline-offset-4 transition-colors hover:text-foreground/90 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                    showBilingualTitle ? 'inline-flex flex-col items-start gap-1' : 'inline-flex items-center gap-2',
+                  )}
                 >
-                  <span>{article.title}</span>
+                  <span>{titleOriginal}</span>
+                  {showBilingualTitle ? (
+                    <span className="text-base font-medium text-muted-foreground">{titleZh}</span>
+                  ) : null}
                 </a>
               ) : (
-                <span>{article.title}</span>
+                <span className={showBilingualTitle ? 'inline-flex flex-col items-start gap-1' : undefined}>
+                  <span>{titleOriginal}</span>
+                  {showBilingualTitle ? (
+                    <span className="text-base font-medium text-muted-foreground">{titleZh}</span>
+                  ) : null}
+                </span>
               )}
             </h1>
 
@@ -596,7 +614,7 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
             </div>
           ) : null}
 
-          {!article.aiTranslationZhHtml && aiTranslationLoading ? (
+          {!hasAiTranslationContent && aiTranslationLoading ? (
             <div
               className="mb-4 rounded-xl border border-border/60 bg-muted/30 px-4 py-3"
               role="status"
@@ -612,13 +630,13 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
             </div>
           ) : null}
 
-          {!article.aiTranslationZhHtml && aiTranslationMissingApiKey ? (
+          {!hasAiTranslationContent && aiTranslationMissingApiKey ? (
             <div className="mb-4 rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
               请先在设置中配置 AI API Key
             </div>
           ) : null}
 
-          {!article.aiTranslationZhHtml && aiTranslationTimedOut ? (
+          {!hasAiTranslationContent && aiTranslationTimedOut ? (
             <div className="mb-4 rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
               翻译超时，请稍后重试
             </div>
