@@ -107,7 +107,7 @@ describe('ArticleView ai translate', () => {
           link: 'https://example.com/a1',
           isRead: true,
           isStarred: false,
-        } as any,
+        },
       ],
       selectedView: 'all',
       selectedArticleId: 'article-1',

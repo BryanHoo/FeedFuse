@@ -108,10 +108,6 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
   }, [article?.id, reportTitleVisibility]);
 
   useEffect(() => {
-    setAiTranslationViewingArticleId(null);
-  }, [article?.id]);
-
-  useEffect(() => {
     if (!article || article.isRead) {
       return undefined;
     }
