@@ -1,4 +1,5 @@
 import { JSDOM } from 'jsdom';
+import { createOpenAIClient } from './openaiClient';
 
 export const translatableSelectors = [
   'p',
@@ -45,22 +46,6 @@ interface TranslateSegmentsInput {
   batchSize?: number;
 }
 
-interface ChatCompletionMessage {
-  content?: unknown;
-}
-
-interface ChatCompletionChoice {
-  message?: ChatCompletionMessage;
-}
-
-interface ChatCompletionResponse {
-  choices?: ChatCompletionChoice[];
-}
-
-function normalizeBaseUrl(value: string): string {
-  return value.endsWith('/') ? value.slice(0, -1) : value;
-}
-
 function normalizeVisibleText(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
 }
@@ -74,11 +59,7 @@ function unwrapCodeFence(value: string): string {
     .trim();
 }
 
-function getMessageContent(payload: unknown): string {
-  const content = (
-    payload as Partial<ChatCompletionResponse> | null
-  )?.choices?.[0]?.message?.content;
-
+function getMessageContent(content: unknown): string {
   if (typeof content !== 'string' || !content.trim()) {
     throw new Error('Invalid bilingual translation response: missing content');
   }
@@ -130,37 +111,24 @@ function collectSegmentNodeRefs(document: Document): SegmentNodeRef[] {
 }
 
 async function translateBatch(input: TranslateBatchInput): Promise<string[]> {
-  const baseUrl = normalizeBaseUrl(input.apiBaseUrl);
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      authorization: `Bearer ${input.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: input.model,
-      temperature: 0.2,
-      messages: [
-        {
-          role: 'system',
-          content:
-            '你是翻译助手。把用户给出的字符串数组逐项翻译为简体中文，保持数组顺序和长度完全一致。只输出 JSON 字符串数组，不要输出解释。',
-        },
-        {
-          role: 'user',
-          content: JSON.stringify(input.texts),
-        },
-      ],
-    }),
+  const client = createOpenAIClient({ apiBaseUrl: input.apiBaseUrl, apiKey: input.apiKey });
+  const completion = await client.chat.completions.create({
+    model: input.model,
+    temperature: 0.2,
+    messages: [
+      {
+        role: 'system',
+        content:
+          '你是翻译助手。把用户给出的字符串数组逐项翻译为简体中文，保持数组顺序和长度完全一致。只输出 JSON 字符串数组，不要输出解释。',
+      },
+      {
+        role: 'user',
+        content: JSON.stringify(input.texts),
+      },
+    ],
   });
 
-  if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    throw new Error(`Bilingual translate API failed: ${response.status} ${detail}`.trim());
-  }
-
-  const payload = (await response.json().catch(() => null)) as unknown;
-  const content = getMessageContent(payload);
+  const content = getMessageContent(completion.choices?.[0]?.message?.content);
   return parseBatchTranslations(content, input.texts.length);
 }
 

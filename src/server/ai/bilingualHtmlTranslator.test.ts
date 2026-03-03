@@ -5,6 +5,15 @@ import {
   translateSegmentsInBatches,
 } from './bilingualHtmlTranslator';
 
+function getFetchUrl(arg: unknown): string {
+  if (typeof arg === 'string') return arg;
+  if (arg && typeof arg === 'object' && 'url' in arg) {
+    const url = (arg as { url?: unknown }).url;
+    if (typeof url === 'string') return url;
+  }
+  return '';
+}
+
 describe('bilingualHtmlTranslator', () => {
   it('extracts translatable segments and excludes code/pre text', () => {
     const segments = extractTranslatableSegments(`
@@ -60,10 +69,11 @@ describe('bilingualHtmlTranslator', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock).toHaveBeenCalledWith(
+    const urls = fetchMock.mock.calls.map((call) => getFetchUrl(call[0]));
+    expect(urls).toEqual([
       'https://api.openai.com/v1/chat/completions',
-      expect.objectContaining({ method: 'POST' }),
-    );
+      'https://api.openai.com/v1/chat/completions',
+    ]);
     expect(translated.map((item) => item.id)).toEqual(['seg-0', 'seg-1', 'seg-2']);
     expect(translated.map((item) => item.translatedText)).toEqual([
       '段落一',
