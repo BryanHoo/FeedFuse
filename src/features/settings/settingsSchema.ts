@@ -24,6 +24,11 @@ const defaultAISettings: AIPersistedSettings = {
   autoSummarize: false,
   model: '',
   apiBaseUrl: '',
+  translation: {
+    useSharedAi: true,
+    model: '',
+    apiBaseUrl: '',
+  },
 };
 
 const defaultRssSettings: RssSettings = {
@@ -83,6 +88,7 @@ function normalizeGeneralSettings(input: Record<string, unknown>): GeneralSettin
 
 function normalizeAISettings(input: Record<string, unknown>): AIPersistedSettings {
   const aiInput = isRecord(input.ai) ? input.ai : {};
+  const translationInput = isRecord(aiInput.translation) ? aiInput.translation : {};
 
   return {
     summaryEnabled: readBoolean(aiInput.summaryEnabled, defaultAISettings.summaryEnabled),
@@ -90,6 +96,17 @@ function normalizeAISettings(input: Record<string, unknown>): AIPersistedSetting
     autoSummarize: readBoolean(aiInput.autoSummarize, defaultAISettings.autoSummarize),
     model: readString(aiInput.model, defaultAISettings.model),
     apiBaseUrl: readString(aiInput.apiBaseUrl, defaultAISettings.apiBaseUrl),
+    translation: {
+      useSharedAi: readBoolean(
+        translationInput.useSharedAi,
+        defaultAISettings.translation.useSharedAi,
+      ),
+      model: readString(translationInput.model, defaultAISettings.translation.model),
+      apiBaseUrl: readString(
+        translationInput.apiBaseUrl,
+        defaultAISettings.translation.apiBaseUrl,
+      ),
+    },
   };
 }
 

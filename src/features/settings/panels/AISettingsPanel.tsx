@@ -13,6 +13,7 @@ interface AISettingsPanelProps {
 
 export default function AISettingsPanel({ draft, onChange, errors }: AISettingsPanelProps) {
   const ai = draft.persisted.ai;
+  const translation = ai.translation;
   const apiKey = draft.session.ai.apiKey;
   const hasApiKey = draft.session.ai.hasApiKey;
   const clearApiKey = draft.session.ai.clearApiKey;
@@ -63,6 +64,84 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
               <p className="mt-1.5 text-xs text-destructive">{errors['ai.apiBaseUrl']}</p>
             ) : null}
           </div>
+
+          <div className="px-4 py-3.5">
+            <p className="mb-2 text-sm font-medium text-foreground">Translation Provider</p>
+            <div className="flex gap-1">
+              <Button
+                type="button"
+                onClick={() =>
+                  onChange((nextDraft) => {
+                    nextDraft.persisted.ai.translation.useSharedAi = true;
+                  })
+                }
+                aria-pressed={translation.useSharedAi}
+                variant={translation.useSharedAi ? 'default' : 'outline'}
+                size="sm"
+                className="h-8 rounded-lg px-3"
+              >
+                复用主配置
+              </Button>
+              <Button
+                type="button"
+                onClick={() =>
+                  onChange((nextDraft) => {
+                    nextDraft.persisted.ai.translation.useSharedAi = false;
+                  })
+                }
+                aria-pressed={!translation.useSharedAi}
+                variant={!translation.useSharedAi ? 'default' : 'outline'}
+                size="sm"
+                className="h-8 rounded-lg px-3"
+              >
+                独立配置
+              </Button>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {translation.useSharedAi
+                ? '正文/标题翻译复用上方 Model、API Base URL 和主 API Key。'
+                : '正文/标题翻译将使用下方独立配置。'}
+            </p>
+          </div>
+
+          {!translation.useSharedAi ? (
+            <>
+              <div className="px-4 py-3.5">
+                <Label htmlFor="ai-translation-model" className="mb-2 block">
+                  Translation Model
+                </Label>
+                <Input
+                  id="ai-translation-model"
+                  value={translation.model}
+                  onChange={(event) =>
+                    onChange((nextDraft) => {
+                      nextDraft.persisted.ai.translation.model = event.target.value;
+                    })
+                  }
+                  placeholder="例如：gpt-4o-mini"
+                />
+              </div>
+
+              <div className="px-4 py-3.5">
+                <Label htmlFor="ai-translation-api-base-url" className="mb-2 block">
+                  Translation API Base URL
+                </Label>
+                <Input
+                  id="ai-translation-api-base-url"
+                  value={translation.apiBaseUrl}
+                  onChange={(event) =>
+                    onChange((nextDraft) => {
+                      nextDraft.persisted.ai.translation.apiBaseUrl = event.target.value;
+                    })
+                  }
+                  placeholder="https://api.openai.com/v1"
+                />
+                {errors['ai.translation.apiBaseUrl'] ? (
+                  <p className="mt-1.5 text-xs text-destructive">{errors['ai.translation.apiBaseUrl']}</p>
+                ) : null}
+              </div>
+            </>
+          ) : null}
 
           <div className="px-4 py-3.5">
             <div className="mb-2 flex items-center justify-between gap-3">

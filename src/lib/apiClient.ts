@@ -328,6 +328,24 @@ export async function deleteAiApiKey(): Promise<{ hasApiKey: boolean }> {
   });
 }
 
+export async function putTranslationApiKey(input: { apiKey: string }): Promise<{ hasApiKey: boolean }> {
+  return requestApi('/api/settings/translation/api-key', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getTranslationApiKeyStatus(): Promise<{ hasApiKey: boolean }> {
+  return requestApi('/api/settings/translation/api-key');
+}
+
+export async function deleteTranslationApiKey(): Promise<{ hasApiKey: boolean }> {
+  return requestApi('/api/settings/translation/api-key', {
+    method: 'DELETE',
+  });
+}
+
 export function mapFeedDto(dto: ReaderSnapshotDto['feeds'][number], categories: Category[]): Feed {
   const categoryNameById = new Map(categories.map((category) => [category.id, category.name]));
   return {

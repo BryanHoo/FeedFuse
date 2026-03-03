@@ -70,6 +70,11 @@ export interface AIPersistedSettings {
   autoSummarize: boolean;
   model: string;
   apiBaseUrl: string;
+  translation: {
+    useSharedAi: boolean;
+    model: string;
+    apiBaseUrl: string;
+  };
 }
 
 export interface RssSourceSetting {

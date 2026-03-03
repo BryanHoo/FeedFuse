@@ -62,6 +62,34 @@ export async function clearAiApiKey(pool: Pool): Promise<string> {
   return setAiApiKey(pool, '');
 }
 
+export async function getTranslationApiKey(pool: Pool): Promise<string> {
+  const { rows } = await pool.query<{ translationApiKey: string }>(`
+    select translation_api_key as "translationApiKey"
+    from app_settings
+    where id = 1
+  `);
+  return rows[0]?.translationApiKey ?? '';
+}
+
+export async function setTranslationApiKey(pool: Pool, apiKey: string): Promise<string> {
+  const { rows } = await pool.query<{ translationApiKey: string }>(
+    `
+      update app_settings
+      set
+        translation_api_key = $1,
+        updated_at = now()
+      where id = 1
+      returning translation_api_key as "translationApiKey"
+    `,
+    [apiKey],
+  );
+  return rows[0]?.translationApiKey ?? apiKey;
+}
+
+export async function clearTranslationApiKey(pool: Pool): Promise<string> {
+  return setTranslationApiKey(pool, '');
+}
+
 export async function getAppSettings(pool: Pool): Promise<AppSettingsRow> {
   const { rows } = await pool.query<AppSettingsRow>(`
     select
