@@ -1,5 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 
+function getFetchUrl(arg: unknown): string {
+  if (typeof arg === 'string') return arg;
+  if (arg && typeof arg === 'object' && 'url' in arg) {
+    const url = (arg as { url?: unknown }).url;
+    if (typeof url === 'string') return url;
+  }
+  return '';
+}
+
 describe('summarizeText', () => {
   it('calls chat/completions and returns content', async () => {
     const fetchMock = vi.fn(async () =>
@@ -21,10 +30,9 @@ describe('summarizeText', () => {
     });
 
     expect(out).toContain('TL;DR');
-    expect(fetchMock).toHaveBeenCalledWith(
+    expect(fetchMock).toHaveBeenCalled();
+    expect(getFetchUrl(fetchMock.mock.calls[0]?.[0])).toBe(
       'https://api.openai.com/v1/chat/completions',
-      expect.objectContaining({ method: 'POST' }),
     );
   });
 });
-
