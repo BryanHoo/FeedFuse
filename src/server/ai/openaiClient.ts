@@ -1,3 +1,4 @@
+import 'server-only';
 import OpenAI from 'openai';
 
 export function normalizeBaseUrl(value: string): string {
@@ -8,6 +9,6 @@ export function createOpenAIClient(input: { apiBaseUrl: string; apiKey: string }
   return new OpenAI({
     apiKey: input.apiKey,
     baseURL: normalizeBaseUrl(input.apiBaseUrl),
+    dangerouslyAllowBrowser: true,
   });
 }
-
