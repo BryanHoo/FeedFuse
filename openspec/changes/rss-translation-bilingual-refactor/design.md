@@ -160,3 +160,10 @@ Render `ai_translation_bilingual_html`; fallback to original content if unavaila
 3. Risk: inconsistent settings migration.
    - Mitigation: schema normalization defaults and compatibility reading path.
 
+## 8. Implementation Notes
+
+1. Task 41 commit scope diverged from initial add list: actual implementation also touched `FeedList.tsx` and `EditFeedDialog.tsx` to ensure translation toggle payload flows through add/edit paths.
+2. Task 46 commit scope diverged from initial add list: actual implementation also included `appStore.ts` and `apiClient.test.ts` to align bilingual translation polling signal and DTO mapping coverage.
+3. Task 48 lint required one follow-up fix pass after the first run:
+   - removed `no-explicit-any` usage in `ArticleView.aiTranslate.test.tsx`
+   - removed effect-time synchronous `setState` in `ArticleView.tsx` (`react-hooks/set-state-in-effect`)
