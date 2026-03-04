@@ -903,6 +903,11 @@ describe('/api/articles', () => {
         retryLimit: 0,
       }),
     );
+    expect(upsertTaskQueuedMock).toHaveBeenCalledWith(pool, {
+      articleId,
+      type: 'ai_translate',
+      jobId: 'job-id-1',
+    });
   });
 
   it('POST /:id/ai-translate returns already_enqueued when enqueue rejected', async () => {
