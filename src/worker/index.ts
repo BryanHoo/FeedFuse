@@ -47,6 +47,7 @@ import {
 import { normalizePersistedSettings } from '../features/settings/settingsSchema';
 import { buildFeedFetchJobData, selectFeedsForRefreshAll } from './refreshAll';
 import { isFeedDue } from './rssScheduler';
+import { runArticleTaskWithStatus } from './articleTaskStatus';
 
 const DEFAULT_SUMMARY_MODEL = 'gpt-4o-mini';
 const DEFAULT_SUMMARY_API_BASE_URL = 'https://api.openai.com/v1';
@@ -264,7 +265,26 @@ async function main() {
           : null;
 
       if (!articleId) throw new Error('Missing articleId');
-      await fetchFulltextAndStore(pool, articleId);
+
+      const jobId =
+        typeof (job as { id?: unknown }).id === 'string' ||
+        typeof (job as { id?: unknown }).id === 'number'
+          ? String((job as { id: string | number }).id)
+          : null;
+
+      await runArticleTaskWithStatus({
+        pool,
+        articleId,
+        type: 'fulltext',
+        jobId,
+        fn: async () => {
+          await fetchFulltextAndStore(pool, articleId);
+          const after = await getArticleById(pool, articleId);
+          if (after?.contentFullError) {
+            throw new Error(after.contentFullError);
+          }
+        },
+      });
     }
   });
 
@@ -281,38 +301,56 @@ async function main() {
 
       if (!articleId) throw new Error('Missing articleId');
 
-      const article = await getArticleById(pool, articleId);
-      if (!article) continue;
-      if (article.aiSummary?.trim()) continue;
+      const jobId =
+        typeof (job as { id?: unknown }).id === 'string' ||
+        typeof (job as { id?: unknown }).id === 'number'
+          ? String((job as { id: string | number }).id)
+          : null;
 
-      const aiApiKey = await getAiApiKey(pool);
-      if (!aiApiKey.trim()) continue;
+      await runArticleTaskWithStatus({
+        pool,
+        articleId,
+        type: 'ai_summary',
+        jobId,
+        fn: async () => {
+          const article = await getArticleById(pool, articleId);
+          if (!article) return;
+          if (article.aiSummary?.trim()) return;
 
-      const fullTextOnOpenEnabled = await getFeedFullTextOnOpenEnabled(pool, article.feedId);
-      if (fullTextOnOpenEnabled === true && !article.contentFullHtml && !article.contentFullError) {
-        throw new Error('Fulltext pending');
-      }
+          const aiApiKey = await getAiApiKey(pool);
+          if (!aiApiKey.trim()) throw new Error('Missing AI API key');
 
-      const sourceText = pickSummarySourceText({
-        contentFullHtml: article.contentFullHtml,
-        contentHtml: article.contentHtml,
-        summary: article.summary,
+          const fullTextOnOpenEnabled = await getFeedFullTextOnOpenEnabled(pool, article.feedId);
+          if (
+            fullTextOnOpenEnabled === true &&
+            !article.contentFullHtml &&
+            !article.contentFullError
+          ) {
+            throw new Error('Fulltext pending');
+          }
+
+          const sourceText = pickSummarySourceText({
+            contentFullHtml: article.contentFullHtml,
+            contentHtml: article.contentHtml,
+            summary: article.summary,
+          });
+          if (!sourceText) throw new Error('Missing article content');
+
+          const uiSettings = await getUiSettings(pool);
+          const normalizedSettings = normalizePersistedSettings(uiSettings);
+          const model = normalizedSettings.ai.model.trim() || DEFAULT_SUMMARY_MODEL;
+          const apiBaseUrl = normalizedSettings.ai.apiBaseUrl.trim() || DEFAULT_SUMMARY_API_BASE_URL;
+
+          const aiSummary = await summarizeText({
+            apiBaseUrl,
+            apiKey: aiApiKey,
+            model,
+            text: sourceText,
+          });
+
+          await setArticleAiSummary(pool, articleId, { aiSummary, aiSummaryModel: model });
+        },
       });
-      if (!sourceText) continue;
-
-      const uiSettings = await getUiSettings(pool);
-      const normalizedSettings = normalizePersistedSettings(uiSettings);
-      const model = normalizedSettings.ai.model.trim() || DEFAULT_SUMMARY_MODEL;
-      const apiBaseUrl = normalizedSettings.ai.apiBaseUrl.trim() || DEFAULT_SUMMARY_API_BASE_URL;
-
-      const aiSummary = await summarizeText({
-        apiBaseUrl,
-        apiKey: aiApiKey,
-        model,
-        text: sourceText,
-      });
-
-      await setArticleAiSummary(pool, articleId, { aiSummary, aiSummaryModel: model });
     }
   });
 
@@ -329,54 +367,72 @@ async function main() {
 
       if (!articleId) throw new Error('Missing articleId');
 
-      const article = await getArticleById(pool, articleId);
-      if (!article) continue;
-      if (article.aiTranslationBilingualHtml?.trim() || article.aiTranslationZhHtml?.trim()) {
-        continue;
-      }
+      const jobId =
+        typeof (job as { id?: unknown }).id === 'string' ||
+        typeof (job as { id?: unknown }).id === 'number'
+          ? String((job as { id: string | number }).id)
+          : null;
 
-      const fullTextOnOpenEnabled = await getFeedFullTextOnOpenEnabled(pool, article.feedId);
-      if (fullTextOnOpenEnabled === true && !article.contentFullHtml && !article.contentFullError) {
-        throw new Error('Fulltext pending');
-      }
+      await runArticleTaskWithStatus({
+        pool,
+        articleId,
+        type: 'ai_translate',
+        jobId,
+        fn: async () => {
+          const article = await getArticleById(pool, articleId);
+          if (!article) return;
+          if (article.aiTranslationBilingualHtml?.trim() || article.aiTranslationZhHtml?.trim()) {
+            return;
+          }
 
-      const htmlSource = article.contentFullHtml ?? article.contentHtml;
-      if (!htmlSource?.trim()) continue;
+          const fullTextOnOpenEnabled = await getFeedFullTextOnOpenEnabled(pool, article.feedId);
+          if (
+            fullTextOnOpenEnabled === true &&
+            !article.contentFullHtml &&
+            !article.contentFullError
+          ) {
+            throw new Error('Fulltext pending');
+          }
 
-      const baseUrl = article.contentFullSourceUrl ?? article.link ?? null;
-      const sanitizedSource = sanitizeContent(htmlSource, baseUrl ? { baseUrl } : undefined);
-      if (!sanitizedSource?.trim()) continue;
+          const htmlSource = article.contentFullHtml ?? article.contentHtml;
+          if (!htmlSource?.trim()) throw new Error('Missing article content');
 
-      const uiSettings = await getUiSettings(pool);
-      const normalizedSettings = normalizePersistedSettings(uiSettings);
-      const aiApiKey = await getAiApiKey(pool);
-      const translationApiKey = await getTranslationApiKey(pool);
-      const resolved = resolveTranslationConfig({
-        settings: normalizedSettings,
-        aiApiKey,
-        translationApiKey,
-      });
-      const model = resolved.model || DEFAULT_TRANSLATION_MODEL;
-      const apiBaseUrl = resolved.apiBaseUrl || DEFAULT_TRANSLATION_API_BASE_URL;
-      const apiKey = resolved.apiKey.trim();
-      if (!apiKey) continue;
+          const baseUrl = article.contentFullSourceUrl ?? article.link ?? null;
+          const sanitizedSource = sanitizeContent(htmlSource, baseUrl ? { baseUrl } : undefined);
+          if (!sanitizedSource?.trim()) throw new Error('Missing article content');
 
-      const segments = extractTranslatableSegments(sanitizedSource);
-      const translatedSegments = await translateSegmentsInBatches({
-        apiBaseUrl,
-        apiKey,
-        model,
-        segments,
-      });
+          const uiSettings = await getUiSettings(pool);
+          const normalizedSettings = normalizePersistedSettings(uiSettings);
+          const aiApiKey = await getAiApiKey(pool);
+          const translationApiKey = await getTranslationApiKey(pool);
+          const resolved = resolveTranslationConfig({
+            settings: normalizedSettings,
+            aiApiKey,
+            translationApiKey,
+          });
+          const model = resolved.model || DEFAULT_TRANSLATION_MODEL;
+          const apiBaseUrl = resolved.apiBaseUrl || DEFAULT_TRANSLATION_API_BASE_URL;
+          const apiKey = resolved.apiKey.trim();
+          if (!apiKey) throw new Error('Missing translation API key');
 
-      const bilingualHtml = reconstructBilingualHtml(sanitizedSource, translatedSegments);
-      if (!bilingualHtml.trim()) {
-        throw new Error('Invalid translation: empty result after reconstruction');
-      }
+          const segments = extractTranslatableSegments(sanitizedSource);
+          const translatedSegments = await translateSegmentsInBatches({
+            apiBaseUrl,
+            apiKey,
+            model,
+            segments,
+          });
 
-      await setArticleAiTranslationBilingual(pool, articleId, {
-        aiTranslationBilingualHtml: bilingualHtml,
-        aiTranslationModel: model,
+          const bilingualHtml = reconstructBilingualHtml(sanitizedSource, translatedSegments);
+          if (!bilingualHtml.trim()) {
+            throw new Error('Invalid translation: empty result after reconstruction');
+          }
+
+          await setArticleAiTranslationBilingual(pool, articleId, {
+            aiTranslationBilingualHtml: bilingualHtml,
+            aiTranslationModel: model,
+          });
+        },
       });
     }
   });
