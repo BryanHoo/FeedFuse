@@ -1,13 +1,10 @@
+import type { PgBoss } from 'pg-boss';
 import { getWorkerOptions } from '../server/queue/contracts';
 
+type BossWorkerRegistrationSource = Pick<PgBoss, 'work'>;
+
 export async function registerWorkers(
-  boss: {
-    work: (
-      name: string,
-      options: unknown,
-      handler: (jobs: unknown[]) => Promise<void>,
-    ) => Promise<string>;
-  },
+  boss: BossWorkerRegistrationSource,
   handlers: Record<string, (jobs: unknown[]) => Promise<void>>,
 ) {
   for (const [name, handler] of Object.entries(handlers)) {

@@ -1,3 +1,4 @@
+import type { PgBoss } from 'pg-boss';
 import { describe, expect, it, vi } from 'vitest';
 import { registerWorkers } from './workerRegistry';
 
@@ -8,13 +9,7 @@ describe('registerWorkers', () => {
     await registerWorkers(
       {
         work,
-      } as unknown as {
-        work: (
-          name: string,
-          options: unknown,
-          handler: (jobs: unknown[]) => Promise<void>,
-        ) => Promise<string>;
-      },
+      } as unknown as Pick<PgBoss, 'work'>,
       {
         'article.fetch_fulltext': async () => undefined,
       },

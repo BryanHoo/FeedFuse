@@ -1,6 +1,9 @@
-export function attachBossObservers(boss: {
-  on: (event: string, cb: (...args: unknown[]) => void) => void;
-}) {
+import type { PgBoss } from 'pg-boss';
+
+type BossEventSource = Pick<PgBoss, 'on'>;
+type BossQueueStatsSource = Pick<PgBoss, 'getQueueStats'>;
+
+export function attachBossObservers(boss: BossEventSource) {
   boss.on('error', (err) => {
     console.error('[pgboss.error]', err);
   });
@@ -16,7 +19,7 @@ export function attachBossObservers(boss: {
 }
 
 export async function sampleQueueStats(
-  boss: { getQueueStats: (name: string) => Promise<unknown> },
+  boss: BossQueueStatsSource,
   names: string[],
 ) {
   await Promise.all(

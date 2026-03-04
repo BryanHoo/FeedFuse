@@ -1,3 +1,4 @@
+import type { PgBoss } from 'pg-boss';
 import { describe, expect, it, vi } from 'vitest';
 import { bootstrapQueues } from './bootstrap';
 
@@ -7,7 +8,7 @@ describe('bootstrapQueues', () => {
 
     await bootstrapQueues({
       createQueue,
-    } as unknown as { createQueue: (name: string, options?: unknown) => Promise<void> });
+    } as unknown as Pick<PgBoss, 'createQueue'>);
 
     expect(createQueue).toHaveBeenCalledWith('article.fetch_fulltext', expect.any(Object));
     expect(createQueue).toHaveBeenCalledWith('dlq.article.fulltext', expect.any(Object));
