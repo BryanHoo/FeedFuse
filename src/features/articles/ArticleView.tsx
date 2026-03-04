@@ -4,7 +4,6 @@ import { useAppStore } from '../../store/appStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import {
   enqueueArticleAiSummary,
-  enqueueArticleAiTranslate,
   enqueueArticleFulltext,
   getArticleTasks,
   type ArticleTasksDto,
@@ -13,6 +12,7 @@ import { pollWithBackoff } from '../../lib/polling';
 import { formatRelativeTime } from '../../utils/date';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useImmersiveTranslation } from './useImmersiveTranslation';
 
 const FLOATING_TITLE_SCROLL_THRESHOLD_PX = 96;
 
@@ -41,20 +41,6 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
   const [aiSummaryExpandedArticleId, setAiSummaryExpandedArticleId] = useState<string | null>(
     null,
   );
-  const [aiTranslationLoadingArticleId, setAiTranslationLoadingArticleId] = useState<string | null>(
-    null,
-  );
-  const [aiTranslationMissingApiKeyArticleId, setAiTranslationMissingApiKeyArticleId] = useState<
-    string | null
-  >(null);
-  const [aiTranslationTimedOutArticleId, setAiTranslationTimedOutArticleId] = useState<
-    string | null
-  >(null);
-  const [aiTranslationWaitingFulltextArticleId, setAiTranslationWaitingFulltextArticleId] =
-    useState<string | null>(null);
-  const [aiTranslationViewingArticleId, setAiTranslationViewingArticleId] = useState<string | null>(
-    null,
-  );
   const lastReportedTitleVisibilityRef = useRef<boolean | null>(null);
 
   const article = articles.find((item) => item.id === selectedArticleId);
@@ -63,6 +49,7 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
   const feedAiSummaryOnOpenEnabled = feed?.aiSummaryOnOpenEnabled ?? false;
   const feedBodyTranslateEnabled = feed?.bodyTranslateEnabled ?? false;
   const currentArticleId = article?.id ?? null;
+  const immersiveTranslation = useImmersiveTranslation({ articleId: currentArticleId });
   const fulltextStatus = tasks?.fulltext.status ?? 'idle';
   const fulltextPending = Boolean(
     currentArticleId && (fulltextStatus === 'queued' || fulltextStatus === 'running'),
@@ -80,21 +67,11 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
   const aiSummaryExpanded = Boolean(
     currentArticleId && aiSummaryExpandedArticleId === currentArticleId,
   );
-  const aiTranslationLoading = Boolean(
-    currentArticleId && aiTranslationLoadingArticleId === currentArticleId,
-  );
-  const aiTranslationMissingApiKey = Boolean(
-    currentArticleId && aiTranslationMissingApiKeyArticleId === currentArticleId,
-  );
-  const aiTranslationTimedOut = Boolean(
-    currentArticleId && aiTranslationTimedOutArticleId === currentArticleId,
-  );
-  const aiTranslationWaitingFulltext = Boolean(
-    currentArticleId && aiTranslationWaitingFulltextArticleId === currentArticleId,
-  );
-  const aiTranslationViewing = Boolean(
-    currentArticleId && aiTranslationViewingArticleId === currentArticleId,
-  );
+  const aiTranslationLoading = immersiveTranslation.loading;
+  const aiTranslationMissingApiKey = immersiveTranslation.missingApiKey;
+  const aiTranslationTimedOut = immersiveTranslation.timedOut;
+  const aiTranslationWaitingFulltext = immersiveTranslation.waitingFulltext;
+  const aiTranslationViewing = immersiveTranslation.viewing;
 
   const reportTitleVisibility = useCallback(
     (isVisible: boolean) => {
@@ -279,97 +256,6 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
     [refreshArticle],
   );
 
-  const requestAiTranslation = useCallback(
-    async (
-      articleId: string,
-      input?: {
-        signal?: AbortSignal;
-      },
-    ) => {
-      const signal = input?.signal;
-      const isCancelled = () => Boolean(signal?.aborted);
-
-      try {
-        const enqueueResult = await enqueueArticleAiTranslate(articleId);
-        if (isCancelled()) return;
-        setAiTranslationMissingApiKeyArticleId((current) =>
-          current === articleId ? null : current,
-        );
-        setAiTranslationTimedOutArticleId((current) => (current === articleId ? null : current));
-        setAiTranslationWaitingFulltextArticleId((current) =>
-          current === articleId ? null : current,
-        );
-
-        if (enqueueResult.reason === 'missing_api_key') {
-          setAiTranslationLoadingArticleId((current) => (current === articleId ? null : current));
-          setAiTranslationMissingApiKeyArticleId(articleId);
-          return;
-        }
-
-        if (enqueueResult.reason === 'fulltext_pending') {
-          setAiTranslationLoadingArticleId((current) => (current === articleId ? null : current));
-          setAiTranslationWaitingFulltextArticleId(articleId);
-          return;
-        }
-
-        if (enqueueResult.reason === 'already_translated') {
-          const refreshed = await refreshArticle(articleId);
-          if (isCancelled()) return;
-          if (refreshed.hasAiTranslation) {
-            setAiTranslationLoadingArticleId((current) => (current === articleId ? null : current));
-            setAiTranslationViewingArticleId(articleId);
-            return;
-          }
-          return;
-        }
-
-        if (enqueueResult.enqueued || enqueueResult.reason === 'already_enqueued') {
-          setAiTranslationLoadingArticleId(articleId);
-
-          const polled = await pollWithBackoff({
-            fn: () => getArticleTasks(articleId),
-            stop: (value) => {
-              const status = value.ai_translate.status;
-              return status === 'succeeded' || status === 'failed';
-            },
-            onValue: (value) => {
-              if (!isCancelled()) setTasks(value);
-            },
-            signal,
-          });
-
-          if (isCancelled()) return;
-
-          setAiTranslationLoadingArticleId((current) => (current === articleId ? null : current));
-
-          if (polled.timedOut) {
-            setAiTranslationTimedOutArticleId(articleId);
-            return;
-          }
-
-          const status = polled.value?.ai_translate.status ?? 'idle';
-          if (status === 'succeeded') {
-            const refreshed = await refreshArticle(articleId);
-            if (isCancelled()) return;
-            if (refreshed.hasAiTranslation) {
-              setAiTranslationViewingArticleId(articleId);
-            }
-          }
-
-          return;
-        }
-
-        setAiTranslationLoadingArticleId((current) => (current === articleId ? null : current));
-      } catch (err) {
-        console.error(err);
-        if (!isCancelled()) {
-          setAiTranslationLoadingArticleId((current) => (current === articleId ? null : current));
-        }
-      }
-    },
-    [refreshArticle],
-  );
-
   useEffect(() => {
     const articleId = article?.id ?? null;
     if (!articleId) return;
@@ -401,18 +287,23 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
     if (!article?.id) return;
 
     if (aiTranslationViewing) {
-      setAiTranslationViewingArticleId((current) => (current === article.id ? null : current));
+      immersiveTranslation.setViewing(false);
       return;
     }
 
     if (!feedBodyTranslateEnabled) return;
 
-    if (article.aiTranslationBilingualHtml?.trim() || article.aiTranslationZhHtml?.trim()) {
-      setAiTranslationViewingArticleId(article.id);
+    if (immersiveTranslation.segments.length > 0 || immersiveTranslation.session) {
+      immersiveTranslation.setViewing(true);
       return;
     }
 
-    void requestAiTranslation(article.id);
+    if (article.aiTranslationBilingualHtml?.trim() || article.aiTranslationZhHtml?.trim()) {
+      immersiveTranslation.setViewing(true);
+      return;
+    }
+
+    void immersiveTranslation.requestTranslation();
   }
 
   const toggleAiSummaryExpanded = useCallback(() => {
@@ -463,11 +354,14 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
     .filter(Boolean);
   const aiSummaryTldrText = aiSummaryLines.slice(0, 2).join(' ');
   const aiSummaryContentId = `ai-summary-${article.id}`;
-  const hasAiTranslationContent = Boolean(
+  const hasLegacyAiTranslationContent = Boolean(
     article.aiTranslationBilingualHtml?.trim() || article.aiTranslationZhHtml?.trim(),
   );
+  const hasImmersiveSegments = immersiveTranslation.segments.length > 0;
+  const showImmersiveTranslation = aiTranslationViewing && hasImmersiveSegments;
+  const hasAiTranslationContent = hasLegacyAiTranslationContent || hasImmersiveSegments;
   const bodyHtml =
-    aiTranslationViewing && hasAiTranslationContent
+    aiTranslationViewing && hasLegacyAiTranslationContent
       ? (article.aiTranslationBilingualHtml?.trim() || article.aiTranslationZhHtml?.trim() || article.content)
       : article.content;
   const titleOriginal = article.titleOriginal?.trim() || article.title;
@@ -754,15 +648,58 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
             </div>
           ) : null}
 
-          <div
-            className={cn(
-              'prose max-w-none dark:prose-invert',
-              fontSizeClass,
-              lineHeightClass,
-              fontFamilyClass,
-            )}
-            dangerouslySetInnerHTML={{ __html: bodyHtml }}
-          />
+          {showImmersiveTranslation ? (
+            <div
+              className={cn('space-y-4', fontSizeClass, lineHeightClass, fontFamilyClass)}
+              data-testid="immersive-translation"
+            >
+              {immersiveTranslation.segments.map((segment) => (
+                <div
+                  key={`${article.id}-immersive-segment-${segment.segmentIndex}`}
+                  className="ff-bilingual-block rounded-lg border border-border/60 bg-muted/20 px-4 py-3"
+                  data-segment-index={segment.segmentIndex}
+                >
+                  <p className="ff-original text-foreground">{segment.sourceText}</p>
+
+                  {segment.status === 'succeeded' ? (
+                    <p className="ff-translation mt-2 text-foreground/90">
+                      {segment.translatedText}
+                    </p>
+                  ) : null}
+
+                  {segment.status === 'running' || segment.status === 'pending' ? (
+                    <p className="ff-translation mt-2 text-sm text-muted-foreground">翻译中…</p>
+                  ) : null}
+
+                  {segment.status === 'failed' ? (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <p className="ff-translation text-sm text-muted-foreground">
+                        {segment.errorMessage || '该段翻译失败'}
+                      </p>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => void immersiveTranslation.retrySegment(segment.segmentIndex)}
+                      >
+                        重试该段
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div
+              className={cn(
+                'prose max-w-none dark:prose-invert',
+                fontSizeClass,
+                lineHeightClass,
+                fontFamilyClass,
+              )}
+              dangerouslySetInnerHTML={{ __html: bodyHtml }}
+            />
+          )}
         </div>
       </div>
     </div>

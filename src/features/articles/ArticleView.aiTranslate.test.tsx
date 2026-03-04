@@ -1,222 +1,310 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 type ApiClientModule = typeof import('../../lib/apiClient');
+
+class FakeEventSource {
+  private listeners = new Map<string, Set<(event: Event) => void>>();
+
+  close = vi.fn();
+
+  addEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+    const fn =
+      typeof listener === 'function'
+        ? (listener as (event: Event) => void)
+        : (event: Event) => listener.handleEvent(event);
+    const set = this.listeners.get(type) ?? new Set<(event: Event) => void>();
+    set.add(fn);
+    this.listeners.set(type, set);
+  }
+
+  removeEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+    const fn =
+      typeof listener === 'function'
+        ? (listener as (event: Event) => void)
+        : (event: Event) => listener.handleEvent(event);
+    const set = this.listeners.get(type);
+    if (!set) return;
+    set.delete(fn);
+    if (set.size === 0) {
+      this.listeners.delete(type);
+    }
+  }
+
+  emit(eventType: string, payload: Record<string, unknown>) {
+    const event = new MessageEvent(eventType, {
+      data: JSON.stringify(payload),
+      lastEventId: '1',
+    });
+    for (const listener of this.listeners.get(eventType) ?? []) {
+      listener(event);
+    }
+  }
+}
+
+const idleTasks = {
+  fulltext: {
+    type: 'fulltext' as const,
+    status: 'idle' as const,
+    jobId: null,
+    requestedAt: null,
+    startedAt: null,
+    finishedAt: null,
+    attempts: 0,
+    errorCode: null,
+    errorMessage: null,
+  },
+  ai_summary: {
+    type: 'ai_summary' as const,
+    status: 'idle' as const,
+    jobId: null,
+    requestedAt: null,
+    startedAt: null,
+    finishedAt: null,
+    attempts: 0,
+    errorCode: null,
+    errorMessage: null,
+  },
+  ai_translate: {
+    type: 'ai_translate' as const,
+    status: 'idle' as const,
+    jobId: null,
+    requestedAt: null,
+    startedAt: null,
+    finishedAt: null,
+    attempts: 0,
+    errorCode: null,
+    errorMessage: null,
+  },
+};
 
 vi.mock('../../lib/apiClient', async () => {
   const actual = await vi.importActual<ApiClientModule>('../../lib/apiClient');
   return {
     ...actual,
     enqueueArticleAiTranslate: vi.fn(),
+    getArticleAiTranslateSnapshot: vi.fn(),
+    createArticleAiTranslateEventSource: vi.fn(),
+    retryArticleAiTranslateSegment: vi.fn(),
     getArticleTasks: vi.fn(),
   };
 });
 
+function seedArticleViewState(input?: { bodyTranslateEnabled?: boolean; content?: string }) {
+  const bodyTranslateEnabled = input?.bodyTranslateEnabled ?? true;
+  const content = input?.content ?? '<p>A</p><p>B</p>';
+
+  return import('../../store/appStore').then(({ useAppStore }) => {
+    useAppStore.setState({
+      feeds: [
+        {
+          id: 'feed-1',
+          title: 'Feed 1',
+          url: 'https://example.com/rss.xml',
+          unreadCount: 1,
+          enabled: true,
+          fullTextOnOpenEnabled: false,
+          aiSummaryOnOpenEnabled: false,
+          titleTranslateEnabled: true,
+          bodyTranslateEnabled,
+          categoryId: null,
+          category: null,
+          articleListDisplayMode: 'card',
+        },
+      ],
+      categories: [{ id: 'cat-uncategorized', name: '未分类', expanded: true }],
+      articles: [
+        {
+          id: 'article-1',
+          feedId: 'feed-1',
+          title: 'Article 1',
+          content,
+          summary: 'summary',
+          publishedAt: new Date('2026-02-28T00:00:00.000Z').toISOString(),
+          link: 'https://example.com/a1',
+          isRead: true,
+          isStarred: false,
+        },
+      ],
+      selectedView: 'all',
+      selectedArticleId: 'article-1',
+    });
+  });
+}
+
 describe('ArticleView ai translate', () => {
-  it('ai translate failed shows persisted error', async () => {
+  let fakeEventSource: FakeEventSource;
+
+  beforeEach(async () => {
+    fakeEventSource = new FakeEventSource();
+
     const apiClient = await import('../../lib/apiClient');
+    vi.mocked(apiClient.enqueueArticleAiTranslate).mockReset();
+    vi.mocked(apiClient.getArticleAiTranslateSnapshot).mockReset();
+    vi.mocked(apiClient.createArticleAiTranslateEventSource).mockReset();
+    vi.mocked(apiClient.retryArticleAiTranslateSegment).mockReset();
+    vi.mocked(apiClient.getArticleTasks).mockReset();
+
     vi.mocked(apiClient.enqueueArticleAiTranslate).mockResolvedValue({
       enqueued: true,
       jobId: 'job-1',
+      sessionId: 'session-1',
     });
-    vi.mocked(apiClient.getArticleTasks).mockResolvedValue({
-      fulltext: { type: 'fulltext', status: 'idle', jobId: null, requestedAt: null, startedAt: null, finishedAt: null, attempts: 0, errorCode: null, errorMessage: null },
-      ai_summary: { type: 'ai_summary', status: 'idle', jobId: null, requestedAt: null, startedAt: null, finishedAt: null, attempts: 0, errorCode: null, errorMessage: null },
-      ai_translate: { type: 'ai_translate', status: 'failed', jobId: 'job-1', requestedAt: null, startedAt: null, finishedAt: null, attempts: 1, errorCode: 'ai_rate_limited', errorMessage: '请求过于频繁，请稍后重试' },
-    });
-
-    const { useAppStore } = (await import('../../store/appStore')) as typeof import('../../store/appStore');
-    useAppStore.setState({
-      feeds: [
+    vi.mocked(apiClient.getArticleAiTranslateSnapshot).mockResolvedValue({
+      session: {
+        id: 'session-1',
+        articleId: 'article-1',
+        sourceHtmlHash: 'hash-1',
+        status: 'running',
+        totalSegments: 2,
+        translatedSegments: 0,
+        failedSegments: 0,
+        startedAt: '2026-03-04T00:00:00.000Z',
+        finishedAt: null,
+        updatedAt: '2026-03-04T00:00:00.000Z',
+      },
+      segments: [
         {
-          id: 'feed-1',
-          title: 'Feed 1',
-          url: 'https://example.com/rss.xml',
-          unreadCount: 1,
-          enabled: true,
-          fullTextOnOpenEnabled: false,
-          aiSummaryOnOpenEnabled: false,
-          titleTranslateEnabled: true,
-          bodyTranslateEnabled: true,
-          categoryId: null,
-          category: null,
-          articleListDisplayMode: 'card',
+          id: 'seg-0',
+          segmentIndex: 0,
+          sourceText: 'A',
+          translatedText: null,
+          status: 'pending',
+          errorCode: null,
+          errorMessage: null,
+          updatedAt: '2026-03-04T00:00:00.000Z',
+        },
+        {
+          id: 'seg-1',
+          segmentIndex: 1,
+          sourceText: 'B',
+          translatedText: null,
+          status: 'pending',
+          errorCode: null,
+          errorMessage: null,
+          updatedAt: '2026-03-04T00:00:00.000Z',
         },
       ],
-      categories: [{ id: 'cat-uncategorized', name: '未分类', expanded: true }],
-      articles: [
-        {
-          id: 'article-1',
-          feedId: 'feed-1',
-          title: 'Article 1',
-          content: '<p>Hello</p>',
-          summary: 'hello',
-          publishedAt: new Date('2026-02-28T00:00:00.000Z').toISOString(),
-          link: 'https://example.com/a1',
-          isRead: true,
-          isStarred: false,
-        },
-      ],
-      selectedView: 'all',
-      selectedArticleId: 'article-1',
     });
+    vi.mocked(apiClient.createArticleAiTranslateEventSource).mockImplementation(
+      () => fakeEventSource as unknown as EventSource,
+    );
+    vi.mocked(apiClient.retryArticleAiTranslateSegment).mockResolvedValue({
+      enqueued: true,
+      jobId: 'job-retry-1',
+    });
+    vi.mocked(apiClient.getArticleTasks).mockResolvedValue(idleTasks);
 
-    const { default: ArticleView } = await import('./ArticleView');
-    render(<ArticleView />);
-
-    fireEvent.click(screen.getByRole('button', { name: '翻译' }));
-    expect(await screen.findByText('请求过于频繁，请稍后重试')).toBeInTheDocument();
+    await seedArticleViewState();
   });
 
-  it('toggles between original and translation when translation exists', async () => {
-    const apiClient = await import('../../lib/apiClient');
-    vi.mocked(apiClient.enqueueArticleAiTranslate).mockResolvedValue({
-      enqueued: false,
-      reason: 'already_translated',
-    });
-
-    const { useAppStore } = (await import('../../store/appStore')) as typeof import('../../store/appStore');
-    useAppStore.setState({
-      feeds: [
-        {
-          id: 'feed-1',
-          title: 'Feed 1',
-          url: 'https://example.com/rss.xml',
-          unreadCount: 1,
-          enabled: true,
-          fullTextOnOpenEnabled: false,
-          aiSummaryOnOpenEnabled: false,
-          titleTranslateEnabled: true,
-          bodyTranslateEnabled: true,
-          categoryId: null,
-          category: null,
-          articleListDisplayMode: 'card',
-        },
-      ],
-      categories: [{ id: 'cat-uncategorized', name: '未分类', expanded: true }],
-      articles: [
-        {
-          id: 'article-1',
-          feedId: 'feed-1',
-          title: 'Article 1',
-          content: '<p>Hello</p>',
-          aiTranslationZhHtml: '<p>你好</p>',
-          summary: 'hello',
-          publishedAt: new Date('2026-02-28T00:00:00.000Z').toISOString(),
-          link: 'https://example.com/a1',
-          isRead: true,
-          isStarred: false,
-        },
-      ],
-      selectedView: 'all',
-      selectedArticleId: 'article-1',
-    });
-
+  it('shows original first and appends translated paragraph below when SSE segment arrives', async () => {
     const { default: ArticleView } = await import('./ArticleView');
     render(<ArticleView />);
 
-    expect(screen.getByText('Hello')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '翻译' }));
-    expect(screen.getByText('你好')).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getByText('A')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fakeEventSource.emit('segment.succeeded', {
+        segmentIndex: 0,
+        status: 'succeeded',
+        translatedText: '甲',
+      });
+    });
+
+    expect(screen.getByText('A')).toBeInTheDocument();
+    expect(screen.getByText('甲')).toBeInTheDocument();
+  });
+
+  it('keeps stable segment order when SSE events arrive out of order', async () => {
+    const { default: ArticleView } = await import('./ArticleView');
+    const { container } = render(<ArticleView />);
+
+    fireEvent.click(screen.getByRole('button', { name: '翻译' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('A')).toBeInTheDocument();
+      expect(screen.getByText('B')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fakeEventSource.emit('segment.succeeded', {
+        segmentIndex: 1,
+        status: 'succeeded',
+        translatedText: '乙',
+      });
+      fakeEventSource.emit('segment.succeeded', {
+        segmentIndex: 0,
+        status: 'succeeded',
+        translatedText: '甲',
+      });
+    });
+
+    const originals = Array.from(
+      container.querySelectorAll('.ff-bilingual-block .ff-original'),
+    ).map((node) => node.textContent);
+    const translations = Array.from(
+      container.querySelectorAll('.ff-bilingual-block .ff-translation'),
+    ).map((node) => node.textContent);
+
+    expect(originals).toEqual(['A', 'B']);
+    expect(translations).toEqual(['甲', '乙']);
+  });
+
+  it('preserves translated segments when toggling between original and translation mode', async () => {
+    const { default: ArticleView } = await import('./ArticleView');
+    render(<ArticleView />);
+
+    fireEvent.click(screen.getByRole('button', { name: '翻译' }));
+    await waitFor(() => {
+      expect(screen.getByText('A')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fakeEventSource.emit('segment.succeeded', {
+        segmentIndex: 0,
+        status: 'succeeded',
+        translatedText: '甲',
+      });
+    });
+    expect(screen.getByText('甲')).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole('button', { name: '原文' }));
-    expect(screen.getByText('Hello')).toBeInTheDocument();
+    expect(screen.queryByText('甲')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '翻译' }));
+    expect(await screen.findByText('甲')).toBeInTheDocument();
   });
 
-  it('renders bilingual content in translation mode when bilingual html exists', async () => {
+  it('shows retry button for failed segment and triggers retry api', async () => {
     const apiClient = await import('../../lib/apiClient');
-    vi.mocked(apiClient.enqueueArticleAiTranslate).mockResolvedValue({
-      enqueued: false,
-      reason: 'already_translated',
-    });
-
-    const { useAppStore } = (await import('../../store/appStore')) as typeof import('../../store/appStore');
-    useAppStore.setState({
-      feeds: [
-        {
-          id: 'feed-1',
-          title: 'Feed 1',
-          url: 'https://example.com/rss.xml',
-          unreadCount: 1,
-          enabled: true,
-          fullTextOnOpenEnabled: false,
-          aiSummaryOnOpenEnabled: false,
-          titleTranslateEnabled: true,
-          bodyTranslateEnabled: true,
-          categoryId: null,
-          category: null,
-          articleListDisplayMode: 'card',
-        },
-      ],
-      categories: [{ id: 'cat-uncategorized', name: '未分类', expanded: true }],
-      articles: [
-        {
-          id: 'article-1',
-          feedId: 'feed-1',
-          title: 'Article 1',
-          content: '<p>Original paragraph</p>',
-          aiTranslationZhHtml: '<p>翻译后的段落</p>',
-          aiTranslationBilingualHtml:
-            '<div class="ff-bilingual-block"><p class="ff-original">Original paragraph</p><p class="ff-translation">翻译后的段落</p></div>',
-          summary: 'hello',
-          publishedAt: new Date('2026-02-28T00:00:00.000Z').toISOString(),
-          link: 'https://example.com/a1',
-          isRead: true,
-          isStarred: false,
-        },
-      ],
-      selectedView: 'all',
-      selectedArticleId: 'article-1',
-    });
-
     const { default: ArticleView } = await import('./ArticleView');
     render(<ArticleView />);
 
     fireEvent.click(screen.getByRole('button', { name: '翻译' }));
-    expect(screen.getByText('Original paragraph')).toBeInTheDocument();
-    expect(screen.getByText('翻译后的段落')).toBeInTheDocument();
-  });
-
-  it('disables translate button when feed body translation is disabled', async () => {
-    const { useAppStore } = (await import('../../store/appStore')) as typeof import('../../store/appStore');
-    useAppStore.setState({
-      feeds: [
-        {
-          id: 'feed-1',
-          title: 'Feed 1',
-          url: 'https://example.com/rss.xml',
-          unreadCount: 1,
-          enabled: true,
-          fullTextOnOpenEnabled: false,
-          aiSummaryOnOpenEnabled: false,
-          titleTranslateEnabled: true,
-          bodyTranslateEnabled: false,
-          categoryId: null,
-          category: null,
-          articleListDisplayMode: 'card',
-        },
-      ],
-      categories: [{ id: 'cat-uncategorized', name: '未分类', expanded: true }],
-      articles: [
-        {
-          id: 'article-1',
-          feedId: 'feed-1',
-          title: 'Article 1',
-          content: '<p>Hello</p>',
-          summary: 'hello',
-          publishedAt: new Date('2026-02-28T00:00:00.000Z').toISOString(),
-          link: 'https://example.com/a1',
-          isRead: true,
-          isStarred: false,
-        },
-      ],
-      selectedView: 'all',
-      selectedArticleId: 'article-1',
+    await waitFor(() => {
+      expect(screen.getByText('A')).toBeInTheDocument();
     });
 
-    const { default: ArticleView } = await import('./ArticleView');
-    render(<ArticleView />);
+    await act(async () => {
+      fakeEventSource.emit('segment.failed', {
+        segmentIndex: 0,
+        status: 'failed',
+        errorCode: 'ai_timeout',
+        errorMessage: '请求超时',
+      });
+    });
 
-    expect(screen.getByRole('button', { name: '翻译' })).toBeDisabled();
+    const retryButton = await screen.findByRole('button', { name: '重试该段' });
+    fireEvent.click(retryButton);
+
+    await waitFor(() => {
+      expect(apiClient.retryArticleAiTranslateSegment).toHaveBeenCalledWith('article-1', 0);
+    });
   });
 });
