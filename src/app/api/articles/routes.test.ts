@@ -397,6 +397,11 @@ describe('/api/articles', () => {
       { articleId },
       expect.objectContaining({ singletonKey: articleId, singletonSeconds: 600 }),
     );
+    expect(upsertTaskQueuedMock).toHaveBeenCalledWith(pool, {
+      articleId,
+      type: 'fulltext',
+      jobId: 'job-id-1',
+    });
   });
 
   it('POST /:id/fulltext returns enqueued=false when job is already enqueued', async () => {
