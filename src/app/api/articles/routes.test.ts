@@ -19,6 +19,7 @@ const listTranslationSegmentsBySessionIdMock = vi.fn();
 const upsertTranslationSegmentMock = vi.fn();
 const deleteTranslationSegmentsBySessionIdMock = vi.fn();
 const deleteTranslationEventsBySessionIdMock = vi.fn();
+const listTranslationEventsAfterMock = vi.fn();
 const extractImmersiveSegmentsMock = vi.fn();
 const hashSourceHtmlMock = vi.fn();
 
@@ -112,6 +113,7 @@ vi.mock('../../../../../server/repositories/articleTranslationRepo', () => ({
   upsertTranslationSession: (...args: unknown[]) => upsertTranslationSessionMock(...args),
   listTranslationSegmentsBySessionId: (...args: unknown[]) =>
     listTranslationSegmentsBySessionIdMock(...args),
+  listTranslationEventsAfter: (...args: unknown[]) => listTranslationEventsAfterMock(...args),
   upsertTranslationSegment: (...args: unknown[]) => upsertTranslationSegmentMock(...args),
   deleteTranslationSegmentsBySessionId: (...args: unknown[]) =>
     deleteTranslationSegmentsBySessionIdMock(...args),
@@ -124,6 +126,7 @@ vi.mock('../../../../../../../../../server/repositories/articleTranslationRepo',
   upsertTranslationSession: (...args: unknown[]) => upsertTranslationSessionMock(...args),
   listTranslationSegmentsBySessionId: (...args: unknown[]) =>
     listTranslationSegmentsBySessionIdMock(...args),
+  listTranslationEventsAfter: (...args: unknown[]) => listTranslationEventsAfterMock(...args),
   upsertTranslationSegment: (...args: unknown[]) => upsertTranslationSegmentMock(...args),
   deleteTranslationSegmentsBySessionId: (...args: unknown[]) =>
     deleteTranslationSegmentsBySessionIdMock(...args),
@@ -136,6 +139,7 @@ vi.mock('../../../../../../../../server/repositories/articleTranslationRepo', ()
   upsertTranslationSession: (...args: unknown[]) => upsertTranslationSessionMock(...args),
   listTranslationSegmentsBySessionId: (...args: unknown[]) =>
     listTranslationSegmentsBySessionIdMock(...args),
+  listTranslationEventsAfter: (...args: unknown[]) => listTranslationEventsAfterMock(...args),
   upsertTranslationSegment: (...args: unknown[]) => upsertTranslationSegmentMock(...args),
   deleteTranslationSegmentsBySessionId: (...args: unknown[]) =>
     deleteTranslationSegmentsBySessionIdMock(...args),
@@ -148,6 +152,7 @@ vi.mock('../../../server/repositories/articleTranslationRepo', () => ({
   upsertTranslationSession: (...args: unknown[]) => upsertTranslationSessionMock(...args),
   listTranslationSegmentsBySessionId: (...args: unknown[]) =>
     listTranslationSegmentsBySessionIdMock(...args),
+  listTranslationEventsAfter: (...args: unknown[]) => listTranslationEventsAfterMock(...args),
   upsertTranslationSegment: (...args: unknown[]) => upsertTranslationSegmentMock(...args),
   deleteTranslationSegmentsBySessionId: (...args: unknown[]) =>
     deleteTranslationSegmentsBySessionIdMock(...args),
@@ -185,6 +190,7 @@ describe('/api/articles', () => {
     upsertTranslationSegmentMock.mockReset();
     deleteTranslationSegmentsBySessionIdMock.mockReset();
     deleteTranslationEventsBySessionIdMock.mockReset();
+    listTranslationEventsAfterMock.mockReset();
     extractImmersiveSegmentsMock.mockReset();
     hashSourceHtmlMock.mockReset();
 
@@ -206,6 +212,7 @@ describe('/api/articles', () => {
     upsertTranslationSegmentMock.mockResolvedValue(undefined);
     deleteTranslationSegmentsBySessionIdMock.mockResolvedValue(undefined);
     deleteTranslationEventsBySessionIdMock.mockResolvedValue(undefined);
+    listTranslationEventsAfterMock.mockResolvedValue([]);
     extractImmersiveSegmentsMock.mockReturnValue([
       { segmentIndex: 0, tagName: 'p', text: 'rss', domPath: 'body[0]>p[0]' },
     ]);
@@ -1482,5 +1489,137 @@ describe('/api/articles', () => {
     expect(json.ok).toBe(true);
     expect(json.data).toEqual({ enqueued: false, reason: 'already_succeeded' });
     expect(enqueueWithResultMock).not.toHaveBeenCalled();
+  });
+
+  it('ai-translate stream + snapshot + retry APIs keep existing reason semantics', async () => {
+    const baseArticle = {
+      id: articleId,
+      feedId,
+      dedupeKey: 'guid:1',
+      title: 'Hello',
+      titleOriginal: 'Hello',
+      titleZh: null,
+      titleTranslationModel: null,
+      titleTranslationAttempts: 0,
+      titleTranslationError: null,
+      titleTranslatedAt: null,
+      link: 'https://example.com/a',
+      author: null,
+      publishedAt: null,
+      contentHtml: '<article><p>A</p></article>',
+      contentFullHtml: null,
+      contentFullFetchedAt: null,
+      contentFullError: null,
+      contentFullSourceUrl: null,
+      aiSummary: null,
+      aiSummaryModel: null,
+      aiSummarizedAt: null,
+      aiTranslationBilingualHtml: null,
+      aiTranslationZhHtml: null,
+      aiTranslationModel: null,
+      aiTranslatedAt: null,
+      summary: null,
+      isRead: false,
+      readAt: null,
+      isStarred: false,
+      starredAt: null,
+    };
+
+    const translateRoute = await import('./[id]/ai-translate/route');
+
+    getArticleByIdMock.mockResolvedValue(baseArticle);
+    getAiApiKeyMock.mockResolvedValue('');
+    getFeedBodyTranslateEnabledMock.mockResolvedValue(true);
+    let res = await translateRoute.POST(
+      new Request(`http://localhost/api/articles/${articleId}/ai-translate`),
+      { params: Promise.resolve({ id: articleId }) },
+    );
+    let json = await res.json();
+    expect(json.ok).toBe(true);
+    expect(json.data).toEqual({ enqueued: false, reason: 'missing_api_key' });
+
+    getAiApiKeyMock.mockResolvedValue('sk-test');
+    getFeedBodyTranslateEnabledMock.mockResolvedValue(false);
+    res = await translateRoute.POST(
+      new Request(`http://localhost/api/articles/${articleId}/ai-translate`),
+      { params: Promise.resolve({ id: articleId }) },
+    );
+    json = await res.json();
+    expect(json.ok).toBe(true);
+    expect(json.data).toEqual({ enqueued: false, reason: 'body_translate_disabled' });
+
+    getFeedBodyTranslateEnabledMock.mockResolvedValue(true);
+    getFeedFullTextOnOpenEnabledMock.mockResolvedValue(true);
+    getArticleByIdMock.mockResolvedValue({
+      ...baseArticle,
+      contentFullHtml: null,
+      contentFullError: null,
+    });
+    res = await translateRoute.POST(
+      new Request(`http://localhost/api/articles/${articleId}/ai-translate`),
+      { params: Promise.resolve({ id: articleId }) },
+    );
+    json = await res.json();
+    expect(json.ok).toBe(true);
+    expect(json.data).toEqual({ enqueued: false, reason: 'fulltext_pending' });
+
+    getFeedFullTextOnOpenEnabledMock.mockResolvedValue(false);
+    getTranslationSessionByArticleIdMock.mockResolvedValue(null);
+    const snapshotRes = await translateRoute.GET(
+      new Request(`http://localhost/api/articles/${articleId}/ai-translate`),
+      { params: Promise.resolve({ id: articleId }) },
+    );
+    const snapshotJson = await snapshotRes.json();
+    expect(snapshotJson.ok).toBe(true);
+    expect(snapshotJson.data).toEqual({ session: null, segments: [] });
+
+    getTranslationSessionByArticleIdMock.mockResolvedValue({
+      id: 'session-id-1',
+      articleId,
+      sourceHtmlHash: 'hash-1',
+      status: 'running',
+      totalSegments: 1,
+      translatedSegments: 1,
+      failedSegments: 0,
+      startedAt: '2026-03-04T00:00:00.000Z',
+      finishedAt: null,
+      createdAt: '2026-03-04T00:00:00.000Z',
+      updatedAt: '2026-03-04T00:00:00.000Z',
+    });
+    listTranslationSegmentsBySessionIdMock.mockResolvedValue([
+      {
+        id: 'seg-0',
+        sessionId: 'session-id-1',
+        segmentIndex: 0,
+        sourceText: 'A',
+        translatedText: '甲',
+        status: 'succeeded',
+        errorCode: null,
+        errorMessage: null,
+        startedAt: null,
+        finishedAt: null,
+        createdAt: '2026-03-04T00:00:00.000Z',
+        updatedAt: '2026-03-04T00:00:00.000Z',
+      },
+    ]);
+    const retryRoute = await import('./[id]/ai-translate/segments/[index]/retry/route');
+    const retryRes = await retryRoute.POST(
+      new Request(`http://localhost/api/articles/${articleId}/ai-translate/segments/0/retry`),
+      { params: Promise.resolve({ id: articleId, index: '0' }) },
+    );
+    const retryJson = await retryRes.json();
+    expect(retryJson.ok).toBe(true);
+    expect(retryJson.data).toEqual({ enqueued: false, reason: 'already_succeeded' });
+
+    const streamRoute = await import('./[id]/ai-translate/stream/route');
+    const abortController = new AbortController();
+    const streamRes = await streamRoute.GET(
+      new Request(`http://localhost/api/articles/${articleId}/ai-translate/stream`, {
+        signal: abortController.signal,
+      }),
+      { params: Promise.resolve({ id: articleId }) },
+    );
+    expect(streamRes.headers.get('content-type')).toContain('text/event-stream');
+    abortController.abort();
   });
 });

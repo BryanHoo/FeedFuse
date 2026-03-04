@@ -4,6 +4,7 @@
 **Status:** resolved  
 **Area:** article async tasks / worker / ArticleView  
 **Related:** branch `codex/async-tasks-refactor`
+**Follow-up:** `docs/summaries/2026-03-04-immersive-translation.md`
 
 ## Symptom
 
