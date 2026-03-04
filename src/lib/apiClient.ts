@@ -277,6 +277,31 @@ export async function getArticle(articleId: string): Promise<ArticleDto> {
   return requestApi(`/api/articles/${encodeURIComponent(articleId)}`);
 }
 
+export type ArticleTaskType = 'fulltext' | 'ai_summary' | 'ai_translate';
+export type ArticleTaskStatus = 'idle' | 'queued' | 'running' | 'succeeded' | 'failed';
+
+export interface ArticleTaskDto {
+  type: ArticleTaskType;
+  status: ArticleTaskStatus;
+  jobId: string | null;
+  requestedAt: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  attempts: number;
+  errorCode: string | null;
+  errorMessage: string | null;
+}
+
+export interface ArticleTasksDto {
+  fulltext: ArticleTaskDto;
+  ai_summary: ArticleTaskDto;
+  ai_translate: ArticleTaskDto;
+}
+
+export async function getArticleTasks(articleId: string): Promise<ArticleTasksDto> {
+  return requestApi(`/api/articles/${encodeURIComponent(articleId)}/tasks`);
+}
+
 export async function enqueueArticleFulltext(
   articleId: string,
 ): Promise<{ enqueued: boolean; jobId?: string }> {

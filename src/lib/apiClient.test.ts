@@ -164,3 +164,28 @@ it('enqueueArticleAiTranslate POSTs /api/articles/:id/ai-translate', async () =>
     expect.objectContaining({ method: 'POST' }),
   );
 });
+
+it('getArticleTasks GETs /api/articles/:id/tasks', async () => {
+  const fetchMock = vi.fn(async () => {
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        data: {
+          fulltext: { type: 'fulltext', status: 'idle', jobId: null, requestedAt: null, startedAt: null, finishedAt: null, attempts: 0, errorCode: null, errorMessage: null },
+          ai_summary: { type: 'ai_summary', status: 'idle', jobId: null, requestedAt: null, startedAt: null, finishedAt: null, attempts: 0, errorCode: null, errorMessage: null },
+          ai_translate: { type: 'ai_translate', status: 'idle', jobId: null, requestedAt: null, startedAt: null, finishedAt: null, attempts: 0, errorCode: null, errorMessage: null },
+        },
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+  });
+  vi.stubGlobal('fetch', fetchMock);
+
+  const { getArticleTasks } = await import('./apiClient');
+  await getArticleTasks('00000000-0000-0000-0000-000000000000');
+
+  expect(fetchMock).toHaveBeenCalledWith(
+    expect.stringContaining('/api/articles/00000000-0000-0000-0000-000000000000/tasks'),
+    expect.objectContaining({}),
+  );
+});
