@@ -128,6 +128,47 @@ describe('FeedList manage', () => {
           });
         }
 
+        if (url.includes('/api/articles/a-1/tasks') && method === 'GET') {
+          return jsonResponse({
+            ok: true,
+            data: {
+              fulltext: {
+                type: 'fulltext',
+                status: 'idle',
+                jobId: null,
+                requestedAt: null,
+                startedAt: null,
+                finishedAt: null,
+                attempts: 0,
+                errorCode: null,
+                errorMessage: null,
+              },
+              ai_summary: {
+                type: 'ai_summary',
+                status: 'idle',
+                jobId: null,
+                requestedAt: null,
+                startedAt: null,
+                finishedAt: null,
+                attempts: 0,
+                errorCode: null,
+                errorMessage: null,
+              },
+              ai_translate: {
+                type: 'ai_translate',
+                status: 'idle',
+                jobId: null,
+                requestedAt: null,
+                startedAt: null,
+                finishedAt: null,
+                attempts: 0,
+                errorCode: null,
+                errorMessage: null,
+              },
+            },
+          });
+        }
+
         throw new Error(`Unexpected fetch: ${method} ${url}`);
       }),
     );
@@ -323,6 +364,47 @@ describe('FeedList manage', () => {
             error: {
               code: 'validation_error',
               message: 'invalid feed patch',
+            },
+          });
+        }
+
+        if (url.includes('/api/articles/a-1/tasks') && method === 'GET') {
+          return jsonResponse({
+            ok: true,
+            data: {
+              fulltext: {
+                type: 'fulltext',
+                status: 'idle',
+                jobId: null,
+                requestedAt: null,
+                startedAt: null,
+                finishedAt: null,
+                attempts: 0,
+                errorCode: null,
+                errorMessage: null,
+              },
+              ai_summary: {
+                type: 'ai_summary',
+                status: 'idle',
+                jobId: null,
+                requestedAt: null,
+                startedAt: null,
+                finishedAt: null,
+                attempts: 0,
+                errorCode: null,
+                errorMessage: null,
+              },
+              ai_translate: {
+                type: 'ai_translate',
+                status: 'idle',
+                jobId: null,
+                requestedAt: null,
+                startedAt: null,
+                finishedAt: null,
+                attempts: 0,
+                errorCode: null,
+                errorMessage: null,
+              },
             },
           });
         }
