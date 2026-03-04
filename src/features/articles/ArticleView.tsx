@@ -14,10 +14,6 @@ import { formatRelativeTime } from '../../utils/date';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 const FLOATING_TITLE_SCROLL_THRESHOLD_PX = 96;
 
 interface ArticleViewProps {
@@ -54,6 +50,8 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
   const [aiTranslationTimedOutArticleId, setAiTranslationTimedOutArticleId] = useState<
     string | null
   >(null);
+  const [aiTranslationWaitingFulltextArticleId, setAiTranslationWaitingFulltextArticleId] =
+    useState<string | null>(null);
   const [aiTranslationViewingArticleId, setAiTranslationViewingArticleId] = useState<string | null>(
     null,
   );
@@ -90,6 +88,9 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
   );
   const aiTranslationTimedOut = Boolean(
     currentArticleId && aiTranslationTimedOutArticleId === currentArticleId,
+  );
+  const aiTranslationWaitingFulltext = Boolean(
+    currentArticleId && aiTranslationWaitingFulltextArticleId === currentArticleId,
   );
   const aiTranslationViewing = Boolean(
     currentArticleId && aiTranslationViewingArticleId === currentArticleId,
@@ -279,16 +280,35 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
   );
 
   const requestAiTranslation = useCallback(
-    async (articleId: string, isCancelled: () => boolean = () => false) => {
+    async (
+      articleId: string,
+      input?: {
+        signal?: AbortSignal;
+      },
+    ) => {
+      const signal = input?.signal;
+      const isCancelled = () => Boolean(signal?.aborted);
+
       try {
         const enqueueResult = await enqueueArticleAiTranslate(articleId);
         if (isCancelled()) return;
-        setAiTranslationMissingApiKeyArticleId((current) => (current === articleId ? null : current));
+        setAiTranslationMissingApiKeyArticleId((current) =>
+          current === articleId ? null : current,
+        );
         setAiTranslationTimedOutArticleId((current) => (current === articleId ? null : current));
+        setAiTranslationWaitingFulltextArticleId((current) =>
+          current === articleId ? null : current,
+        );
 
         if (enqueueResult.reason === 'missing_api_key') {
           setAiTranslationLoadingArticleId((current) => (current === articleId ? null : current));
           setAiTranslationMissingApiKeyArticleId(articleId);
+          return;
+        }
+
+        if (enqueueResult.reason === 'fulltext_pending') {
+          setAiTranslationLoadingArticleId((current) => (current === articleId ? null : current));
+          setAiTranslationWaitingFulltextArticleId(articleId);
           return;
         }
 
@@ -300,32 +320,42 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
             setAiTranslationViewingArticleId(articleId);
             return;
           }
+          return;
         }
 
-        if (
-          enqueueResult.enqueued ||
-          enqueueResult.reason === 'already_enqueued' ||
-          enqueueResult.reason === 'already_translated'
-        ) {
+        if (enqueueResult.enqueued || enqueueResult.reason === 'already_enqueued') {
           setAiTranslationLoadingArticleId(articleId);
-          for (let attempt = 0; attempt < 30; attempt += 1) {
-            await sleep(1000);
-            if (isCancelled()) return;
 
+          const polled = await pollWithBackoff({
+            fn: () => getArticleTasks(articleId),
+            stop: (value) => {
+              const status = value.ai_translate.status;
+              return status === 'succeeded' || status === 'failed';
+            },
+            onValue: (value) => {
+              if (!isCancelled()) setTasks(value);
+            },
+            signal,
+          });
+
+          if (isCancelled()) return;
+
+          setAiTranslationLoadingArticleId((current) => (current === articleId ? null : current));
+
+          if (polled.timedOut) {
+            setAiTranslationTimedOutArticleId(articleId);
+            return;
+          }
+
+          const status = polled.value?.ai_translate.status ?? 'idle';
+          if (status === 'succeeded') {
             const refreshed = await refreshArticle(articleId);
+            if (isCancelled()) return;
             if (refreshed.hasAiTranslation) {
-              if (!isCancelled()) {
-                setAiTranslationLoadingArticleId((current) => (current === articleId ? null : current));
-                setAiTranslationViewingArticleId(articleId);
-              }
-              return;
+              setAiTranslationViewingArticleId(articleId);
             }
           }
 
-          if (!isCancelled()) {
-            setAiTranslationLoadingArticleId((current) => (current === articleId ? null : current));
-            setAiTranslationTimedOutArticleId(articleId);
-          }
           return;
         }
 
@@ -693,7 +723,34 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
 
           {!hasAiTranslationContent && aiTranslationTimedOut ? (
             <div className="mb-4 rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-              翻译超时，请稍后重试
+              仍在处理中，可稍后重试/刷新
+            </div>
+          ) : null}
+
+          {!hasAiTranslationContent && aiTranslationWaitingFulltext ? (
+            <div className="mb-4 rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+              请先等待全文抓取完成，再尝试翻译
+            </div>
+          ) : null}
+
+          {!hasAiTranslationContent &&
+          !aiTranslationLoading &&
+          !aiTranslationMissingApiKey &&
+          !aiTranslationTimedOut &&
+          !aiTranslationWaitingFulltext &&
+          tasks?.ai_translate.status === 'failed' ? (
+            <div className="mb-4 rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span>{tasks.ai_translate.errorMessage || '翻译失败'}</span>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={onAiTranslationButtonClick}
+                >
+                  重试
+                </Button>
+              </div>
             </div>
           ) : null}
 

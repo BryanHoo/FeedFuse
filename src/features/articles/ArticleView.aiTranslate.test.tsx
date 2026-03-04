@@ -9,10 +9,66 @@ vi.mock('../../lib/apiClient', async () => {
   return {
     ...actual,
     enqueueArticleAiTranslate: vi.fn(),
+    getArticleTasks: vi.fn(),
   };
 });
 
 describe('ArticleView ai translate', () => {
+  it('ai translate failed shows persisted error', async () => {
+    const apiClient = await import('../../lib/apiClient');
+    vi.mocked(apiClient.enqueueArticleAiTranslate).mockResolvedValue({
+      enqueued: true,
+      jobId: 'job-1',
+    });
+    vi.mocked(apiClient.getArticleTasks).mockResolvedValue({
+      fulltext: { type: 'fulltext', status: 'idle', jobId: null, requestedAt: null, startedAt: null, finishedAt: null, attempts: 0, errorCode: null, errorMessage: null },
+      ai_summary: { type: 'ai_summary', status: 'idle', jobId: null, requestedAt: null, startedAt: null, finishedAt: null, attempts: 0, errorCode: null, errorMessage: null },
+      ai_translate: { type: 'ai_translate', status: 'failed', jobId: 'job-1', requestedAt: null, startedAt: null, finishedAt: null, attempts: 1, errorCode: 'ai_rate_limited', errorMessage: '请求过于频繁，请稍后重试' },
+    });
+
+    const { useAppStore } = (await import('../../store/appStore')) as typeof import('../../store/appStore');
+    useAppStore.setState({
+      feeds: [
+        {
+          id: 'feed-1',
+          title: 'Feed 1',
+          url: 'https://example.com/rss.xml',
+          unreadCount: 1,
+          enabled: true,
+          fullTextOnOpenEnabled: false,
+          aiSummaryOnOpenEnabled: false,
+          titleTranslateEnabled: true,
+          bodyTranslateEnabled: true,
+          categoryId: null,
+          category: null,
+          articleListDisplayMode: 'card',
+        },
+      ],
+      categories: [{ id: 'cat-uncategorized', name: '未分类', expanded: true }],
+      articles: [
+        {
+          id: 'article-1',
+          feedId: 'feed-1',
+          title: 'Article 1',
+          content: '<p>Hello</p>',
+          summary: 'hello',
+          publishedAt: new Date('2026-02-28T00:00:00.000Z').toISOString(),
+          link: 'https://example.com/a1',
+          isRead: true,
+          isStarred: false,
+        },
+      ],
+      selectedView: 'all',
+      selectedArticleId: 'article-1',
+    });
+
+    const { default: ArticleView } = await import('./ArticleView');
+    render(<ArticleView />);
+
+    fireEvent.click(screen.getByRole('button', { name: '翻译' }));
+    expect(await screen.findByText('请求过于频繁，请稍后重试')).toBeInTheDocument();
+  });
+
   it('toggles between original and translation when translation exists', async () => {
     const apiClient = await import('../../lib/apiClient');
     vi.mocked(apiClient.enqueueArticleAiTranslate).mockResolvedValue({
