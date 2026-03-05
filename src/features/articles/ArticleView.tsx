@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type UIEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type UIEvent } from 'react';
 import { Languages, Sparkles, Star } from 'lucide-react';
 import { useAppStore } from '../../store/appStore';
 import { useSettingsStore } from '../../store/settingsStore';
@@ -313,6 +313,20 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
       current === currentArticleId ? null : currentArticleId,
     );
   }, [currentArticleId]);
+
+  const onArticleContentClick = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      const target = (event.target as HTMLElement).closest('[data-action="retry-segment"]');
+      if (!target) return;
+
+      const rawSegmentIndex = target.getAttribute('data-segment-index');
+      const segmentIndex = rawSegmentIndex ? Number(rawSegmentIndex) : Number.NaN;
+      if (!Number.isInteger(segmentIndex) || segmentIndex < 0) return;
+
+      void immersiveTranslation.retrySegment(segmentIndex);
+    },
+    [immersiveTranslation],
+  );
 
   if (!article) {
     return (
@@ -662,6 +676,7 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
               fontFamilyClass,
             )}
             data-testid="article-html-content"
+            onClick={onArticleContentClick}
             dangerouslySetInnerHTML={{ __html: bodyHtml }}
           />
         </div>

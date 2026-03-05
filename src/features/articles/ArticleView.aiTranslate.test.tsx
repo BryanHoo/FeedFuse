@@ -306,10 +306,10 @@ describe('ArticleView ai translate', () => {
     expect(await screen.findByText('甲')).toBeInTheDocument();
   });
 
-  it('shows retry button for failed segment and triggers retry api', async () => {
+  it('triggers retry API from delegated retry button inside rendered html', async () => {
     const apiClient = await import('../../lib/apiClient');
     const { default: ArticleView } = await import('./ArticleView');
-    render(<ArticleView />);
+    const { container } = render(<ArticleView />);
 
     fireEvent.click(screen.getByRole('button', { name: '翻译' }));
     await waitFor(() => {
@@ -325,8 +325,10 @@ describe('ArticleView ai translate', () => {
       });
     });
 
-    const retryButton = await screen.findByRole('button', { name: '重试该段' });
-    fireEvent.click(retryButton);
+    const retry = container.querySelector(
+      '[data-action="retry-segment"][data-segment-index="0"]',
+    ) as HTMLElement;
+    fireEvent.click(retry);
 
     await waitFor(() => {
       expect(apiClient.retryArticleAiTranslateSegment).toHaveBeenCalledWith('article-1', 0);
