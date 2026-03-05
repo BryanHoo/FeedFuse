@@ -1,9 +1,14 @@
 import { z } from 'zod';
 import { getPool } from '../../../../server/db/pool';
 import { ok, fail } from '../../../../server/http/apiResponse';
-import { NotFoundError, ValidationError } from '../../../../server/http/errors';
+import {
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+} from '../../../../server/http/errors';
 import { deleteFeed, updateFeed } from '../../../../server/repositories/feedsRepo';
 import { deriveFeedIconUrl } from '../../../../server/rss/deriveFeedIconUrl';
+import { isSafeExternalUrl } from '../../../../server/rss/ssrfGuard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -55,6 +60,19 @@ function isForeignKeyViolation(
   );
 }
 
+function isUniqueViolation(
+  err: unknown,
+  constraint: string,
+): err is { code: string; constraint?: string } {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'code' in err &&
+    (err as { code?: unknown }).code === '23505' &&
+    (!('constraint' in err) || (err as { constraint?: unknown }).constraint === constraint)
+  );
+}
+
 export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> },
@@ -73,6 +91,12 @@ export async function PATCH(
     if (!bodyParsed.success) {
       return fail(new ValidationError('Invalid request body', zodIssuesToFields(bodyParsed.error)));
     }
+    if (
+      typeof bodyParsed.data.url !== 'undefined' &&
+      !(await isSafeExternalUrl(bodyParsed.data.url))
+    ) {
+      return fail(new ValidationError('Invalid request body', { url: 'Unsafe URL' }));
+    }
 
     const input = {
       ...bodyParsed.data,
@@ -86,6 +110,9 @@ export async function PATCH(
     if (!updated) return fail(new NotFoundError('Feed not found'));
     return ok(updated);
   } catch (err) {
+    if (isUniqueViolation(err, 'feeds_url_unique')) {
+      return fail(new ConflictError('Feed already exists', { url: 'duplicate' }));
+    }
     if (isForeignKeyViolation(err, 'feeds_category_id_fkey')) {
       return fail(new ValidationError('Invalid request body', { categoryId: 'not_found' }));
     }

@@ -415,6 +415,45 @@ describe('/api/feeds', () => {
     expect(json.ok).toBe(true);
   });
 
+  it('PATCH rejects unsafe url', async () => {
+    const mod = await import('./[id]/route');
+    const res = await mod.PATCH(
+      new Request(`http://localhost/api/feeds/${feedId}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ url: 'http://192.168.1.1/rss.xml' }),
+      }),
+      { params: Promise.resolve({ id: feedId }) },
+    );
+    const json = await res.json();
+
+    expect(json.ok).toBe(false);
+    expect(json.error.code).toBe('validation_error');
+    expect(json.error.fields.url).toBeTruthy();
+    expect(updateFeedMock).not.toHaveBeenCalled();
+  });
+
+  it('PATCH returns conflict on duplicate url', async () => {
+    updateFeedMock.mockRejectedValue({
+      code: '23505',
+      constraint: 'feeds_url_unique',
+    });
+
+    const mod = await import('./[id]/route');
+    const res = await mod.PATCH(
+      new Request(`http://localhost/api/feeds/${feedId}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ url: 'https://2.2.2.2/rss.xml' }),
+      }),
+      { params: Promise.resolve({ id: feedId }) },
+    );
+    const json = await res.json();
+
+    expect(json.ok).toBe(false);
+    expect(json.error.code).toBe('conflict');
+  });
+
   it('PATCH returns validation error when categoryId does not exist', async () => {
     updateFeedMock.mockRejectedValue({
       code: '23503',
