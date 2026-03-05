@@ -8,6 +8,10 @@ type Segment = {
 };
 
 export function buildImmersiveHtml(baseHtml: string, segments: Segment[]): string {
+  if (typeof DOMParser !== 'function') {
+    return baseHtml;
+  }
+
   const doc = new DOMParser().parseFromString(baseHtml, 'text/html');
   const nodes = Array.from(doc.body.querySelectorAll(selectors));
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { buildImmersiveHtml } from './immersiveRender';
 
 describe('buildImmersiveHtml', () => {
@@ -43,5 +43,18 @@ describe('buildImmersiveHtml', () => {
     ]);
 
     expect(out).toContain('&lt;img src=x onerror=alert(1) /&gt;');
+  });
+
+  it('falls back to base html when DOMParser is unavailable (SSR safety)', () => {
+    const baseHtml = '<article><p>A</p></article>';
+    const originalDomParser = globalThis.DOMParser;
+
+    vi.stubGlobal('DOMParser', undefined);
+    try {
+      expect(() => buildImmersiveHtml(baseHtml, [])).not.toThrow();
+      expect(buildImmersiveHtml(baseHtml, [])).toBe(baseHtml);
+    } finally {
+      vi.stubGlobal('DOMParser', originalDomParser);
+    }
   });
 });
