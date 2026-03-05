@@ -6,6 +6,7 @@ const listCategoriesMock = vi.fn();
 const createCategoryMock = vi.fn();
 const updateCategoryMock = vi.fn();
 const deleteCategoryMock = vi.fn();
+const reorderCategoriesMock = vi.fn();
 
 vi.mock('../../../server/db/pool', () => ({
   getPool: () => pool,
@@ -19,12 +20,14 @@ vi.mock('../../../server/repositories/categoriesRepo', () => ({
   createCategory: (...args: unknown[]) => createCategoryMock(...args),
   updateCategory: (...args: unknown[]) => updateCategoryMock(...args),
   deleteCategory: (...args: unknown[]) => deleteCategoryMock(...args),
+  reorderCategories: (...args: unknown[]) => reorderCategoriesMock(...args),
 }));
 vi.mock('../../../../server/repositories/categoriesRepo', () => ({
   listCategories: (...args: unknown[]) => listCategoriesMock(...args),
   createCategory: (...args: unknown[]) => createCategoryMock(...args),
   updateCategory: (...args: unknown[]) => updateCategoryMock(...args),
   deleteCategory: (...args: unknown[]) => deleteCategoryMock(...args),
+  reorderCategories: (...args: unknown[]) => reorderCategoriesMock(...args),
 }));
 
 const uuid = '00000000-0000-0000-0000-000000000000';
@@ -35,6 +38,7 @@ describe('/api/categories', () => {
     createCategoryMock.mockReset();
     updateCategoryMock.mockReset();
     deleteCategoryMock.mockReset();
+    reorderCategoriesMock.mockReset();
   });
 
   it('GET returns categories', async () => {
@@ -148,5 +152,30 @@ describe('/api/categories', () => {
     });
     const json = await res.json();
     expect(json.ok).toBe(true);
+  });
+
+  it('PATCH /api/categories/reorder updates positions', async () => {
+    reorderCategoriesMock.mockResolvedValue([
+      { id: 'c2', name: '设计', position: 0 },
+      { id: 'c1', name: '科技', position: 1 },
+    ]);
+
+    const mod = await import('./reorder/route');
+    const res = await mod.PATCH(
+      new Request('http://localhost/api/categories/reorder', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          items: [
+            { id: '123e4567-e89b-42d3-a456-426614174002', position: 0 },
+            { id: '123e4567-e89b-42d3-a456-426614174001', position: 1 },
+          ],
+        }),
+      }),
+    );
+
+    const json = await res.json();
+    expect(json.ok).toBe(true);
+    expect(json.data[0].position).toBe(0);
   });
 });
