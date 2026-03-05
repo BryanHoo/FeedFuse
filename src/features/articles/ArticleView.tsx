@@ -316,7 +316,10 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
 
   const onArticleContentClick = useCallback(
     (event: MouseEvent<HTMLDivElement>) => {
-      const target = (event.target as HTMLElement).closest('[data-action="retry-segment"]');
+      const eventTarget = event.target;
+      if (!(eventTarget instanceof Element)) return;
+
+      const target = eventTarget.closest('[data-action="retry-segment"]');
       if (!target) return;
 
       const rawSegmentIndex = target.getAttribute('data-segment-index');
@@ -326,6 +329,11 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
       void immersiveTranslation.retrySegment(segmentIndex);
     },
     [immersiveTranslation],
+  );
+
+  const immersiveHtml = useMemo(
+    () => buildImmersiveHtml(article?.content ?? '', immersiveTranslation.segments),
+    [article?.content, immersiveTranslation.segments],
   );
 
   if (!article) {
@@ -373,10 +381,6 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
     article.aiTranslationBilingualHtml?.trim() || article.aiTranslationZhHtml?.trim(),
   );
   const hasImmersiveSegments = immersiveTranslation.segments.length > 0;
-  const immersiveHtml = useMemo(
-    () => buildImmersiveHtml(article.content, immersiveTranslation.segments),
-    [article.content, immersiveTranslation.segments],
-  );
   const hasAiTranslationContent = hasLegacyAiTranslationContent || hasImmersiveSegments;
   const bodyHtml =
     aiTranslationViewing && hasImmersiveSegments

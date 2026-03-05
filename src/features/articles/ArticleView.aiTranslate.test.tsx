@@ -270,15 +270,10 @@ describe('ArticleView ai translate', () => {
       });
     });
 
-    const originals = Array.from(
-      container.querySelectorAll('.ff-bilingual-block .ff-original'),
-    ).map((node) => node.textContent);
-    const translations = Array.from(
-      container.querySelectorAll('.ff-bilingual-block .ff-translation'),
-    ).map((node) => node.textContent);
-
-    expect(originals).toEqual(['A', 'B']);
-    expect(translations).toEqual(['甲', '乙']);
+    const html = container.querySelector('[data-testid="article-html-content"]')?.innerHTML ?? '';
+    expect(html).toMatch(
+      /<p>A<\/p>\s*<p class="ff-translation">甲<\/p>\s*<p>B<\/p>\s*<p class="ff-translation">乙<\/p>/,
+    );
   });
 
   it('preserves translated segments when toggling between original and translation mode', async () => {
