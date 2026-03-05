@@ -194,6 +194,23 @@ describe('AddFeedDialog', () => {
     expect(urlInput).toHaveFocus();
   });
 
+  it('add dialog only shows URL 名称 分类 fields', () => {
+    renderWithNotifications();
+    fireEvent.click(screen.getByLabelText('add-feed'));
+
+    expect(screen.getByLabelText('URL')).toBeInTheDocument();
+    expect(screen.getByLabelText('名称')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: '分类' })).toBeInTheDocument();
+
+    expect(screen.queryByRole('combobox', { name: '打开文章时抓取全文' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: '获取文章后自动获取摘要' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: '打开文章自动获取摘要' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: '列表标题自动翻译' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: '获取文章后自动翻译正文' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: '打开文章自动翻译正文' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: '正文翻译' })).not.toBeInTheDocument();
+  });
+
   it('auto fills title when validation succeeds and title is empty', async () => {
     renderWithNotifications();
     fireEvent.click(screen.getByLabelText('add-feed'));
@@ -250,11 +267,13 @@ describe('AddFeedDialog', () => {
     });
 
     expect(lastCreateFeedBody).toBeTruthy();
-    expect(lastCreateFeedBody?.fullTextOnOpenEnabled).toBe(false);
-    expect(lastCreateFeedBody?.aiSummaryOnOpenEnabled).toBe(false);
-    expect(lastCreateFeedBody?.aiSummaryOnFetchEnabled).toBe(false);
-    expect(lastCreateFeedBody?.bodyTranslateOnFetchEnabled).toBe(false);
-    expect(lastCreateFeedBody?.bodyTranslateOnOpenEnabled).toBe(false);
+    expect(lastCreateFeedBody).not.toHaveProperty('fullTextOnOpenEnabled');
+    expect(lastCreateFeedBody).not.toHaveProperty('aiSummaryOnOpenEnabled');
+    expect(lastCreateFeedBody).not.toHaveProperty('aiSummaryOnFetchEnabled');
+    expect(lastCreateFeedBody).not.toHaveProperty('bodyTranslateOnFetchEnabled');
+    expect(lastCreateFeedBody).not.toHaveProperty('bodyTranslateOnOpenEnabled');
+    expect(lastCreateFeedBody).not.toHaveProperty('titleTranslateEnabled');
+    expect(lastCreateFeedBody).not.toHaveProperty('bodyTranslateEnabled');
   });
 
   it('submits validated siteUrl in create payload', async () => {
@@ -281,24 +300,13 @@ describe('AddFeedDialog', () => {
     expect(lastCreateFeedBody?.siteUrl).toBe('https://example.com/');
   });
 
-  it('submits fullTextOnOpenEnabled when enabled', async () => {
+  it('submit add feed payload excludes policy flags', async () => {
     renderWithNotifications();
     fireEvent.click(screen.getByLabelText('add-feed'));
 
-    fireEvent.change(screen.getByPlaceholderText('例如：The Verge'), { target: { value: 'Fulltext Feed' } });
+    fireEvent.change(screen.getByPlaceholderText('例如：The Verge'), { target: { value: 'Base Feed' } });
     const urlInput = screen.getByPlaceholderText('https://example.com/feed.xml');
-    fireEvent.change(urlInput, {
-      target: { value: 'https://example.com/success.xml' },
-    });
-
-    const fulltextCombobox = screen.getByRole('combobox', { name: '打开文章时抓取全文' });
-    fireEvent.click(fulltextCombobox);
-
-    await waitFor(() => {
-      expect(screen.getByRole('option', { name: '开启' })).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByRole('option', { name: '开启' }));
-
+    fireEvent.change(urlInput, { target: { value: 'https://example.com/success.xml' } });
     fireEvent.blur(urlInput);
 
     await waitFor(() => {
@@ -310,41 +318,12 @@ describe('AddFeedDialog', () => {
       expect(screen.queryByRole('dialog', { name: '添加 RSS 源' })).not.toBeInTheDocument();
     });
 
-    expect(lastCreateFeedBody).toBeTruthy();
-    expect(lastCreateFeedBody?.fullTextOnOpenEnabled).toBe(true);
-  });
-
-  it('submits aiSummaryOnOpenEnabled when enabled', async () => {
-    renderWithNotifications();
-    fireEvent.click(screen.getByLabelText('add-feed'));
-
-    fireEvent.change(screen.getByPlaceholderText('例如：The Verge'), { target: { value: 'AI Summary Feed' } });
-    const urlInput = screen.getByPlaceholderText('https://example.com/feed.xml');
-    fireEvent.change(urlInput, {
-      target: { value: 'https://example.com/success.xml' },
+    expect(lastCreateFeedBody).toEqual({
+      title: 'Mock Feed Title',
+      url: 'https://example.com/success.xml',
+      siteUrl: 'https://example.com/',
+      categoryId: 'cat-tech',
     });
-
-    const aiSummaryCombobox = screen.getByRole('combobox', { name: '打开文章自动获取摘要' });
-    fireEvent.click(aiSummaryCombobox);
-
-    await waitFor(() => {
-      expect(screen.getByRole('option', { name: '开启' })).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByRole('option', { name: '开启' }));
-
-    fireEvent.blur(urlInput);
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: '添加' })).toBeEnabled();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: '添加' }));
-    await waitFor(() => {
-      expect(screen.queryByRole('dialog', { name: '添加 RSS 源' })).not.toBeInTheDocument();
-    });
-
-    expect(lastCreateFeedBody).toBeTruthy();
-    expect(lastCreateFeedBody?.aiSummaryOnOpenEnabled).toBe(true);
   });
 
   it('requires successful validation before save', async () => {
