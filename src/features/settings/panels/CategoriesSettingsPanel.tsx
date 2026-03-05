@@ -15,7 +15,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { ApiError, createCategory, deleteCategory, patchCategory } from '../../../lib/apiClient';
+import {
+  ApiError,
+  createCategory,
+  deleteCategory,
+  patchCategory,
+  reorderCategories,
+} from '../../../lib/apiClient';
 import { useNotify } from '../../notifications/useNotify';
 import { useAppStore } from '../../../store/appStore';
 
@@ -44,6 +50,7 @@ export default function CategoriesSettingsPanel() {
   const [rowBusyById, setRowBusyById] = useState<Record<string, boolean>>({});
   const [rowErrorById, setRowErrorById] = useState<Record<string, string>>({});
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
 
   const appCategories = useAppStore((state) => state.categories);
   const feeds = useAppStore((state) => state.feeds);
@@ -105,6 +112,55 @@ export default function CategoriesSettingsPanel() {
           : feed,
       ),
     }));
+  };
+
+  const setCategoriesOrderInStore = (
+    orderedCategories: Array<{ id: string; name: string }>,
+  ) => {
+    useAppStore.setState((state) => {
+      const uncategorized = state.categories.find((item) => item.id === uncategorizedId) ?? {
+        id: uncategorizedId,
+        name: uncategorizedName,
+        expanded: true,
+      };
+
+      const expandedById = new Map(state.categories.map((item) => [item.id, item.expanded]));
+      const nextCategories = orderedCategories.map((item) => ({
+        id: item.id,
+        name: item.name,
+        expanded: expandedById.get(item.id) ?? true,
+      }));
+
+      return {
+        categories: [...nextCategories, uncategorized],
+      };
+    });
+  };
+
+  const handleReorder = async (dropIndex: number) => {
+    if (draggingIndex === null || draggingIndex === dropIndex) {
+      setDraggingIndex(null);
+      return;
+    }
+
+    const previousOrder = [...categories];
+    const nextOrder = [...categories];
+    const [draggingItem] = nextOrder.splice(draggingIndex, 1);
+    if (!draggingItem) {
+      setDraggingIndex(null);
+      return;
+    }
+    nextOrder.splice(dropIndex, 0, draggingItem);
+
+    setDraggingIndex(null);
+    setCategoriesOrderInStore(nextOrder);
+
+    try {
+      await reorderCategories(nextOrder.map((item, index) => ({ id: item.id, position: index })));
+    } catch (error) {
+      setCategoriesOrderInStore(previousOrder);
+      notify.error(getCategoryErrorMessage(error));
+    }
   };
 
   const handleCreate = async () => {
@@ -287,6 +343,24 @@ export default function CategoriesSettingsPanel() {
                   return (
                     <div key={category.id} className="px-3 py-3">
                       <div className="flex items-start gap-3">
+                        <button
+                          type="button"
+                          aria-label={`排序手柄-${index}`}
+                          className="mt-2 cursor-move rounded-sm px-1 text-sm text-muted-foreground hover:bg-muted"
+                          draggable
+                          onDragStart={() => {
+                            setDraggingIndex(index);
+                          }}
+                          onDragOver={(event) => {
+                            event.preventDefault();
+                          }}
+                          onDrop={(event) => {
+                            event.preventDefault();
+                            void handleReorder(index);
+                          }}
+                        >
+                          ⋮⋮
+                        </button>
                         <div className="min-w-0 flex-1">
                           <Label htmlFor={`category-name-${index}`} className="sr-only">
                             分类名称

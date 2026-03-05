@@ -99,6 +99,35 @@ describe('CategoriesSettingsPanel', () => {
     });
   });
 
+  it('calls reorder api after drag reorder', async () => {
+    useAppStore.setState({
+      categories: [
+        { id: 'cat-design', name: '设计', expanded: true },
+        { id: 'cat-tech', name: '科技', expanded: true },
+        { id: 'cat-uncategorized', name: '未分类', expanded: true },
+      ],
+      feeds: [],
+      articles: [],
+      selectedView: 'all',
+      selectedArticleId: null,
+      sidebarCollapsed: false,
+      snapshotLoading: false,
+    });
+
+    renderWithNotifications();
+
+    fireEvent.dragStart(screen.getByLabelText('排序手柄-0'));
+    fireEvent.dragEnter(screen.getByLabelText('排序手柄-1'));
+    fireEvent.drop(screen.getByLabelText('排序手柄-1'));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/categories/reorder'),
+        expect.objectContaining({ method: 'PATCH' }),
+      );
+    });
+  });
+
   it('clears feed bindings when deleting a category', async () => {
     useAppStore.setState({
       categories: [

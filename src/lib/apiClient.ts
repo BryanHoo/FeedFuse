@@ -244,6 +244,16 @@ export async function deleteCategory(categoryId: string): Promise<{ deleted: tru
   });
 }
 
+export async function reorderCategories(
+  items: Array<{ id: string; position: number }>,
+): Promise<CategoryDto[]> {
+  return requestApi('/api/categories/reorder', {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ items }),
+  });
+}
+
 export async function patchArticle(
   articleId: string,
   input: { isRead?: boolean; isStarred?: boolean },
