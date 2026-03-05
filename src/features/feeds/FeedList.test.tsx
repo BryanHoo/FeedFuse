@@ -247,41 +247,53 @@ describe('FeedList manage', () => {
     );
   });
 
-  it('updates fullTextOnOpenEnabled via edit dialog', async () => {
+  it('shows AI摘要配置 and 翻译配置 in feed context menu', async () => {
     renderWithNotifications();
 
     fireEvent.contextMenu(screen.getByRole('button', { name: /My Feed.*2/ }));
 
-    fireEvent.click(await screen.findByRole('menuitem', { name: '编辑' }));
-    expect(screen.getByRole('dialog', { name: '编辑 RSS 源' })).toBeInTheDocument();
+    expect(await screen.findByRole('menuitem', { name: 'AI摘要配置' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: '翻译配置' })).toBeInTheDocument();
+  });
 
-    const fulltextCombobox = screen.getByRole('combobox', { name: '打开文章时抓取全文' });
-    fireEvent.click(fulltextCombobox);
-    fireEvent.click(await screen.findByRole('option', { name: '开启' }));
+  it('opens summary policy dialog from context menu and saves patch', async () => {
+    renderWithNotifications();
 
-    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    fireEvent.contextMenu(screen.getByRole('button', { name: /My Feed.*2/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'AI摘要配置' }));
+
+    expect(screen.getByRole('dialog', { name: 'AI 摘要配置' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('switch', { name: '获取文章后自动获取摘要' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存配置' }));
 
     await waitFor(() => {
-      expect(useAppStore.getState().feeds[0].fullTextOnOpenEnabled).toBe(true);
+      expect(lastPatchBody).toEqual({
+        aiSummaryOnFetchEnabled: true,
+        aiSummaryOnOpenEnabled: false,
+      });
     });
   });
 
-  it('updates aiSummaryOnOpenEnabled via edit dialog', async () => {
+  it('opens translation policy dialog from context menu and saves patch', async () => {
     renderWithNotifications();
 
     fireEvent.contextMenu(screen.getByRole('button', { name: /My Feed.*2/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: '翻译配置' }));
 
-    fireEvent.click(await screen.findByRole('menuitem', { name: '编辑' }));
-    expect(screen.getByRole('dialog', { name: '编辑 RSS 源' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: '翻译配置' })).toBeInTheDocument();
 
-    const aiSummaryCombobox = screen.getByRole('combobox', { name: '打开文章自动获取摘要' });
-    fireEvent.click(aiSummaryCombobox);
-    fireEvent.click(await screen.findByRole('option', { name: '开启' }));
-
-    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    fireEvent.click(screen.getByRole('switch', { name: '列表标题自动翻译' }));
+    fireEvent.click(screen.getByRole('switch', { name: '获取文章后自动翻译正文' }));
+    fireEvent.click(screen.getByRole('switch', { name: '打开文章自动翻译正文' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存配置' }));
 
     await waitFor(() => {
-      expect(useAppStore.getState().feeds[0].aiSummaryOnOpenEnabled).toBe(true);
+      expect(lastPatchBody).toEqual({
+        titleTranslateEnabled: true,
+        bodyTranslateOnFetchEnabled: true,
+        bodyTranslateOnOpenEnabled: true,
+      });
     });
   });
 

@@ -3,6 +3,8 @@ import { useMemo, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import AddFeedDialog from './AddFeedDialog';
 import EditFeedDialog from './EditFeedDialog';
+import FeedSummaryPolicyDialog from './FeedSummaryPolicyDialog';
+import FeedTranslationPolicyDialog from './FeedTranslationPolicyDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -43,6 +45,8 @@ export default function FeedList() {
   const [addFeedOpen, setAddFeedOpen] = useState(false);
   const [editFeedId, setEditFeedId] = useState<string | null>(null);
   const [deleteFeedId, setDeleteFeedId] = useState<string | null>(null);
+  const [summaryPolicyFeedId, setSummaryPolicyFeedId] = useState<string | null>(null);
+  const [translationPolicyFeedId, setTranslationPolicyFeedId] = useState<string | null>(null);
   const notify = useNotify();
 
   const smartViews = [
@@ -151,6 +155,15 @@ export default function FeedList() {
   const activeDeleteFeed = useMemo(
     () => (deleteFeedId ? feeds.find((feed) => feed.id === deleteFeedId) ?? null : null),
     [deleteFeedId, feeds],
+  );
+  const activeSummaryPolicyFeed = useMemo(
+    () => (summaryPolicyFeedId ? feeds.find((feed) => feed.id === summaryPolicyFeedId) ?? null : null),
+    [summaryPolicyFeedId, feeds],
+  );
+  const activeTranslationPolicyFeed = useMemo(
+    () =>
+      translationPolicyFeedId ? feeds.find((feed) => feed.id === translationPolicyFeedId) ?? null : null,
+    [translationPolicyFeedId, feeds],
   );
 
   return (
@@ -262,6 +275,20 @@ export default function FeedList() {
                           </ContextMenuItem>
                           <ContextMenuItem
                             onSelect={() => {
+                              setSummaryPolicyFeedId(feed.id);
+                            }}
+                          >
+                            AI摘要配置
+                          </ContextMenuItem>
+                          <ContextMenuItem
+                            onSelect={() => {
+                              setTranslationPolicyFeedId(feed.id);
+                            }}
+                          >
+                            翻译配置
+                          </ContextMenuItem>
+                          <ContextMenuItem
+                            onSelect={() => {
                               void (async () => {
                                 try {
                                   await updateFeed(feed.id, { enabled: !feed.enabled });
@@ -341,6 +368,34 @@ export default function FeedList() {
           onSubmit={(payload) => updateFeed(activeEditFeed.id, payload)}
         />
       ) : null}
+
+      <FeedSummaryPolicyDialog
+        open={Boolean(activeSummaryPolicyFeed)}
+        feed={activeSummaryPolicyFeed}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSummaryPolicyFeedId(null);
+          }
+        }}
+        onSubmit={async (patch) => {
+          if (!activeSummaryPolicyFeed) return;
+          await updateFeed(activeSummaryPolicyFeed.id, patch);
+        }}
+      />
+
+      <FeedTranslationPolicyDialog
+        open={Boolean(activeTranslationPolicyFeed)}
+        feed={activeTranslationPolicyFeed}
+        onOpenChange={(open) => {
+          if (!open) {
+            setTranslationPolicyFeedId(null);
+          }
+        }}
+        onSubmit={async (patch) => {
+          if (!activeTranslationPolicyFeed) return;
+          await updateFeed(activeTranslationPolicyFeed.id, patch);
+        }}
+      />
 
       <AlertDialog
         open={Boolean(deleteFeedId)}
