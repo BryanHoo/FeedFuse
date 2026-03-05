@@ -8,10 +8,10 @@
     "node": ">=20.19.0"
   },
   "scripts": {
-    "dev": "WATCHPACK_POLLING=true next dev --webpack",
-    "dev:turbo": "next dev",
+    "dev": "WATCHPACK_POLLING=true next dev --webpack -p 9559",
+    "dev:turbo": "next dev -p 9559",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p 9559",
     "worker:dev": "tsx src/worker/index.ts",
     "worker:start": "tsx src/worker/index.ts",
     "lint": "eslint .",

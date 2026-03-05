@@ -9,28 +9,51 @@ services:
       - '${POSTGRES_PORT:-5432}:5432'
     volumes:
       - feedfuse_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U feedfuse -d feedfuse']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
   web:
-    build: .
-    command: ['sh', '-lc', 'node scripts/db/migrate.mjs && node node_modules/next/dist/bin/next start']
+    build:
+      context: .
+      target: web
+    command:
+      ['sh', '-lc', 'node scripts/db/migrate.mjs && exec node node_modules/next/dist/bin/next start -p 9559']
     environment:
       DATABASE_URL: postgresql://feedfuse:feedfuse@db:5432/feedfuse
       AI_API_KEY: ${AI_API_KEY}
+      PORT: '9559'
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     ports:
-      - '${WEB_PORT:-3000}:3000'
+      - '${WEB_PORT:-9559}:9559'
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:9559/ >/dev/null || exit 1']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
   worker:
-    build: .
-    command: ['sh', '-lc', 'node scripts/db/migrate.mjs && node node_modules/tsx/dist/cli.mjs src/worker/index.ts']
+    build:
+      context: .
+      target: worker
+    command:
+      ['sh', '-lc', 'node scripts/db/migrate.mjs && exec node node_modules/tsx/dist/cli.mjs src/worker/index.ts']
     environment:
       DATABASE_URL: postgresql://feedfuse:feedfuse@db:5432/feedfuse
       AI_API_KEY: ${AI_API_KEY}
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   feedfuse_pg:

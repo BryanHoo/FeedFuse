@@ -8,3 +8,9 @@ dist
 *.log
 pnpm-debug.log*
 Dockerfile*
+docs
+.agents
+.codex
+README.md
+rss.md
+tsconfig.tsbuildinfo
