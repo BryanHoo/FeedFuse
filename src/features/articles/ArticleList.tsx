@@ -507,6 +507,7 @@ export default function ArticleList() {
                 ? previewImageStatuses.get(previewImage.key)
                 : undefined;
               const showPreviewImage = previewImageStatus === "ready";
+              const displayTitle = article.titleZh?.trim() || article.title;
 
               if (effectiveDisplayMode === "list") {
                 return (
@@ -521,7 +522,7 @@ export default function ArticleList() {
                     <div className="flex items-center justify-between gap-3">
                       <span
                         data-testid={`article-list-row-${article.id}-title`}
-                        title={article.title}
+                        title={displayTitle}
                         className={cn(
                           "min-w-0 flex-1 truncate text-[0.94rem] leading-[1.35]",
                           article.isRead
@@ -529,7 +530,7 @@ export default function ArticleList() {
                             : "font-semibold text-foreground",
                         )}
                       >
-                        {article.title}
+                        {displayTitle}
                       </span>
                       <div className="shrink-0 flex items-center gap-1.5 text-[11px]">
                         {!article.isRead && (
@@ -579,7 +580,7 @@ export default function ArticleList() {
                             : "font-semibold text-foreground",
                         )}
                       >
-                        {article.title}
+                        {displayTitle}
                       </h3>
 
                       <p

@@ -71,6 +71,8 @@ export interface ReaderSnapshotArticleItem {
   id: string;
   feedId: string;
   title: string;
+  titleOriginal: string | null;
+  titleZh: string | null;
   summary: string | null;
   previewImage: string | null;
   author: string | null;
@@ -147,6 +149,8 @@ export async function getReaderSnapshot(
         id,
         feed_id as "feedId",
         title,
+        title_original as "titleOriginal",
+        title_zh as "titleZh",
         summary,
         coalesce(
           preview_image_url,

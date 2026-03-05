@@ -166,6 +166,44 @@ describe('ArticleList', () => {
     expect(screen.getByText('Selected Article')).toBeInTheDocument();
   });
 
+  it('uses titleZh when available and falls back to title', () => {
+    useAppStore.setState({
+      articles: [
+        {
+          id: 'art-zh',
+          feedId: 'feed-1',
+          title: 'Original title',
+          titleOriginal: 'Original title',
+          titleZh: '译文标题',
+          content: '',
+          summary: 'Summary',
+          publishedAt: new Date('2026-02-25T00:00:00.000Z').toISOString(),
+          link: 'https://example.com/zh',
+          isRead: false,
+          isStarred: false,
+        },
+        {
+          id: 'art-fallback',
+          feedId: 'feed-1',
+          title: 'Only original title',
+          content: '',
+          summary: 'Summary',
+          publishedAt: new Date('2026-02-24T00:00:00.000Z').toISOString(),
+          link: 'https://example.com/fallback',
+          isRead: false,
+          isStarred: false,
+        },
+      ],
+      selectedArticleId: 'art-zh',
+    });
+
+    renderWithNotifications();
+
+    expect(screen.getByText('译文标题')).toBeInTheDocument();
+    expect(screen.getByText('Only original title')).toBeInTheDocument();
+    expect(screen.queryByText('Original title')).not.toBeInTheDocument();
+  });
+
   it('keeps selected read article visible when showUnreadOnly is enabled (fresh session)', () => {
     useAppStore.setState((state) => ({
       ...state,

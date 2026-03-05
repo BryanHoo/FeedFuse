@@ -90,6 +90,8 @@ export interface ReaderSnapshotDto {
       id: string;
       feedId: string;
       title: string;
+      titleOriginal?: string | null;
+      titleZh?: string | null;
       summary: string | null;
       previewImage?: string | null;
       author: string | null;
@@ -471,10 +473,16 @@ export function mapFeedDto(dto: ReaderSnapshotDto['feeds'][number], categories: 
 }
 
 export function mapSnapshotArticleItem(dto: ReaderSnapshotDto['articles']['items'][number]): Article {
+  const titleOriginal = dto.titleOriginal?.trim() ? dto.titleOriginal : dto.title;
+  const titleZh = dto.titleZh?.trim() ? dto.titleZh : undefined;
+  const effectiveTitle = titleZh ?? dto.title;
+
   return {
     id: dto.id,
     feedId: dto.feedId,
-    title: dto.title,
+    title: effectiveTitle,
+    titleOriginal,
+    titleZh,
     content: '',
     previewImage: dto.previewImage ?? undefined,
     summary: dto.summary ?? '',

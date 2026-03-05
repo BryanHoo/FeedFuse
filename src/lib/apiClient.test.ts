@@ -22,6 +22,31 @@ describe('mapSnapshotArticleItem', () => {
     expect(mapped.previewImage).toBe('https://example.com/preview.jpg');
     expect(mapped.content).toBe('');
   });
+
+  it('prefers titleZh and keeps title/titleOriginal fields from snapshot payload', () => {
+    const dto = {
+      id: 'article-2',
+      feedId: 'feed-1',
+      title: 'Original title',
+      titleOriginal: 'Original title',
+      titleZh: '译文标题',
+      summary: 'Summary',
+      author: 'Author',
+      publishedAt: '2026-01-01T00:00:00.000Z',
+      link: 'https://example.com/article-2',
+      isRead: false,
+      isStarred: false,
+    } as ReaderSnapshotDto['articles']['items'][number] & {
+      titleOriginal: string;
+      titleZh: string | null;
+    };
+
+    const mapped = mapSnapshotArticleItem(dto);
+
+    expect(mapped.title).toBe('译文标题');
+    expect(mapped.titleOriginal).toBe('Original title');
+    expect(mapped.titleZh).toBe('译文标题');
+  });
 });
 
 it('mapArticleDto prefers contentFullHtml', () => {
