@@ -1314,6 +1314,60 @@ describe('/api/articles', () => {
     expect(json.data).toEqual({ enqueued: false, reason: 'already_translated' });
   });
 
+  it('POST /:id/ai-translate force=true bypasses already_translated and enqueues', async () => {
+    getAiApiKeyMock.mockResolvedValue('sk-test');
+    getFeedBodyTranslateEnabledMock.mockResolvedValue(true);
+    getFeedFullTextOnOpenEnabledMock.mockResolvedValue(false);
+    getArticleByIdMock.mockResolvedValue({
+      id: articleId,
+      feedId,
+      dedupeKey: 'guid:1',
+      title: 'Hello',
+      titleOriginal: 'Hello',
+      titleZh: null,
+      titleTranslationModel: null,
+      titleTranslationAttempts: 0,
+      titleTranslationError: null,
+      titleTranslatedAt: null,
+      link: 'https://example.com/a',
+      author: null,
+      publishedAt: null,
+      contentHtml: '<p>rss</p>',
+      contentFullHtml: null,
+      contentFullFetchedAt: null,
+      contentFullError: null,
+      contentFullSourceUrl: null,
+      aiSummary: null,
+      aiSummaryModel: null,
+      aiSummarizedAt: null,
+      aiTranslationBilingualHtml: null,
+      aiTranslationZhHtml: '<p>已有翻译</p>',
+      aiTranslationModel: 'gpt-4o-mini',
+      aiTranslatedAt: '2026-02-28T00:00:00.000Z',
+      summary: null,
+      isRead: false,
+      readAt: null,
+      isStarred: false,
+      starredAt: null,
+    });
+    enqueueWithResultMock.mockResolvedValue({ status: 'enqueued', jobId: 'job-id-force-translate-1' });
+
+    const mod = await import('./[id]/ai-translate/route');
+    const res = await mod.POST(
+      new Request(`http://localhost/api/articles/${articleId}/ai-translate`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ force: true }),
+      }),
+      { params: Promise.resolve({ id: articleId }) },
+    );
+    const json = await res.json();
+
+    expect(json.ok).toBe(true);
+    expect(json.data.enqueued).toBe(true);
+    expect(json.data.jobId).toBe('job-id-force-translate-1');
+  });
+
   it('POST /:id/ai-translate returns body_translate_disabled when feed body translation is disabled', async () => {
     getAiApiKeyMock.mockResolvedValue('sk-test');
     getFeedBodyTranslateEnabledMock.mockResolvedValue(false);

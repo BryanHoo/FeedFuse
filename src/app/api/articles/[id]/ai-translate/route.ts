@@ -38,6 +38,9 @@ export const dynamic = 'force-dynamic';
 const paramsSchema = z.object({
   id: z.string().uuid(),
 });
+const bodySchema = z.object({
+  force: z.boolean().optional(),
+});
 
 function zodIssuesToFields(error: z.ZodError): Record<string, string> {
   const fields: Record<string, string> = {};
@@ -119,7 +122,7 @@ export async function GET(
 }
 
 export async function POST(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
   try {
@@ -133,6 +136,8 @@ export async function POST(
 
     const articleId = paramsParsed.data.id;
     const pool = getPool();
+    const bodyParsed = bodySchema.safeParse(await request.json().catch(() => ({})));
+    const force = bodyParsed.success ? Boolean(bodyParsed.data.force) : false;
 
     const article = await getArticleById(pool, articleId);
     if (!article) return fail(new NotFoundError('Article not found'));
@@ -158,7 +163,10 @@ export async function POST(
       return ok({ enqueued: false, reason: 'body_translate_disabled' });
     }
 
-    if (article.aiTranslationBilingualHtml?.trim() || article.aiTranslationZhHtml?.trim()) {
+    if (
+      !force &&
+      (article.aiTranslationBilingualHtml?.trim() || article.aiTranslationZhHtml?.trim())
+    ) {
       return ok({ enqueued: false, reason: 'already_translated' });
     }
 
