@@ -683,6 +683,55 @@ describe('/api/articles', () => {
     expect(json.data).toEqual({ enqueued: false, reason: 'already_summarized' });
   });
 
+  it('POST /:id/ai-summary force=true bypasses already_summarized and enqueues', async () => {
+    getAiApiKeyMock.mockResolvedValue('sk-test');
+    getFeedFullTextOnOpenEnabledMock.mockResolvedValue(false);
+    getArticleByIdMock.mockResolvedValue({
+      id: articleId,
+      feedId,
+      dedupeKey: 'guid:1',
+      title: 'Hello',
+      link: 'https://example.com/a',
+      author: null,
+      publishedAt: null,
+      contentHtml: '<p>rss</p>',
+      contentFullHtml: null,
+      contentFullFetchedAt: null,
+      contentFullError: null,
+      contentFullSourceUrl: null,
+      aiSummary: 'done',
+      aiSummaryModel: 'gpt-4o-mini',
+      aiSummarizedAt: '2026-02-28T00:00:00.000Z',
+      summary: null,
+      isRead: false,
+      readAt: null,
+      isStarred: false,
+      starredAt: null,
+    });
+    enqueueWithResultMock.mockResolvedValue({ status: 'enqueued', jobId: 'job-id-force-1' });
+
+    const mod = await import('./[id]/ai-summary/route');
+    const res = await mod.POST(
+      new Request(`http://localhost/api/articles/${articleId}/ai-summary`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ force: true }),
+      }),
+      {
+        params: Promise.resolve({ id: articleId }),
+      },
+    );
+    const json = await res.json();
+
+    expect(json.ok).toBe(true);
+    expect(json.data).toEqual({ enqueued: true, jobId: 'job-id-force-1' });
+    expect(enqueueWithResultMock).toHaveBeenCalledWith(
+      'ai.summarize_article',
+      { articleId },
+      expect.any(Object),
+    );
+  });
+
   it('POST /:id/ai-summary enqueues summarize job', async () => {
     getAiApiKeyMock.mockResolvedValue('sk-test');
     getArticleByIdMock.mockResolvedValue({
