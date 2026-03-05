@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { getPool } from '../../../../../../server/db/pool';
-import { ok, fail } from '../../../../../../server/http/apiResponse';
+import { fail } from '../../../../../../server/http/apiResponse';
 import { NotFoundError, ValidationError } from '../../../../../../server/http/errors';
 import { getArticleById } from '../../../../../../server/repositories/articlesRepo';
 import {

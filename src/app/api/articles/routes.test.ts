@@ -9,6 +9,8 @@ const markAllReadMock = vi.fn();
 const getFeedFullTextOnOpenEnabledMock = vi.fn();
 const getFeedBodyTranslateEnabledMock = vi.fn();
 const getAiApiKeyMock = vi.fn();
+const getTranslationApiKeyMock = vi.fn();
+const getUiSettingsMock = vi.fn();
 const enqueueMock = vi.fn();
 const enqueueWithResultMock = vi.fn();
 const getArticleTasksByArticleIdMock = vi.fn();
@@ -81,9 +83,13 @@ vi.mock('../../../../../server/repositories/feedsRepo', () => ({
 
 vi.mock('../../../server/repositories/settingsRepo', () => ({
   getAiApiKey: (...args: unknown[]) => getAiApiKeyMock(...args),
+  getTranslationApiKey: (...args: unknown[]) => getTranslationApiKeyMock(...args),
+  getUiSettings: (...args: unknown[]) => getUiSettingsMock(...args),
 }));
 vi.mock('../../../../../server/repositories/settingsRepo', () => ({
   getAiApiKey: (...args: unknown[]) => getAiApiKeyMock(...args),
+  getTranslationApiKey: (...args: unknown[]) => getTranslationApiKeyMock(...args),
+  getUiSettings: (...args: unknown[]) => getUiSettingsMock(...args),
 }));
 
 vi.mock('../../../server/queue/queue', () => ({
@@ -180,6 +186,8 @@ describe('/api/articles', () => {
     getFeedFullTextOnOpenEnabledMock.mockReset();
     getFeedBodyTranslateEnabledMock.mockReset();
     getAiApiKeyMock.mockReset();
+    getTranslationApiKeyMock.mockReset();
+    getUiSettingsMock.mockReset();
     enqueueMock.mockReset();
     enqueueWithResultMock.mockReset();
     getArticleTasksByArticleIdMock.mockReset();
@@ -195,6 +203,9 @@ describe('/api/articles', () => {
     hashSourceHtmlMock.mockReset();
 
     getTranslationSessionByArticleIdMock.mockResolvedValue(null);
+    getArticleTasksByArticleIdMock.mockResolvedValue([]);
+    getUiSettingsMock.mockResolvedValue({});
+    getTranslationApiKeyMock.mockResolvedValue('');
     upsertTranslationSessionMock.mockResolvedValue({
       id: 'session-id-1',
       articleId,
@@ -980,6 +991,87 @@ describe('/api/articles', () => {
     expect(upsertTranslationSessionMock).not.toHaveBeenCalled();
   });
 
+  it('POST /:id/ai-translate recreates stale running session when translate task already failed', async () => {
+    getAiApiKeyMock.mockResolvedValue('sk-test');
+    getFeedBodyTranslateEnabledMock.mockResolvedValue(true);
+    getFeedFullTextOnOpenEnabledMock.mockResolvedValue(false);
+    getArticleByIdMock.mockResolvedValue({
+      id: articleId,
+      feedId,
+      dedupeKey: 'guid:1',
+      title: 'Hello',
+      titleOriginal: 'Hello',
+      titleZh: null,
+      titleTranslationModel: null,
+      titleTranslationAttempts: 0,
+      titleTranslationError: null,
+      titleTranslatedAt: null,
+      link: 'https://example.com/a',
+      author: null,
+      publishedAt: null,
+      contentHtml: '<article><p>A</p></article>',
+      contentFullHtml: null,
+      contentFullFetchedAt: null,
+      contentFullError: null,
+      contentFullSourceUrl: null,
+      aiSummary: null,
+      aiSummaryModel: null,
+      aiSummarizedAt: null,
+      aiTranslationBilingualHtml: null,
+      aiTranslationZhHtml: null,
+      aiTranslationModel: null,
+      aiTranslatedAt: null,
+      summary: null,
+      isRead: false,
+      readAt: null,
+      isStarred: false,
+      starredAt: null,
+    });
+    getTranslationSessionByArticleIdMock.mockResolvedValue({
+      id: 'session-id-running',
+      articleId,
+      sourceHtmlHash: 'hash-1',
+      status: 'running',
+      totalSegments: 1,
+      translatedSegments: 0,
+      failedSegments: 0,
+      startedAt: '2026-03-04T00:00:00.000Z',
+      finishedAt: null,
+      createdAt: '2026-03-04T00:00:00.000Z',
+      updatedAt: '2026-03-04T00:00:00.000Z',
+    });
+    getArticleTasksByArticleIdMock.mockResolvedValue([
+      {
+        id: 'task-1',
+        articleId,
+        type: 'ai_translate',
+        status: 'failed',
+        jobId: 'job-old',
+        requestedAt: '2026-03-04T00:00:00.000Z',
+        startedAt: '2026-03-04T00:00:01.000Z',
+        finishedAt: '2026-03-04T00:00:02.000Z',
+        attempts: 1,
+        errorCode: 'missing_api_key',
+        errorMessage: 'Missing translation API key',
+        createdAt: '2026-03-04T00:00:00.000Z',
+        updatedAt: '2026-03-04T00:00:02.000Z',
+      },
+    ]);
+    enqueueWithResultMock.mockResolvedValue({ status: 'enqueued', jobId: 'job-id-2' });
+
+    const mod = await import('./[id]/ai-translate/route');
+    const res = await mod.POST(new Request(`http://localhost/api/articles/${articleId}/ai-translate`), {
+      params: Promise.resolve({ id: articleId }),
+    });
+    const json = await res.json();
+
+    expect(json.ok).toBe(true);
+    expect(json.data.enqueued).toBe(true);
+    expect(json.data.jobId).toBe('job-id-2');
+    expect(deleteTranslationSegmentsBySessionIdMock).toHaveBeenCalledWith(pool, 'session-id-running');
+    expect(deleteTranslationEventsBySessionIdMock).toHaveBeenCalledWith(pool, 'session-id-running');
+  });
+
   it('POST /:id/ai-translate returns missing_api_key when key is empty', async () => {
     getAiApiKeyMock.mockResolvedValue('');
     getFeedBodyTranslateEnabledMock.mockResolvedValue(true);
@@ -1023,6 +1115,63 @@ describe('/api/articles', () => {
     const json = await res.json();
     expect(json.ok).toBe(true);
     expect(json.data).toEqual({ enqueued: false, reason: 'missing_api_key' });
+  });
+
+  it('POST /:id/ai-translate returns missing_api_key when dedicated translation key is empty', async () => {
+    getAiApiKeyMock.mockResolvedValue('sk-shared-present');
+    getTranslationApiKeyMock.mockResolvedValue('');
+    getUiSettingsMock.mockResolvedValue({
+      ai: {
+        translation: {
+          useSharedAi: false,
+          model: 'gpt-4o-mini',
+          apiBaseUrl: 'https://api.openai.com/v1',
+        },
+      },
+    });
+    getFeedBodyTranslateEnabledMock.mockResolvedValue(true);
+    getArticleByIdMock.mockResolvedValue({
+      id: articleId,
+      feedId,
+      dedupeKey: 'guid:1',
+      title: 'Hello',
+      titleOriginal: 'Hello',
+      titleZh: null,
+      titleTranslationModel: null,
+      titleTranslationAttempts: 0,
+      titleTranslationError: null,
+      titleTranslatedAt: null,
+      link: 'https://example.com/a',
+      author: null,
+      publishedAt: null,
+      contentHtml: '<p>rss</p>',
+      contentFullHtml: null,
+      contentFullFetchedAt: null,
+      contentFullError: null,
+      contentFullSourceUrl: null,
+      aiSummary: null,
+      aiSummaryModel: null,
+      aiSummarizedAt: null,
+      aiTranslationBilingualHtml: null,
+      aiTranslationZhHtml: null,
+      aiTranslationModel: null,
+      aiTranslatedAt: null,
+      summary: null,
+      isRead: false,
+      readAt: null,
+      isStarred: false,
+      starredAt: null,
+    });
+
+    const mod = await import('./[id]/ai-translate/route');
+    const res = await mod.POST(new Request(`http://localhost/api/articles/${articleId}/ai-translate`), {
+      params: Promise.resolve({ id: articleId }),
+    });
+    const json = await res.json();
+
+    expect(json.ok).toBe(true);
+    expect(json.data).toEqual({ enqueued: false, reason: 'missing_api_key' });
+    expect(enqueueWithResultMock).not.toHaveBeenCalled();
   });
 
   it('POST /:id/ai-translate returns fulltext_pending when fulltext is enabled and pending', async () => {

@@ -221,13 +221,14 @@ export async function runImmersiveTranslateSession(
       translatedSegments: initialCounts.translatedSegments,
       failedSegments: initialCounts.failedSegments,
     });
+    const activeSession = session;
     await deps.insertTranslationEvent(input.pool, {
-      sessionId: session.id,
+      sessionId: activeSession.id,
       segmentIndex: targetSegmentIndex,
       eventType: 'session.started',
       payload: {
         articleId: input.articleId,
-        sessionId: session.id,
+        sessionId: activeSession.id,
         segmentIndex: targetSegmentIndex,
       },
     });
@@ -241,27 +242,27 @@ export async function runImmersiveTranslateSession(
       await processSegment({
         pool: input.pool,
         articleId: input.articleId,
-        session,
+        session: activeSession,
         segment,
         translateText: input.translateText,
         deps,
       });
     });
 
-    const finalSegments = await deps.listTranslationSegmentsBySessionId(input.pool, session.id);
+    const finalSegments = await deps.listTranslationSegmentsBySessionId(input.pool, activeSession.id);
     const finalCounts = toSegmentCounts(finalSegments);
     const finalStatus = finalCounts.failedSegments > 0 ? 'partial_failed' : 'succeeded';
 
     const updatedSession = await deps.upsertTranslationSession(input.pool, {
       articleId: input.articleId,
-      sourceHtmlHash: session.sourceHtmlHash,
+      sourceHtmlHash: activeSession.sourceHtmlHash,
       status: finalStatus,
       totalSegments: finalSegments.length,
       translatedSegments: finalCounts.translatedSegments,
       failedSegments: finalCounts.failedSegments,
     });
     await deps.insertTranslationEvent(input.pool, {
-      sessionId: session.id,
+      sessionId: activeSession.id,
       eventType: 'session.completed',
       payload: {
         status: updatedSession.status,

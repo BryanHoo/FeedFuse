@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { getPool } from '../../../../../server/db/pool';
 import { ok, fail } from '../../../../../server/http/apiResponse';
 import { NotFoundError, ValidationError } from '../../../../../server/http/errors';
+import { normalizePersistedSettings } from '../../../../../features/settings/settingsSchema';
+import { resolveTranslationConfig } from '../../../../../server/ai/translationConfig';
 import { extractImmersiveSegments, hashSourceHtml } from '../../../../../server/ai/immersiveTranslationSession';
 import { getArticleById, type ArticleRow } from '../../../../../server/repositories/articlesRepo';
 import {
@@ -12,12 +14,20 @@ import {
   upsertTranslationSegment,
   upsertTranslationSession,
 } from '../../../../../server/repositories/articleTranslationRepo';
-import { upsertTaskQueued } from '../../../../../server/repositories/articleTasksRepo';
+import {
+  getArticleTasksByArticleId,
+  type ArticleTaskRow,
+  upsertTaskQueued,
+} from '../../../../../server/repositories/articleTasksRepo';
 import {
   getFeedBodyTranslateEnabled,
   getFeedFullTextOnOpenEnabled,
 } from '../../../../../server/repositories/feedsRepo';
-import { getAiApiKey } from '../../../../../server/repositories/settingsRepo';
+import {
+  getAiApiKey,
+  getTranslationApiKey,
+  getUiSettings,
+} from '../../../../../server/repositories/settingsRepo';
 import { getQueueSendOptions } from '../../../../../server/queue/contracts';
 import { enqueueWithResult } from '../../../../../server/queue/queue';
 import { JOB_AI_TRANSLATE } from '../../../../../server/queue/jobs';
@@ -58,6 +68,11 @@ function buildSessionSnapshot(
     finishedAt: session.finishedAt,
     updatedAt: session.updatedAt,
   };
+}
+
+function isAiTranslateTaskActive(task: ArticleTaskRow | undefined): boolean {
+  if (!task) return true;
+  return task.status === 'queued' || task.status === 'running';
 }
 
 export async function GET(
@@ -122,8 +137,19 @@ export async function POST(
     const article = await getArticleById(pool, articleId);
     if (!article) return fail(new NotFoundError('Article not found'));
 
-    const aiApiKey = await getAiApiKey(pool);
-    if (!aiApiKey.trim()) {
+    const [aiApiKey, translationApiKey, uiSettings] = await Promise.all([
+      getAiApiKey(pool),
+      getTranslationApiKey(pool),
+      getUiSettings(pool),
+    ]);
+    const normalizedSettings = normalizePersistedSettings(uiSettings);
+    const translationConfig = resolveTranslationConfig({
+      settings: normalizedSettings,
+      aiApiKey,
+      translationApiKey,
+    });
+
+    if (!translationConfig.apiKey.trim()) {
       return ok({ enqueued: false, reason: 'missing_api_key' });
     }
 
@@ -154,11 +180,15 @@ export async function POST(
       existingSession.status === 'running' &&
       existingSession.sourceHtmlHash === sourceHtmlHash
     ) {
-      return ok({
-        enqueued: false,
-        reason: 'already_enqueued',
-        sessionId: existingSession.id,
-      });
+      const taskRows = await getArticleTasksByArticleId(pool, articleId);
+      const aiTranslateTask = taskRows.find((task) => task.type === 'ai_translate');
+      if (isAiTranslateTaskActive(aiTranslateTask)) {
+        return ok({
+          enqueued: false,
+          reason: 'already_enqueued',
+          sessionId: existingSession.id,
+        });
+      }
     }
 
     const segments = extractImmersiveSegments(sourceHtml);

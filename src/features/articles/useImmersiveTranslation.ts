@@ -135,18 +135,34 @@ export function useImmersiveTranslation(
   input: UseImmersiveTranslationInput,
 ): UseImmersiveTranslationResult {
   const api = useMemo(() => input.api ?? defaultApi, [input.api]);
-  const [viewing, setViewing] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [missingApiKey, setMissingApiKey] = useState(false);
-  const [waitingFulltext, setWaitingFulltext] = useState(false);
-  const [timedOut, setTimedOut] = useState(false);
-  const [session, setSession] = useState<ArticleAiTranslateSessionSnapshotDto | null>(null);
-  const [segments, setSegments] = useState<ArticleAiTranslateSegmentSnapshotDto[]>([]);
+  const [viewing, setViewingState] = useState(false);
+  const [loading, setLoadingState] = useState(false);
+  const [missingApiKey, setMissingApiKeyState] = useState(false);
+  const [waitingFulltext, setWaitingFulltextState] = useState(false);
+  const [timedOut, setTimedOutState] = useState(false);
+  const [session, setSessionState] = useState<ArticleAiTranslateSessionSnapshotDto | null>(null);
+  const [segments, setSegmentsState] = useState<ArticleAiTranslateSegmentSnapshotDto[]>([]);
 
   const articleIdRef = useRef<string | null>(input.articleId);
+  const [stateArticleId, setStateArticleId] = useState<string | null>(input.articleId);
   const requestTokenRef = useRef(0);
   const eventSourceRef = useRef<EventSource | null>(null);
   const streamCleanupRef = useRef<(() => void) | null>(null);
+
+  const ensureStateForArticle = useCallback(
+    (articleId: string | null) => {
+      if (stateArticleId === articleId) return;
+      setStateArticleId(articleId);
+      setViewingState(false);
+      setLoadingState(false);
+      setMissingApiKeyState(false);
+      setWaitingFulltextState(false);
+      setTimedOutState(false);
+      setSessionState(null);
+      setSegmentsState([]);
+    },
+    [stateArticleId],
+  );
 
   const closeStream = useCallback(() => {
     streamCleanupRef.current?.();
@@ -172,7 +188,7 @@ export function useImmersiveTranslation(
         const payload = parseEventPayload(event);
         const segmentIndex = parseSegmentIndex(payload);
         if (segmentIndex === null) return;
-        setSegments((prev) =>
+        setSegmentsState((prev) =>
           applySegmentPatch(prev, {
             segmentIndex,
             status: parseSegmentStatus(payload.status, 'running'),
@@ -186,7 +202,7 @@ export function useImmersiveTranslation(
         const payload = parseEventPayload(event);
         const segmentIndex = parseSegmentIndex(payload);
         if (segmentIndex === null) return;
-        setSegments((prev) =>
+        setSegmentsState((prev) =>
           applySegmentPatch(prev, {
             segmentIndex,
             status: parseSegmentStatus(payload.status, 'succeeded'),
@@ -204,7 +220,7 @@ export function useImmersiveTranslation(
         const payload = parseEventPayload(event);
         const segmentIndex = parseSegmentIndex(payload);
         if (segmentIndex === null) return;
-        setSegments((prev) =>
+        setSegmentsState((prev) =>
           applySegmentPatch(prev, {
             segmentIndex,
             status: parseSegmentStatus(payload.status, 'failed'),
@@ -219,7 +235,7 @@ export function useImmersiveTranslation(
       const onSessionCompleted: EventListener = (event) => {
         if (!isCurrentRequest(articleId, token)) return;
         const payload = parseEventPayload(event);
-        setSession((current) => {
+        setSessionState((current) => {
           if (!current) return current;
           return {
             ...current,
@@ -235,14 +251,14 @@ export function useImmersiveTranslation(
             updatedAt: new Date().toISOString(),
           };
         });
-        setLoading(false);
+        setLoadingState(false);
         closeStream();
       };
 
       const onSessionFailed: EventListener = () => {
         if (!isCurrentRequest(articleId, token)) return;
-        setSession((current) => (current ? { ...current, status: 'failed' } : current));
-        setLoading(false);
+        setSessionState((current) => (current ? { ...current, status: 'failed' } : current));
+        setLoadingState(false);
         closeStream();
       };
 
@@ -265,36 +281,30 @@ export function useImmersiveTranslation(
 
   const loadSnapshot = useCallback(
     async (articleId: string, token: number) => {
+      ensureStateForArticle(articleId);
       const snapshot = await api.getArticleAiTranslateSnapshot(articleId);
       if (!isCurrentRequest(articleId, token)) return null;
 
-      setSession(snapshot.session);
-      setSegments(toSortedSegments(snapshot.segments));
+      setSessionState(snapshot.session);
+      setSegmentsState(toSortedSegments(snapshot.segments));
 
       if (snapshot.session?.status === 'running') {
-        setLoading(true);
+        setLoadingState(true);
         connectStream(articleId, token);
       } else {
-        setLoading(false);
+        setLoadingState(false);
         closeStream();
       }
 
       return snapshot;
     },
-    [api, closeStream, connectStream, isCurrentRequest],
+    [api, closeStream, connectStream, ensureStateForArticle, isCurrentRequest],
   );
 
   useEffect(() => {
     articleIdRef.current = input.articleId;
     requestTokenRef.current += 1;
     closeStream();
-    setViewing(false);
-    setLoading(false);
-    setMissingApiKey(false);
-    setWaitingFulltext(false);
-    setTimedOut(false);
-    setSession(null);
-    setSegments([]);
   }, [input.articleId, closeStream]);
 
   useEffect(() => {
@@ -310,47 +320,48 @@ export function useImmersiveTranslation(
     const token = requestTokenRef.current + 1;
     requestTokenRef.current = token;
 
-    setMissingApiKey(false);
-    setWaitingFulltext(false);
-    setTimedOut(false);
-    setLoading(true);
+    ensureStateForArticle(articleId);
+    setMissingApiKeyState(false);
+    setWaitingFulltextState(false);
+    setTimedOutState(false);
+    setLoadingState(true);
 
     try {
       const enqueueResult = await api.enqueueArticleAiTranslate(articleId);
       if (!isCurrentRequest(articleId, token)) return;
 
       if (enqueueResult.reason === 'missing_api_key') {
-        setLoading(false);
-        setMissingApiKey(true);
+        setLoadingState(false);
+        setMissingApiKeyState(true);
         return;
       }
 
       if (enqueueResult.reason === 'fulltext_pending') {
-        setLoading(false);
-        setWaitingFulltext(true);
+        setLoadingState(false);
+        setWaitingFulltextState(true);
         return;
       }
 
       if (enqueueResult.reason === 'body_translate_disabled') {
-        setLoading(false);
+        setLoadingState(false);
         return;
       }
 
       if (enqueueResult.reason === 'already_translated') {
-        setLoading(false);
-        setViewing(true);
+        setLoadingState(false);
+        setViewingState(true);
         return;
       }
 
       await loadSnapshot(articleId, token);
       if (!isCurrentRequest(articleId, token)) return;
-      setViewing(true);
+      setViewingState(true);
     } catch (err) {
       console.error(err);
       if (!isCurrentRequest(articleId, token)) return;
-      setLoading(false);
+      setLoadingState(false);
     }
-  }, [api, input.articleId, isCurrentRequest, loadSnapshot]);
+  }, [api, ensureStateForArticle, input.articleId, isCurrentRequest, loadSnapshot]);
 
   const retrySegment = useCallback(
     async (segmentIndex: number) => {
@@ -360,31 +371,42 @@ export function useImmersiveTranslation(
       const token = requestTokenRef.current + 1;
       requestTokenRef.current = token;
 
-      setLoading(true);
+      ensureStateForArticle(articleId);
+      setLoadingState(true);
 
       try {
         await api.retryArticleAiTranslateSegment(articleId, segmentIndex);
         if (!isCurrentRequest(articleId, token)) return;
         await loadSnapshot(articleId, token);
         if (!isCurrentRequest(articleId, token)) return;
-        setViewing(true);
+        setViewingState(true);
       } catch (err) {
         console.error(err);
         if (!isCurrentRequest(articleId, token)) return;
-        setLoading(false);
+        setLoadingState(false);
       }
     },
-    [api, input.articleId, isCurrentRequest, loadSnapshot],
+    [api, ensureStateForArticle, input.articleId, isCurrentRequest, loadSnapshot],
   );
 
+  const setViewing = useCallback(
+    (value: boolean) => {
+      ensureStateForArticle(input.articleId);
+      setViewingState(value);
+    },
+    [ensureStateForArticle, input.articleId],
+  );
+
+  const isStateForCurrentArticle = stateArticleId === input.articleId;
+
   return {
-    viewing,
-    loading,
-    missingApiKey,
-    waitingFulltext,
-    timedOut,
-    session,
-    segments,
+    viewing: isStateForCurrentArticle ? viewing : false,
+    loading: isStateForCurrentArticle ? loading : false,
+    missingApiKey: isStateForCurrentArticle ? missingApiKey : false,
+    waitingFulltext: isStateForCurrentArticle ? waitingFulltext : false,
+    timedOut: isStateForCurrentArticle ? timedOut : false,
+    session: isStateForCurrentArticle ? session : null,
+    segments: isStateForCurrentArticle ? segments : [],
     requestTranslation,
     retrySegment,
     setViewing,
