@@ -91,8 +91,13 @@ vi.mock('../../lib/apiClient', async () => {
   };
 });
 
-function seedArticleViewState(input?: { bodyTranslateEnabled?: boolean; content?: string }) {
+function seedArticleViewState(input?: {
+  bodyTranslateEnabled?: boolean;
+  bodyTranslateOnOpenEnabled?: boolean;
+  content?: string;
+}) {
   const bodyTranslateEnabled = input?.bodyTranslateEnabled ?? true;
+  const bodyTranslateOnOpenEnabled = input?.bodyTranslateOnOpenEnabled ?? false;
   const content = input?.content ?? '<p>A</p><p>B</p>';
 
   return import('../../store/appStore').then(({ useAppStore }) => {
@@ -108,6 +113,7 @@ function seedArticleViewState(input?: { bodyTranslateEnabled?: boolean; content?
           aiSummaryOnOpenEnabled: false,
           titleTranslateEnabled: true,
           bodyTranslateEnabled,
+          bodyTranslateOnOpenEnabled,
           categoryId: null,
           category: null,
           articleListDisplayMode: 'card',
@@ -326,5 +332,21 @@ describe('ArticleView ai translate', () => {
     await waitFor(() => {
       expect(apiClient.retryArticleAiTranslateSegment).toHaveBeenCalledWith('article-1', 0);
     });
+  });
+
+  it('bodyTranslateOnOpenEnabled=true opens article and auto requests translation then auto enters translation view', async () => {
+    const apiClient = await import('../../lib/apiClient');
+    await seedArticleViewState({ bodyTranslateOnOpenEnabled: true });
+
+    const { default: ArticleView } = await import('./ArticleView');
+    render(<ArticleView />);
+
+    await waitFor(() => {
+      expect(apiClient.enqueueArticleAiTranslate).toHaveBeenCalledWith('article-1', {
+        force: false,
+      });
+    });
+
+    expect(await screen.findAllByText('翻译中…')).not.toHaveLength(0);
   });
 });

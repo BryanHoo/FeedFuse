@@ -49,6 +49,7 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
   const feedFullTextOnOpenEnabled = feed?.fullTextOnOpenEnabled ?? false;
   const feedAiSummaryOnOpenEnabled = feed?.aiSummaryOnOpenEnabled ?? false;
   const feedBodyTranslateEnabled = feed?.bodyTranslateEnabled ?? false;
+  const feedBodyTranslateOnOpenEnabled = feed?.bodyTranslateOnOpenEnabled ?? false;
   const currentArticleId = article?.id ?? null;
   const immersiveTranslation = useImmersiveTranslation({ articleId: currentArticleId });
   const fulltextStatus = tasks?.fulltext.status ?? 'idle';
@@ -73,6 +74,11 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
   const aiTranslationTimedOut = immersiveTranslation.timedOut;
   const aiTranslationWaitingFulltext = immersiveTranslation.waitingFulltext;
   const aiTranslationViewing = immersiveTranslation.viewing;
+  const hasLegacyAiTranslationContent = Boolean(
+    article?.aiTranslationBilingualHtml?.trim() || article?.aiTranslationZhHtml?.trim(),
+  );
+  const hasImmersiveSegments = immersiveTranslation.segments.length > 0;
+  const hasAiTranslationContent = hasLegacyAiTranslationContent || hasImmersiveSegments;
 
   const reportTitleVisibility = useCallback(
     (isVisible: boolean) => {
@@ -278,6 +284,21 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
     };
   }, [article?.aiSummary, article?.id, feedAiSummaryOnOpenEnabled, requestAiSummary]);
 
+  useEffect(() => {
+    const articleId = article?.id ?? null;
+    if (!articleId) return;
+    if (!feedBodyTranslateOnOpenEnabled) return;
+    if (hasAiTranslationContent || immersiveTranslation.session) return;
+
+    void immersiveTranslation.requestTranslation({ force: false, autoView: true });
+  }, [
+    article?.id,
+    feedBodyTranslateOnOpenEnabled,
+    hasAiTranslationContent,
+    immersiveTranslation.requestTranslation,
+    immersiveTranslation.session,
+  ]);
+
   const aiSummaryButtonDisabled = feedFullTextOnOpenEnabled && fulltextPending;
   const aiTranslationButtonDisabled =
     !aiTranslationViewing &&
@@ -364,11 +385,6 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
     .filter(Boolean);
   const aiSummaryTldrText = aiSummaryLines.slice(0, 2).join(' ');
   const aiSummaryContentId = `ai-summary-${article.id}`;
-  const hasLegacyAiTranslationContent = Boolean(
-    article.aiTranslationBilingualHtml?.trim() || article.aiTranslationZhHtml?.trim(),
-  );
-  const hasImmersiveSegments = immersiveTranslation.segments.length > 0;
-  const hasAiTranslationContent = hasLegacyAiTranslationContent || hasImmersiveSegments;
   const bodyHtml =
     aiTranslationViewing && hasImmersiveSegments
       ? immersiveHtml
