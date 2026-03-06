@@ -6,9 +6,12 @@ import {
   NotFoundError,
   ValidationError,
 } from '../../../../server/http/errors';
-import { deleteFeed, updateFeed } from '../../../../server/repositories/feedsRepo';
 import { deriveFeedIconUrl } from '../../../../server/rss/deriveFeedIconUrl';
 import { isSafeExternalUrl } from '../../../../server/rss/ssrfGuard';
+import {
+  deleteFeedAndCleanupCategory,
+  updateFeedWithCategoryResolution,
+} from '../../../../server/services/feedCategoryLifecycleService';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,13 +20,18 @@ const paramsSchema = z.object({
   id: z.string().uuid(),
 });
 
+const categoryInputShape = {
+  categoryId: z.string().uuid().nullable().optional(),
+  categoryName: z.string().trim().min(1).nullable().optional(),
+};
+
 const patchBodySchema = z
   .object({
     title: z.string().trim().min(1).optional(),
     url: z.string().trim().min(1).url().optional(),
     siteUrl: z.string().trim().url().nullable().optional(),
     enabled: z.boolean().optional(),
-    categoryId: z.string().uuid().nullable().optional(),
+    ...categoryInputShape,
     fullTextOnOpenEnabled: z.boolean().optional(),
     aiSummaryOnOpenEnabled: z.boolean().optional(),
     aiSummaryOnFetchEnabled: z.boolean().optional(),
@@ -32,6 +40,10 @@ const patchBodySchema = z
     titleTranslateEnabled: z.boolean().optional(),
     bodyTranslateEnabled: z.boolean().optional(),
     articleListDisplayMode: z.enum(['card', 'list']).optional(),
+  })
+  .refine((value) => !(value.categoryId && value.categoryName), {
+    path: ['categoryName'],
+    message: 'categoryId and categoryName are mutually exclusive',
   })
   .refine((v) => Object.keys(v).length > 0, {
     message: 'At least one field must be provided',
@@ -106,7 +118,7 @@ export async function PATCH(
     };
 
     const pool = getPool();
-    const updated = await updateFeed(pool, paramsParsed.data.id, input);
+    const updated = await updateFeedWithCategoryResolution(pool, paramsParsed.data.id, input);
     if (!updated) return fail(new NotFoundError('Feed not found'));
     return ok(updated);
   } catch (err) {
@@ -134,7 +146,7 @@ export async function DELETE(
     }
 
     const pool = getPool();
-    const deleted = await deleteFeed(pool, paramsParsed.data.id);
+    const deleted = await deleteFeedAndCleanupCategory(pool, paramsParsed.data.id);
     if (!deleted) return fail(new NotFoundError('Feed not found'));
     return ok({ deleted: true });
   } catch (err) {

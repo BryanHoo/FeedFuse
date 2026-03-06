@@ -2,18 +2,25 @@ import { z } from 'zod';
 import { getPool } from '../../../server/db/pool';
 import { ok, fail } from '../../../server/http/apiResponse';
 import { ConflictError, ValidationError } from '../../../server/http/errors';
-import { createFeed, listFeeds } from '../../../server/repositories/feedsRepo';
+import { listFeeds } from '../../../server/repositories/feedsRepo';
 import { deriveFeedIconUrl } from '../../../server/rss/deriveFeedIconUrl';
 import { isSafeExternalUrl } from '../../../server/rss/ssrfGuard';
+import { createFeedWithCategoryResolution } from '../../../server/services/feedCategoryLifecycleService';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const createFeedBodySchema = z.object({
+const categoryInputShape = {
+  categoryId: z.string().uuid().nullable().optional(),
+  categoryName: z.string().trim().min(1).nullable().optional(),
+};
+
+const createFeedBodySchema = z
+  .object({
   title: z.string().trim().min(1),
   url: z.string().trim().min(1).url(),
   siteUrl: z.string().trim().url().nullable().optional(),
-  categoryId: z.string().uuid().nullable().optional(),
+  ...categoryInputShape,
   fullTextOnOpenEnabled: z.boolean().optional(),
   aiSummaryOnOpenEnabled: z.boolean().optional(),
   aiSummaryOnFetchEnabled: z.boolean().optional(),
@@ -21,7 +28,11 @@ const createFeedBodySchema = z.object({
   bodyTranslateOnOpenEnabled: z.boolean().optional(),
   titleTranslateEnabled: z.boolean().optional(),
   bodyTranslateEnabled: z.boolean().optional(),
-});
+  })
+  .refine((value) => !(value.categoryId && value.categoryName), {
+    path: ['categoryName'],
+    message: 'categoryId and categoryName are mutually exclusive',
+  });
 
 function zodIssuesToFields(error: z.ZodError): Record<string, string> {
   const fields: Record<string, string> = {};
@@ -97,12 +108,10 @@ export async function POST(request: Request) {
 
     const pool = getPool();
     const siteUrl = parsed.data.siteUrl ?? null;
-    const created = await createFeed(pool, {
-      title: parsed.data.title,
-      url: parsed.data.url,
+    const created = await createFeedWithCategoryResolution(pool, {
+      ...parsed.data,
       siteUrl,
       iconUrl: deriveFeedIconUrl(siteUrl),
-      categoryId: parsed.data.categoryId ?? null,
       fullTextOnOpenEnabled: parsed.data.fullTextOnOpenEnabled ?? false,
       aiSummaryOnOpenEnabled: parsed.data.aiSummaryOnOpenEnabled ?? false,
       aiSummaryOnFetchEnabled: parsed.data.aiSummaryOnFetchEnabled ?? false,

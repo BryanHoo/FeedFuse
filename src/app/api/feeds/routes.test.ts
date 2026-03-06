@@ -7,9 +7,9 @@ const pool = {
 };
 
 const listFeedsMock = vi.fn();
-const createFeedMock = vi.fn();
-const updateFeedMock = vi.fn();
-const deleteFeedMock = vi.fn();
+const createFeedWithCategoryResolutionMock = vi.fn();
+const updateFeedWithCategoryResolutionMock = vi.fn();
+const deleteFeedAndCleanupCategoryMock = vi.fn();
 
 const enqueueMock = vi.fn();
 const enqueueWithResultMock = vi.fn();
@@ -26,15 +26,26 @@ vi.mock('../../../../../server/db/pool', () => ({
 
 vi.mock('../../../server/repositories/feedsRepo', () => ({
   listFeeds: (...args: unknown[]) => listFeedsMock(...args),
-  createFeed: (...args: unknown[]) => createFeedMock(...args),
-  updateFeed: (...args: unknown[]) => updateFeedMock(...args),
-  deleteFeed: (...args: unknown[]) => deleteFeedMock(...args),
 }));
 vi.mock('../../../../server/repositories/feedsRepo', () => ({
   listFeeds: (...args: unknown[]) => listFeedsMock(...args),
-  createFeed: (...args: unknown[]) => createFeedMock(...args),
-  updateFeed: (...args: unknown[]) => updateFeedMock(...args),
-  deleteFeed: (...args: unknown[]) => deleteFeedMock(...args),
+}));
+
+vi.mock('../../../server/services/feedCategoryLifecycleService', () => ({
+  createFeedWithCategoryResolution: (...args: unknown[]) =>
+    createFeedWithCategoryResolutionMock(...args),
+  updateFeedWithCategoryResolution: (...args: unknown[]) =>
+    updateFeedWithCategoryResolutionMock(...args),
+  deleteFeedAndCleanupCategory: (...args: unknown[]) =>
+    deleteFeedAndCleanupCategoryMock(...args),
+}));
+vi.mock('../../../../server/services/feedCategoryLifecycleService', () => ({
+  createFeedWithCategoryResolution: (...args: unknown[]) =>
+    createFeedWithCategoryResolutionMock(...args),
+  updateFeedWithCategoryResolution: (...args: unknown[]) =>
+    updateFeedWithCategoryResolutionMock(...args),
+  deleteFeedAndCleanupCategory: (...args: unknown[]) =>
+    deleteFeedAndCleanupCategoryMock(...args),
 }));
 
 vi.mock('../../../server/queue/queue', () => ({
@@ -57,9 +68,9 @@ describe('/api/feeds', () => {
   beforeEach(() => {
     pool.query.mockReset();
     listFeedsMock.mockReset();
-    createFeedMock.mockReset();
-    updateFeedMock.mockReset();
-    deleteFeedMock.mockReset();
+    createFeedWithCategoryResolutionMock.mockReset();
+    updateFeedWithCategoryResolutionMock.mockReset();
+    deleteFeedAndCleanupCategoryMock.mockReset();
     enqueueMock.mockReset();
     enqueueWithResultMock.mockReset();
   });
@@ -93,7 +104,7 @@ describe('/api/feeds', () => {
   });
 
   it('POST creates a feed', async () => {
-    createFeedMock.mockResolvedValue({
+    createFeedWithCategoryResolutionMock.mockResolvedValue({
       id: feedId,
       title: 'Example',
       url: 'https://1.1.1.1/rss.xml',
@@ -122,7 +133,7 @@ describe('/api/feeds', () => {
     );
     const json = await res.json();
 
-    expect(createFeedMock).toHaveBeenCalledWith(
+    expect(createFeedWithCategoryResolutionMock).toHaveBeenCalledWith(
       pool,
       expect.objectContaining({ fullTextOnOpenEnabled: true, aiSummaryOnOpenEnabled: true }),
     );
@@ -130,8 +141,43 @@ describe('/api/feeds', () => {
     expect(json.data.url).toBe('https://1.1.1.1/rss.xml');
   });
 
+  it('POST /api/feeds accepts categoryName and delegates to lifecycle service', async () => {
+    createFeedWithCategoryResolutionMock.mockResolvedValue({
+      id: feedId,
+      title: 'Example',
+      url: 'https://1.1.1.1/rss.xml',
+      siteUrl: null,
+      iconUrl: null,
+      enabled: true,
+      fullTextOnOpenEnabled: false,
+      aiSummaryOnOpenEnabled: false,
+      categoryId,
+      fetchIntervalMinutes: 30,
+    });
+
+    const mod = await import('./route');
+    const res = await mod.POST(
+      new Request('http://localhost/api/feeds', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          title: 'Example',
+          url: 'https://1.1.1.1/rss.xml',
+          categoryName: 'Tech',
+        }),
+      }),
+    );
+    const json = await res.json();
+
+    expect(createFeedWithCategoryResolutionMock).toHaveBeenCalledWith(
+      pool,
+      expect.objectContaining({ categoryName: 'Tech' }),
+    );
+    expect(json.ok).toBe(true);
+  });
+
   it('POST /api/feeds accepts aiSummaryOnFetchEnabled/bodyTranslateOnFetchEnabled/bodyTranslateOnOpenEnabled', async () => {
-    createFeedMock.mockResolvedValue({
+    createFeedWithCategoryResolutionMock.mockResolvedValue({
       id: feedId,
       title: 'Example',
       url: 'https://1.1.1.1/rss.xml',
@@ -163,7 +209,7 @@ describe('/api/feeds', () => {
     );
     const json = await res.json();
 
-    expect(createFeedMock).toHaveBeenCalledWith(
+    expect(createFeedWithCategoryResolutionMock).toHaveBeenCalledWith(
       pool,
       expect.objectContaining({
         aiSummaryOnFetchEnabled: true,
@@ -175,7 +221,7 @@ describe('/api/feeds', () => {
   });
 
   it('POST /api/feeds forwards siteUrl and derived iconUrl', async () => {
-    createFeedMock.mockResolvedValue({
+    createFeedWithCategoryResolutionMock.mockResolvedValue({
       id: feedId,
       title: 'Example',
       url: 'https://1.1.1.1/rss.xml',
@@ -203,7 +249,7 @@ describe('/api/feeds', () => {
     );
     const json = await res.json();
 
-    expect(createFeedMock).toHaveBeenCalledWith(
+    expect(createFeedWithCategoryResolutionMock).toHaveBeenCalledWith(
       pool,
       expect.objectContaining({
         siteUrl: 'https://example.com/',
@@ -234,7 +280,7 @@ describe('/api/feeds', () => {
   });
 
   it('POST returns conflict on duplicate url', async () => {
-    createFeedMock.mockRejectedValue({
+    createFeedWithCategoryResolutionMock.mockRejectedValue({
       code: '23505',
       constraint: 'feeds_url_unique',
     });
@@ -257,7 +303,7 @@ describe('/api/feeds', () => {
   });
 
   it('POST returns validation error when categoryId does not exist', async () => {
-    createFeedMock.mockRejectedValue({
+    createFeedWithCategoryResolutionMock.mockRejectedValue({
       code: '23503',
       constraint: 'feeds_category_id_fkey',
     });
@@ -282,7 +328,7 @@ describe('/api/feeds', () => {
   });
 
   it('PATCH updates a feed', async () => {
-    updateFeedMock.mockResolvedValue({
+    updateFeedWithCategoryResolutionMock.mockResolvedValue({
       id: feedId,
       title: 'Updated',
       url: 'https://example.com/rss.xml',
@@ -313,7 +359,7 @@ describe('/api/feeds', () => {
     );
     const json = await res.json();
 
-    expect(updateFeedMock).toHaveBeenCalledWith(
+    expect(updateFeedWithCategoryResolutionMock).toHaveBeenCalledWith(
       pool,
       feedId,
       expect.objectContaining({
@@ -328,7 +374,7 @@ describe('/api/feeds', () => {
   });
 
   it('PATCH /api/feeds/:id accepts new trigger flags', async () => {
-    updateFeedMock.mockResolvedValue({
+    updateFeedWithCategoryResolutionMock.mockResolvedValue({
       id: feedId,
       title: 'Updated',
       url: 'https://example.com/rss.xml',
@@ -359,7 +405,7 @@ describe('/api/feeds', () => {
     );
     const json = await res.json();
 
-    expect(updateFeedMock).toHaveBeenCalledWith(
+    expect(updateFeedWithCategoryResolutionMock).toHaveBeenCalledWith(
       pool,
       feedId,
       expect.objectContaining({
@@ -372,7 +418,7 @@ describe('/api/feeds', () => {
   });
 
   it('PATCH /api/feeds/:id accepts url and siteUrl', async () => {
-    updateFeedMock.mockResolvedValue({
+    updateFeedWithCategoryResolutionMock.mockResolvedValue({
       id: feedId,
       title: 'Updated',
       url: 'https://2.2.2.2/rss.xml',
@@ -401,7 +447,7 @@ describe('/api/feeds', () => {
     );
     const json = await res.json();
 
-    expect(updateFeedMock).toHaveBeenCalledWith(
+    expect(updateFeedWithCategoryResolutionMock).toHaveBeenCalledWith(
       pool,
       feedId,
       expect.objectContaining({
@@ -413,6 +459,27 @@ describe('/api/feeds', () => {
       }),
     );
     expect(json.ok).toBe(true);
+  });
+
+  it('PATCH /api/feeds/:id rejects payloads that send both categoryId and categoryName', async () => {
+    const mod = await import('./[id]/route');
+    const res = await mod.PATCH(
+      new Request(`http://localhost/api/feeds/${feedId}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          categoryId,
+          categoryName: 'Tech',
+        }),
+      }),
+      { params: Promise.resolve({ id: feedId }) },
+    );
+    const json = await res.json();
+
+    expect(json.ok).toBe(false);
+    expect(json.error.code).toBe('validation_error');
+    expect(json.error.fields.categoryName).toBeTruthy();
+    expect(updateFeedWithCategoryResolutionMock).not.toHaveBeenCalled();
   });
 
   it('PATCH rejects unsafe url', async () => {
@@ -430,11 +497,11 @@ describe('/api/feeds', () => {
     expect(json.ok).toBe(false);
     expect(json.error.code).toBe('validation_error');
     expect(json.error.fields.url).toBeTruthy();
-    expect(updateFeedMock).not.toHaveBeenCalled();
+    expect(updateFeedWithCategoryResolutionMock).not.toHaveBeenCalled();
   });
 
   it('PATCH returns conflict on duplicate url', async () => {
-    updateFeedMock.mockRejectedValue({
+    updateFeedWithCategoryResolutionMock.mockRejectedValue({
       code: '23505',
       constraint: 'feeds_url_unique',
     });
@@ -455,7 +522,7 @@ describe('/api/feeds', () => {
   });
 
   it('PATCH returns validation error when categoryId does not exist', async () => {
-    updateFeedMock.mockRejectedValue({
+    updateFeedWithCategoryResolutionMock.mockRejectedValue({
       code: '23503',
       constraint: 'feeds_category_id_fkey',
     });
@@ -477,7 +544,7 @@ describe('/api/feeds', () => {
   });
 
   it('DELETE deletes a feed', async () => {
-    deleteFeedMock.mockResolvedValue(true);
+    deleteFeedAndCleanupCategoryMock.mockResolvedValue(true);
 
     const mod = await import('./[id]/route');
     const res = await mod.DELETE(new Request(`http://localhost/api/feeds/${feedId}`), {
