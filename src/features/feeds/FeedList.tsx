@@ -23,6 +23,9 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { deleteCategory, patchCategory, reorderCategories } from '@/lib/apiClient';
@@ -371,6 +374,15 @@ export default function FeedList() {
                           >
                             编辑
                           </ContextMenuItem>
+                          <ContextMenuSub>
+                            <ContextMenuSubTrigger>移动到分类</ContextMenuSubTrigger>
+                            <ContextMenuSubContent>
+                              {categoryMaster.map((category) => (
+                                <ContextMenuItem key={category.id}>{category.name}</ContextMenuItem>
+                              ))}
+                              <ContextMenuItem>{uncategorizedName}</ContextMenuItem>
+                            </ContextMenuSubContent>
+                          </ContextMenuSub>
                           <ContextMenuItem
                             onSelect={() => {
                               setSummaryPolicyFeedId(feed.id);

@@ -71,6 +71,13 @@ describe('FeedList manage', () => {
     );
   }
 
+  async function openMoveToCategorySubmenu() {
+    fireEvent.contextMenu(screen.getByRole('button', { name: /My Feed.*2/ }));
+    const moveTrigger = await screen.findByRole('menuitem', { name: '移动到分类' });
+    fireEvent.pointerMove(moveTrigger);
+    fireEvent.keyDown(moveTrigger, { key: 'ArrowRight' });
+  }
+
   beforeEach(() => {
     lastPatchBody = null;
     lastReorderBody = null;
@@ -715,6 +722,31 @@ describe('FeedList manage', () => {
         bodyTranslateOnOpenEnabled: true,
       });
     });
+  });
+
+  it('shows move-to-category submenu in category order', async () => {
+    useAppStore.setState((state) => ({
+      ...state,
+      categories: [
+        { id: 'cat-design', name: '设计', expanded: true },
+        { id: 'cat-tech', name: '科技', expanded: true },
+        { id: 'cat-uncategorized', name: '未分类', expanded: true },
+      ],
+      feeds: [
+        {
+          ...state.feeds[0],
+          categoryId: 'cat-tech',
+          category: '科技',
+        },
+      ],
+    }));
+
+    renderWithNotifications();
+    await openMoveToCategorySubmenu();
+
+    expect(screen.getByRole('menuitem', { name: '设计' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: '科技' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: '未分类' })).toBeInTheDocument();
   });
 
   it('disables save after edit url until validation succeeds', async () => {
