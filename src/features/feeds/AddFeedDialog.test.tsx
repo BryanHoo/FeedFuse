@@ -359,7 +359,12 @@ describe('AddFeedDialog', () => {
     fireEvent.change(urlInput, {
       target: { value: 'https://example.com/success.xml' },
     });
-    fireEvent.change(screen.getByLabelText('分类'), { target: { value: '设计' } });
+    const categoryInput = screen.getByLabelText('分类');
+    fireEvent.focus(categoryInput);
+    fireEvent.click(categoryInput);
+    expect(await screen.findByRole('listbox', { name: '分类建议' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('option', { name: '设计' }));
+    expect(categoryInput).toHaveValue('设计');
     fireEvent.blur(urlInput);
 
     await waitFor(() => {
@@ -443,9 +448,11 @@ describe('AddFeedDialog', () => {
     renderWithNotifications();
     fireEvent.click(screen.getByLabelText('add-feed'));
 
-    const optionValues = Array.from(
-      document.querySelectorAll<HTMLDataListElement>('#feed-category-options option'),
-    ).map((item) => item.value);
+    const categoryInput = screen.getByLabelText('分类');
+    fireEvent.focus(categoryInput);
+    fireEvent.click(categoryInput);
+
+    const optionValues = (await screen.findAllByRole('option')).map((item) => item.textContent);
 
     expect(optionValues).toEqual(['未分类', '设计', '科技']);
   });

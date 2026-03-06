@@ -445,6 +445,29 @@ describe('FeedList manage', () => {
     );
   });
 
+  it('clears 全部文章 active classes after selecting a feed', async () => {
+    useAppStore.setState({
+      selectedView: 'all',
+      selectedArticleId: null,
+    });
+
+    renderWithNotifications();
+
+    const allArticlesButton = screen.getByRole('button', { name: '全部文章' });
+    const feedButton = screen.getByRole('button', { name: /My Feed.*2/ });
+
+    expect(allArticlesButton).toHaveClass('bg-primary/10', 'text-primary');
+    expect(feedButton).not.toHaveClass('bg-primary/10', 'text-primary');
+
+    fireEvent.click(feedButton);
+
+    await waitFor(() => {
+      expect(useAppStore.getState().selectedView).toBe('feed-1');
+      expect(allArticlesButton).not.toHaveClass('bg-primary/10', 'text-primary');
+      expect(feedButton).toHaveClass('bg-primary/10', 'text-primary');
+    });
+  });
+
   it('shows AI摘要配置 and 翻译配置 in feed context menu', async () => {
     renderWithNotifications();
 
