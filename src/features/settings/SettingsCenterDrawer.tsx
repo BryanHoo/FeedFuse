@@ -1,4 +1,4 @@
-import { Bot, FolderTree, Palette, Rss, type LucideIcon } from 'lucide-react';
+import { Bot, Palette, Rss, type LucideIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
   AlertDialog,
@@ -15,7 +15,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSettingsStore } from '../../store/settingsStore';
 import GeneralSettingsPanel from './panels/GeneralSettingsPanel';
 import AISettingsPanel from './panels/AISettingsPanel';
-import CategoriesSettingsPanel from './panels/CategoriesSettingsPanel';
 import RssSettingsPanel from './panels/RssSettingsPanel';
 import { useSettingsAutosave } from './useSettingsAutosave';
 import { useNotify } from '../notifications/useNotify';
@@ -24,7 +23,7 @@ interface SettingsCenterDrawerProps {
   onClose: () => void;
 }
 
-type SettingsSectionKey = 'general' | 'rss' | 'ai' | 'categories';
+type SettingsSectionKey = 'general' | 'rss' | 'ai';
 
 interface SettingsSectionItem {
   key: SettingsSectionKey;
@@ -37,7 +36,6 @@ const sectionItems: SettingsSectionItem[] = [
   { key: 'general', label: '通用', hint: '主题与行为', icon: Palette },
   { key: 'rss', label: 'RSS', hint: '抓取间隔', icon: Rss },
   { key: 'ai', label: 'AI', hint: '模型与密钥', icon: Bot },
-  { key: 'categories', label: '分类', hint: '分类管理', icon: FolderTree },
 ];
 
 const autosaveStatusMeta = {
@@ -161,7 +159,6 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
     general: validationErrorKeys.filter((field) => field.startsWith('general.')).length,
     rss: validationErrorKeys.filter((field) => field.startsWith('rss.')).length,
     ai: validationErrorKeys.filter((field) => field.startsWith('ai.')).length,
-    categories: validationErrorKeys.filter((field) => field.startsWith('categories.')).length,
   };
 
   const requestClose = () => {
@@ -269,9 +266,6 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
                       </TabsContent>
                       <TabsContent value="ai" className="mt-0">
                         <AISettingsPanel draft={draft} onChange={handleDraftChange} errors={validationErrors} />
-                      </TabsContent>
-                      <TabsContent value="categories" className="mt-0">
-                        <CategoriesSettingsPanel />
                       </TabsContent>
                     </div>
                   </div>

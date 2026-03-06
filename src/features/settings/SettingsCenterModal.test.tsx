@@ -172,7 +172,7 @@ describe('SettingsCenterModal', () => {
     });
 
     expect(screen.getByTestId('settings-section-tab-general')).toBeInTheDocument();
-    expect(screen.getByTestId('settings-section-tab-categories')).toBeInTheDocument();
+    expect(screen.queryByTestId('settings-section-tab-categories')).not.toBeInTheDocument();
     expect(screen.getByTestId('settings-section-tab-rss')).toBeInTheDocument();
     expect(screen.getByText('主题')).toBeInTheDocument();
   });
@@ -292,7 +292,7 @@ describe('SettingsCenterModal', () => {
     expect(screen.getByTestId('settings-center-modal')).toBeInTheDocument();
   });
 
-  it('creates category and autosaves without rss verification flow', async () => {
+  it('does not render categories tab in settings anymore', async () => {
     resetSettingsStore();
     renderWithNotifications();
 
@@ -300,19 +300,8 @@ describe('SettingsCenterModal', () => {
     await waitFor(() => {
       expect(screen.getByTestId('settings-center-modal')).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByTestId('settings-section-tab-categories'));
 
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: '添加分类' })).toBeInTheDocument();
-    });
-
-    fireEvent.change(screen.getByLabelText('新分类名称'), { target: { value: 'Tech' } });
-    fireEvent.click(screen.getByRole('button', { name: '添加分类' }));
-
-    await waitFor(() => {
-      const savedCategories = useAppStore.getState().categories;
-      expect(savedCategories.some((item) => item.name === 'Tech')).toBe(true);
-    });
+    expect(screen.queryByTestId('settings-section-tab-categories')).not.toBeInTheDocument();
   });
 
   it('uses right drawer shell with sidebar tab layout', async () => {
