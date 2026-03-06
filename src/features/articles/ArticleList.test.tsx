@@ -52,6 +52,47 @@ function setupImagePreloadMock() {
   };
 }
 
+function setupIntersectionObserverMock() {
+  const original = globalThis.IntersectionObserver;
+  const targets = new Map<string, Element>();
+  let callback: IntersectionObserverCallback = () => undefined;
+
+  class MockIntersectionObserver {
+    constructor(cb: IntersectionObserverCallback) {
+      callback = cb;
+    }
+
+    observe(target: Element) {
+      const articleId = target.getAttribute('data-article-id');
+      if (articleId) targets.set(articleId, target);
+    }
+
+    unobserve() {}
+
+    disconnect() {}
+  }
+
+  vi.stubGlobal('IntersectionObserver', MockIntersectionObserver as unknown as typeof IntersectionObserver);
+
+  return {
+    triggerIntersect(articleIds: string[]) {
+      callback(
+        articleIds
+          .map((articleId) => targets.get(articleId))
+          .filter((target): target is Element => Boolean(target))
+          .map((target) => ({
+            target,
+            isIntersecting: true,
+          }) as IntersectionObserverEntry),
+        {} as IntersectionObserver,
+      );
+    },
+    restore() {
+      vi.stubGlobal('IntersectionObserver', original);
+    },
+  };
+}
+
 describe('ArticleList', () => {
   let ArticleList: ArticleListModule['default'];
   let useAppStore: AppStoreModule['useAppStore'];
@@ -320,9 +361,246 @@ describe('ArticleList', () => {
     expect(screen.getByText('0 篇')).toBeInTheDocument();
   });
 
+  it('does not preload distant preview images before observer activation', () => {
+    const preload = setupImagePreloadMock();
+    const observer = setupIntersectionObserverMock();
+
+    useAppStore.setState({
+      articles: Array.from({ length: 6 }, (_, index) => ({
+        id: `art-${index + 1}`,
+        feedId: 'feed-1',
+        title: `Article ${index + 1}`,
+        content: '',
+        previewImage: `https://example.com/${index + 1}.jpg`,
+        summary: 'Summary',
+        publishedAt: new Date(`2026-02-${25 - index}T00:00:00.000Z`).toISOString(),
+        link: `https://example.com/${index + 1}`,
+        isRead: false,
+        isStarred: false,
+      })),
+      selectedArticleId: 'art-1',
+    });
+
+    try {
+      renderWithNotifications();
+
+      expect(preload.instances).toHaveLength(0);
+
+      act(() => {
+        observer.triggerIntersect(['art-1', 'art-2']);
+      });
+
+      expect(preload.instances).toHaveLength(2);
+    } finally {
+      preload.restore();
+      observer.restore();
+    }
+  });
+
+  it('limits preview image preloads to two concurrent requests', async () => {
+    const preload = setupImagePreloadMock();
+    const observer = setupIntersectionObserverMock();
+
+    useAppStore.setState({
+      articles: Array.from({ length: 5 }, (_, index) => ({
+        id: `art-${index + 1}`,
+        feedId: 'feed-1',
+        title: `Article ${index + 1}`,
+        content: '',
+        previewImage: `https://example.com/${index + 1}.jpg`,
+        summary: 'Summary',
+        publishedAt: new Date(`2026-02-${25 - index}T00:00:00.000Z`).toISOString(),
+        link: `https://example.com/${index + 1}`,
+        isRead: false,
+        isStarred: false,
+      })),
+      selectedArticleId: 'art-1',
+    });
+
+    try {
+      renderWithNotifications();
+
+      act(() => {
+        observer.triggerIntersect(['art-1', 'art-2', 'art-3', 'art-4']);
+      });
+
+      expect(preload.instances).toHaveLength(2);
+
+      act(() => {
+        preload.instances[0].triggerLoad();
+      });
+
+      await waitFor(() => {
+        expect(preload.instances).toHaveLength(3);
+      });
+    } finally {
+      preload.restore();
+      observer.restore();
+    }
+  });
+
+  it('does not retry failed preview images after reactivation', async () => {
+    const preload = setupImagePreloadMock();
+    const observer = setupIntersectionObserverMock();
+
+    useAppStore.setState((state) => ({
+      ...state,
+      articles: state.articles.map((article) =>
+        article.id === 'art-1'
+          ? { ...article, previewImage: 'https://example.com/broken.jpg' }
+          : article,
+      ),
+    }));
+
+    try {
+      renderWithNotifications();
+
+      act(() => {
+        observer.triggerIntersect(['art-1']);
+      });
+
+      await waitFor(() => {
+        expect(preload.instances).toHaveLength(1);
+      });
+
+      act(() => {
+        preload.instances[0].triggerError();
+        observer.triggerIntersect(['art-1']);
+      });
+
+      expect(preload.instances).toHaveLength(1);
+    } finally {
+      preload.restore();
+      observer.restore();
+    }
+  });
+
+  it('drops stale preview image statuses after article list changes', async () => {
+    const preload = setupImagePreloadMock();
+    const observer = setupIntersectionObserverMock();
+
+    useAppStore.setState((state) => ({
+      ...state,
+      articles: state.articles.map((article) =>
+        article.id === 'art-1'
+          ? { ...article, previewImage: 'https://example.com/1.jpg' }
+          : article,
+      ),
+    }));
+
+    try {
+      renderWithNotifications();
+
+      act(() => {
+        observer.triggerIntersect(['art-1']);
+      });
+
+      await waitFor(() => {
+        expect(preload.instances).toHaveLength(1);
+      });
+
+      act(() => {
+        preload.instances[0].triggerLoad();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('article-card-art-1-title')).toBeInTheDocument();
+      });
+
+      act(() => {
+        useAppStore.setState({
+          selectedView: 'starred',
+          articles: [],
+          selectedArticleId: null,
+        });
+      });
+
+      expect(preload.instances).toHaveLength(1);
+    } finally {
+      preload.restore();
+      observer.restore();
+    }
+  });
+
+  it('drops stale preview image in-flight slots after article list changes', async () => {
+    const preload = setupImagePreloadMock();
+    const observer = setupIntersectionObserverMock();
+
+    useAppStore.setState({
+      articles: Array.from({ length: 4 }, (_, index) => ({
+        id: `art-${index + 1}`,
+        feedId: 'feed-1',
+        title: `Article ${index + 1}`,
+        content: '',
+        previewImage: `https://example.com/${index + 1}.jpg`,
+        summary: 'Summary',
+        publishedAt: new Date(`2026-02-${25 - index}T00:00:00.000Z`).toISOString(),
+        link: `https://example.com/${index + 1}`,
+        isRead: false,
+        isStarred: false,
+      })),
+      selectedArticleId: 'art-1',
+      selectedView: 'all',
+    });
+
+    try {
+      renderWithNotifications();
+
+      act(() => {
+        observer.triggerIntersect(['art-1', 'art-2', 'art-3', 'art-4']);
+      });
+
+      expect(preload.instances).toHaveLength(2);
+
+      act(() => {
+        useAppStore.setState({
+          selectedView: 'starred',
+          articles: [],
+          selectedArticleId: null,
+        });
+      });
+
+      act(() => {
+        useAppStore.setState({
+          selectedView: 'all',
+          articles: [
+            {
+              id: 'art-9',
+              feedId: 'feed-1',
+              title: 'Article 9',
+              content: '',
+              previewImage: 'https://example.com/9.jpg',
+              summary: 'Summary',
+              publishedAt: new Date('2026-02-20T00:00:00.000Z').toISOString(),
+              link: 'https://example.com/9',
+              isRead: false,
+              isStarred: false,
+            },
+          ],
+          selectedArticleId: 'art-9',
+        });
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('article-card-art-9-title')).toBeInTheDocument();
+      });
+
+      act(() => {
+        observer.triggerIntersect(['art-9']);
+      });
+
+      expect(preload.instances).toHaveLength(3);
+      expect(preload.instances[2].src).toBe('https://example.com/9.jpg');
+    } finally {
+      preload.restore();
+      observer.restore();
+    }
+  });
+
   it('renders preview image only after preload succeeds', async () => {
     const previewImageUrl = 'https://example.com/preview.jpg';
     const preload = setupImagePreloadMock();
+    const observer = setupIntersectionObserverMock();
 
     useAppStore.setState((state) => ({
       ...state,
@@ -333,6 +611,12 @@ describe('ArticleList', () => {
 
     try {
       const { container } = renderWithNotifications();
+
+      expect(preload.instances).toHaveLength(0);
+
+      act(() => {
+        observer.triggerIntersect(['art-1']);
+      });
 
       expect(preload.instances).toHaveLength(1);
       expect(preload.instances[0].src).toBe(previewImageUrl);
@@ -347,12 +631,14 @@ describe('ArticleList', () => {
       });
     } finally {
       preload.restore();
+      observer.restore();
     }
   });
 
   it('keeps preview image hidden when preload fails', () => {
     const brokenImageUrl = 'https://example.com/broken-preview.jpg';
     const preload = setupImagePreloadMock();
+    const observer = setupIntersectionObserverMock();
 
     useAppStore.setState((state) => ({
       ...state,
@@ -364,6 +650,12 @@ describe('ArticleList', () => {
     try {
       const { container } = renderWithNotifications();
 
+      expect(preload.instances).toHaveLength(0);
+
+      act(() => {
+        observer.triggerIntersect(['art-1']);
+      });
+
       expect(preload.instances).toHaveLength(1);
       expect(container.querySelector(`img[src="${brokenImageUrl}"]`)).not.toBeInTheDocument();
 
@@ -374,6 +666,7 @@ describe('ArticleList', () => {
       expect(container.querySelector(`img[src="${brokenImageUrl}"]`)).not.toBeInTheDocument();
     } finally {
       preload.restore();
+      observer.restore();
     }
   });
 

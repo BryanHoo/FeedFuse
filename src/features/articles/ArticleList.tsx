@@ -1,5 +1,5 @@
 import { CheckCheck, CircleDot, LayoutGrid, List, RefreshCw } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppStore } from "../../store/appStore";
 import { formatRelativeTime, getArticleSectionHeading, getLocalDayKey } from "../../utils/date";
 import { patchFeed, refreshAllFeeds, refreshFeed } from "../../lib/apiClient";
@@ -11,6 +11,7 @@ import { useNotify } from "../notifications/useNotify";
 const sessionVisibleArticleIds = new Set<string>();
 const REFRESH_POLL_INTERVAL_MS = 1000;
 const REFRESH_POLL_MAX_ATTEMPTS = 12;
+const PREVIEW_PRELOAD_MAX_CONCURRENT = 2;
 type PreviewImageStatus = "loading" | "ready" | "failed";
 
 function sleep(ms: number): Promise<void> {
@@ -54,9 +55,15 @@ export default function ArticleList() {
   const showUnreadFilterActive =
     selectedView === "unread" || (showUnreadOnly && showHeaderActions);
 
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const articleCardRefs = useRef(new Map<string, HTMLButtonElement>());
   const [previewImageStatuses, setPreviewImageStatuses] = useState<Map<string, PreviewImageStatus>>(
     () => new Map(),
   );
+  const [activePreviewImageKeys, setActivePreviewImageKeys] = useState<Set<string>>(() => new Set());
+  const preloadQueueRef = useRef<string[]>([]);
+  const preloadInFlightRef = useRef(new Set<string>());
+  const previewImageStatusesRef = useRef(previewImageStatuses);
   const cardTitleRefs = useRef(new Map<string, HTMLHeadingElement>());
   const [wrappedCardTitleArticleIds, setWrappedCardTitleArticleIds] = useState<Set<string>>(
     () => new Set(),
@@ -184,10 +191,43 @@ export default function ArticleList() {
   }, [previewImageByArticleId]);
 
   useEffect(() => {
+    const root = scrollContainerRef.current;
+    if (!root || previewImageByArticleId.size === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        setActivePreviewImageKeys((previous) => {
+          const next = new Set(previous);
+
+          for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+
+            const articleId = entry.target.getAttribute("data-article-id");
+            const preview = articleId ? previewImageByArticleId.get(articleId) : undefined;
+            if (preview) next.add(preview.key);
+          }
+
+          return areSetsEqual(previous, next) ? previous : next;
+        });
+      },
+      {
+        root,
+        rootMargin: "0px 0px 50% 0px",
+      },
+    );
+
+    for (const element of articleCardRefs.current.values()) {
+      observer.observe(element);
+    }
+
+    return () => observer.disconnect();
+  }, [previewImageByArticleId]);
+
+  useEffect(() => {
     const candidateKeys = new Set(previewImageCandidates.keys());
 
     setPreviewImageStatuses((previousStatuses) => {
-      let changed = previousStatuses.size !== candidateKeys.size;
+      let changed = false;
       const nextStatuses = new Map<string, PreviewImageStatus>();
 
       for (const [key, status] of previousStatuses) {
@@ -201,61 +241,60 @@ export default function ArticleList() {
 
       return changed ? nextStatuses : previousStatuses;
     });
+
+    setActivePreviewImageKeys((previous) => {
+      const next = new Set(Array.from(previous).filter((key) => candidateKeys.has(key)));
+      return areSetsEqual(previous, next) ? previous : next;
+    });
+
+    preloadQueueRef.current = preloadQueueRef.current.filter((key) => candidateKeys.has(key));
+    preloadInFlightRef.current.forEach((key) => {
+      if (!candidateKeys.has(key)) preloadInFlightRef.current.delete(key);
+    });
   }, [previewImageCandidates]);
 
   useEffect(() => {
-    const keysToPreload: Array<[string, string]> = [];
+    previewImageStatusesRef.current = previewImageStatuses;
+  }, [previewImageStatuses]);
 
-    for (const [key, src] of previewImageCandidates) {
-      if (previewImageStatuses.has(key)) continue;
-      keysToPreload.push([key, src]);
-    }
+  const pumpPreviewPreloadQueue = useCallback(() => {
+    while (
+      preloadInFlightRef.current.size < PREVIEW_PRELOAD_MAX_CONCURRENT &&
+      preloadQueueRef.current.length > 0
+    ) {
+      const key = preloadQueueRef.current.shift();
+      if (!key) continue;
 
-    if (keysToPreload.length === 0) return;
+      const src = previewImageCandidates.get(key);
+      if (!src || previewImageStatusesRef.current.has(key)) continue;
 
-    setPreviewImageStatuses((previousStatuses) => {
-      const nextStatuses = new Map(previousStatuses);
-      let changed = false;
+      preloadInFlightRef.current.add(key);
+      setPreviewImageStatuses((previous) => new Map(previous).set(key, "loading"));
 
-      for (const [key] of keysToPreload) {
-        if (nextStatuses.has(key)) continue;
-        nextStatuses.set(key, "loading");
-        changed = true;
-      }
-
-      return changed ? nextStatuses : previousStatuses;
-    });
-
-    for (const [key, src] of keysToPreload) {
       const preloader = new Image();
-
       preloader.onload = () => {
-        setPreviewImageStatuses((previousStatuses) => {
-          if (!previousStatuses.has(key) || previousStatuses.get(key) === "ready") {
-            return previousStatuses;
-          }
-
-          const nextStatuses = new Map(previousStatuses);
-          nextStatuses.set(key, "ready");
-          return nextStatuses;
-        });
+        preloadInFlightRef.current.delete(key);
+        setPreviewImageStatuses((previous) => new Map(previous).set(key, "ready"));
+        pumpPreviewPreloadQueue();
       };
-
       preloader.onerror = () => {
-        setPreviewImageStatuses((previousStatuses) => {
-          if (!previousStatuses.has(key) || previousStatuses.get(key) === "failed") {
-            return previousStatuses;
-          }
-
-          const nextStatuses = new Map(previousStatuses);
-          nextStatuses.set(key, "failed");
-          return nextStatuses;
-        });
+        preloadInFlightRef.current.delete(key);
+        setPreviewImageStatuses((previous) => new Map(previous).set(key, "failed"));
+        pumpPreviewPreloadQueue();
       };
-
       preloader.src = src;
     }
-  }, [previewImageCandidates, previewImageStatuses]);
+  }, [previewImageCandidates]);
+
+  useEffect(() => {
+    for (const key of activePreviewImageKeys) {
+      const status = previewImageStatusesRef.current.get(key);
+      if (status || preloadInFlightRef.current.has(key) || preloadQueueRef.current.includes(key)) continue;
+      preloadQueueRef.current.push(key);
+    }
+
+    pumpPreviewPreloadQueue();
+  }, [activePreviewImageKeys, pumpPreviewPreloadQueue]);
 
   const getFeedTitle = (feedId: string) => {
     return feeds.find((feed) => feed.id === feedId)?.title ?? "";
@@ -489,7 +528,7 @@ export default function ArticleList() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto pb-3 pt-1">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pb-3 pt-1">
         {articleSections.map((section, sectionIndex) => (
           <div
             key={`${section.key}-${sectionIndex}`}
@@ -556,6 +595,15 @@ export default function ArticleList() {
               return (
                 <button
                   key={article.id}
+                  data-article-id={article.id}
+                  ref={(node) => {
+                    if (node) {
+                      articleCardRefs.current.set(article.id, node);
+                      return;
+                    }
+
+                    articleCardRefs.current.delete(article.id);
+                  }}
                   type="button"
                   onClick={() => setSelectedArticle(article.id)}
                   className={cn(
