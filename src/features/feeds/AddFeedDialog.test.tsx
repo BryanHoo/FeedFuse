@@ -388,7 +388,7 @@ describe('AddFeedDialog', () => {
     expect(added?.categoryId).toBe('cat-design');
   });
 
-  it('shows category options in store order', async () => {
+  it('keeps category option order in add feed dialog after entry migration', async () => {
     useAppStore.setState({
       categories: [
         { id: 'cat-uncategorized', name: '未分类', expanded: true },

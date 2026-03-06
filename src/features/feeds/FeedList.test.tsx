@@ -136,6 +136,10 @@ describe('FeedList manage', () => {
           return jsonResponse({ ok: true, data: { deleted: true } });
         }
 
+        if (url.includes('/api/categories/') && method === 'DELETE') {
+          return jsonResponse({ ok: true, data: { deleted: true } });
+        }
+
         if (url.includes('/api/articles/a-1/ai-summary') && method === 'POST') {
           return jsonResponse({
             ok: true,
@@ -317,6 +321,54 @@ describe('FeedList manage', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('dialog', { name: '分类管理' })).toBeInTheDocument();
+    });
+  });
+
+  it('keeps uncategorized fallback semantics after deleting a category', async () => {
+    useAppStore.setState((state) => ({
+      ...state,
+      categories: [
+        { id: 'cat-tech', name: '科技', expanded: true },
+        { id: 'cat-uncategorized', name: '未分类', expanded: true },
+      ],
+      feeds: [
+        {
+          id: 'feed-1',
+          title: 'My Feed',
+          url: 'https://example.com/rss.xml',
+          unreadCount: 2,
+          enabled: true,
+          fullTextOnOpenEnabled: false,
+          aiSummaryOnOpenEnabled: false,
+          aiSummaryOnFetchEnabled: false,
+          bodyTranslateOnFetchEnabled: false,
+          bodyTranslateOnOpenEnabled: false,
+          titleTranslateEnabled: false,
+          bodyTranslateEnabled: false,
+          categoryId: 'cat-tech',
+          category: '科技',
+        },
+      ],
+    }));
+
+    renderWithNotifications();
+
+    fireEvent.click(screen.getByRole('button', { name: '管理分类' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog', { name: '分类管理' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByLabelText('删除分类-0'));
+    fireEvent.click(await screen.findByRole('button', { name: '删除' }));
+
+    await waitFor(() => {
+      const [feed] = useAppStore.getState().feeds;
+      expect(feed?.categoryId).toBeNull();
+      expect(feed?.category).toBeNull();
+      expect(useAppStore.getState().categories).toEqual([
+        { id: 'cat-uncategorized', name: '未分类', expanded: true },
+      ]);
     });
   });
 
