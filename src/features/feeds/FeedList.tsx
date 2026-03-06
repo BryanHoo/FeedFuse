@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, CircleDot, Newspaper, Plus, Star } from 'lucide-react';
+import { ChevronDown, ChevronRight, CircleDot, FolderTree, Languages, Newspaper, PencilLine, Plus, Power, Sparkles, Star, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import AddFeedDialog from './AddFeedDialog';
@@ -22,6 +22,9 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuItemHint,
+  ContextMenuItemIcon,
+  ContextMenuItemLabel,
   ContextMenuSeparator,
   ContextMenuSub,
   ContextMenuSubContent,
@@ -375,48 +378,97 @@ export default function FeedList() {
                             )}
                           </button>
                         </ContextMenuTrigger>
-                        <ContextMenuContent>
+                        <ContextMenuContent className="w-64">
                           <ContextMenuItem
                             onSelect={() => {
                               setEditFeedId(feed.id);
                             }}
                           >
-                            编辑
+                            <ContextMenuItemIcon aria-hidden="true">
+                              <PencilLine className="h-3.5 w-3.5" />
+                            </ContextMenuItemIcon>
+                            <ContextMenuItemLabel>编辑</ContextMenuItemLabel>
                           </ContextMenuItem>
+                          <ContextMenuSeparator />
                           <ContextMenuSub>
-                            <ContextMenuSubTrigger>移动到分类</ContextMenuSubTrigger>
-                            <ContextMenuSubContent>
-                              {categoryMaster.map((category) => (
-                                <ContextMenuItem
-                                  key={category.id}
-                                  disabled={feed.categoryId === category.id}
-                                  onSelect={() => void moveFeedToCategory(feed.id, category.id, category.name)}
-                                >
-                                  {category.name}
-                                </ContextMenuItem>
-                              ))}
+                            <ContextMenuSubTrigger>
+                              <ContextMenuItemIcon aria-hidden="true">
+                                <FolderTree className="h-3.5 w-3.5" />
+                              </ContextMenuItemIcon>
+                              <ContextMenuItemLabel>移动到分类</ContextMenuItemLabel>
+                              <ContextMenuItemHint
+                                aria-hidden="true"
+                                className="max-w-[7rem] truncate normal-case tracking-normal text-slate-400/90"
+                              >
+                                {feed.category ?? uncategorizedName}
+                              </ContextMenuItemHint>
+                            </ContextMenuSubTrigger>
+                            <ContextMenuSubContent className="w-56">
+                              {categoryMaster.map((category) => {
+                                const isCurrentCategory = feed.categoryId === category.id;
+
+                                return (
+                                  <ContextMenuItem
+                                    key={category.id}
+                                    disabled={isCurrentCategory}
+                                    onSelect={() => void moveFeedToCategory(feed.id, category.id, category.name)}
+                                  >
+                                    <ContextMenuItemIcon
+                                      aria-hidden="true"
+                                      className={cn(isCurrentCategory && 'text-emerald-300')}
+                                    >
+                                      <FolderTree className="h-3.5 w-3.5" />
+                                    </ContextMenuItemIcon>
+                                    <ContextMenuItemLabel>{category.name}</ContextMenuItemLabel>
+                                    {isCurrentCategory ? (
+                                      <ContextMenuItemHint aria-hidden="true" className="text-emerald-200/90">
+                                        当前
+                                      </ContextMenuItemHint>
+                                    ) : null}
+                                  </ContextMenuItem>
+                                );
+                              })}
                               <ContextMenuItem
                                 disabled={!feed.categoryId}
                                 onSelect={() => void moveFeedToCategory(feed.id, null, uncategorizedName)}
                               >
-                                {uncategorizedName}
+                                <ContextMenuItemIcon
+                                  aria-hidden="true"
+                                  className={cn(!feed.categoryId && 'text-emerald-300')}
+                                >
+                                  <FolderTree className="h-3.5 w-3.5" />
+                                </ContextMenuItemIcon>
+                                <ContextMenuItemLabel>{uncategorizedName}</ContextMenuItemLabel>
+                                {!feed.categoryId ? (
+                                  <ContextMenuItemHint aria-hidden="true" className="text-emerald-200/90">
+                                    当前
+                                  </ContextMenuItemHint>
+                                ) : null}
                               </ContextMenuItem>
                             </ContextMenuSubContent>
                           </ContextMenuSub>
+                          <ContextMenuSeparator />
                           <ContextMenuItem
                             onSelect={() => {
                               setSummaryPolicyFeedId(feed.id);
                             }}
                           >
-                            AI摘要配置
+                            <ContextMenuItemIcon aria-hidden="true">
+                              <Sparkles className="h-3.5 w-3.5" />
+                            </ContextMenuItemIcon>
+                            <ContextMenuItemLabel>AI摘要配置</ContextMenuItemLabel>
                           </ContextMenuItem>
                           <ContextMenuItem
                             onSelect={() => {
                               setTranslationPolicyFeedId(feed.id);
                             }}
                           >
-                            翻译配置
+                            <ContextMenuItemIcon aria-hidden="true">
+                              <Languages className="h-3.5 w-3.5" />
+                            </ContextMenuItemIcon>
+                            <ContextMenuItemLabel>翻译配置</ContextMenuItemLabel>
                           </ContextMenuItem>
+                          <ContextMenuSeparator />
                           <ContextMenuItem
                             onSelect={() => {
                               void (async () => {
@@ -429,15 +481,24 @@ export default function FeedList() {
                               })();
                             }}
                           >
-                            {feed.enabled ? '停用' : '启用'}
+                            <ContextMenuItemIcon aria-hidden="true">
+                              <Power className="h-3.5 w-3.5" />
+                            </ContextMenuItemIcon>
+                            <ContextMenuItemLabel>{feed.enabled ? '停用' : '启用'}</ContextMenuItemLabel>
+                            <ContextMenuItemHint aria-hidden="true" className="normal-case tracking-normal text-slate-400/90">
+                              {feed.enabled ? '当前已启用' : '当前已停用'}
+                            </ContextMenuItemHint>
                           </ContextMenuItem>
-                          <ContextMenuSeparator />
                           <ContextMenuItem
+                            variant="destructive"
                             onSelect={() => {
                               setDeleteFeedId(feed.id);
                             }}
                           >
-                            删除
+                            <ContextMenuItemIcon aria-hidden="true" className="text-rose-200">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </ContextMenuItemIcon>
+                            <ContextMenuItemLabel>删除</ContextMenuItemLabel>
                           </ContextMenuItem>
                         </ContextMenuContent>
                       </ContextMenu>

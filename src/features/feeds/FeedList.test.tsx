@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ReaderLayout from '../reader/ReaderLayout';
 import { NotificationProvider } from '../notifications/NotificationProvider';
@@ -746,6 +746,32 @@ describe('FeedList manage', () => {
     expect(screen.getByRole('menuitem', { name: '设计' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: '科技' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: '未分类' })).toBeInTheDocument();
+  });
+
+  it('marks the current category inside move-to-category submenu', async () => {
+    useAppStore.setState((state) => ({
+      ...state,
+      categories: [
+        { id: 'cat-design', name: '设计', expanded: true },
+        { id: 'cat-tech', name: '科技', expanded: true },
+        { id: 'cat-uncategorized', name: '未分类', expanded: true },
+      ],
+      feeds: [
+        {
+          ...state.feeds[0],
+          categoryId: 'cat-tech',
+          category: '科技',
+        },
+      ],
+    }));
+
+    renderWithNotifications();
+    await openMoveToCategorySubmenu();
+
+    const currentCategoryItem = screen.getByRole('menuitem', { name: '科技' });
+    expect(within(currentCategoryItem).getByText('当前')).toBeInTheDocument();
+    expect(currentCategoryItem).toHaveAttribute('data-disabled', '');
+    expect(screen.getByRole('menuitem', { name: '删除' })).toBeInTheDocument();
   });
 
   it('moves feed to selected category from context submenu', async () => {
