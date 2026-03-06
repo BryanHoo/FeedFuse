@@ -493,6 +493,7 @@ describe('FeedList manage', () => {
     const menu = await screen.findByRole('menu');
 
     expect(menu).toHaveClass('bg-popover');
+    expect(menu).not.toHaveClass('border');
     expect(menu).not.toHaveClass('w-64');
   });
 
@@ -520,6 +521,7 @@ describe('FeedList manage', () => {
     const menu = await screen.findByRole('menu');
 
     expect(menu).toHaveClass('bg-popover');
+    expect(menu).not.toHaveClass('border');
   });
 
   it('renders category groups by category order from store', () => {
@@ -787,6 +789,38 @@ describe('FeedList manage', () => {
     expect(screen.getByRole('menuitem', { name: '未分类' })).toBeInTheDocument();
   });
 
+  it('renders move-to-category submenu in a separate popper layer', async () => {
+    useAppStore.setState((state) => ({
+      ...state,
+      categories: [
+        { id: 'cat-design', name: '设计', expanded: true },
+        { id: 'cat-tech', name: '科技', expanded: true },
+        { id: 'cat-uncategorized', name: '未分类', expanded: true },
+      ],
+      feeds: [
+        {
+          ...state.feeds[0],
+          categoryId: 'cat-tech',
+          category: '科技',
+        },
+      ],
+    }));
+
+    renderWithNotifications();
+    await openMoveToCategorySubmenu();
+
+    const menus = screen.getAllByRole('menu');
+    const parentMenu = menus[0];
+    const submenu = menus[menus.length - 1];
+    const submenuItem = within(submenu).getByRole('menuitem', { name: '设计' });
+    const submenuWrapper = submenu.closest('[data-radix-popper-content-wrapper]');
+
+    expect(submenu).not.toBe(parentMenu);
+    expect(submenuWrapper).not.toBeNull();
+    expect(submenuWrapper?.parentElement).toBe(document.body);
+    expect(parentMenu).not.toContainElement(submenuItem);
+  });
+
   it('marks the current category inside move-to-category submenu', async () => {
     useAppStore.setState((state) => ({
       ...state,
@@ -808,8 +842,17 @@ describe('FeedList manage', () => {
     await openMoveToCategorySubmenu();
 
     const currentCategoryItem = screen.getByRole('menuitem', { name: '科技' });
-    expect(within(currentCategoryItem).getByText('当前')).toBeInTheDocument();
+    const currentCategoryLabel = within(currentCategoryItem).getByText('科技');
+    const currentCategoryHint = within(currentCategoryItem).getByText('当前');
+    const currentCategoryIcon = currentCategoryLabel.previousElementSibling as HTMLElement | null;
+
+    expect(currentCategoryHint).toBeInTheDocument();
     expect(currentCategoryItem).toHaveAttribute('data-disabled', '');
+    expect(currentCategoryIcon).not.toBeNull();
+    expect(currentCategoryIcon).toHaveClass('text-primary');
+    expect(currentCategoryIcon?.className).not.toContain('emerald');
+    expect(currentCategoryHint).toHaveClass('border-primary/20', 'bg-primary/10', 'text-primary');
+    expect(currentCategoryHint.className).not.toContain('emerald');
     expect(screen.getByRole('menuitem', { name: '删除' })).toBeInTheDocument();
   });
 
@@ -873,7 +916,18 @@ describe('FeedList manage', () => {
   it('disables uncategorized target when feed is already uncategorized', async () => {
     renderWithNotifications();
     await openMoveToCategorySubmenu();
-    expect(screen.getByRole('menuitem', { name: '未分类' })).toHaveAttribute('data-disabled', '');
+
+    const uncategorizedItem = screen.getByRole('menuitem', { name: '未分类' });
+    const uncategorizedLabel = within(uncategorizedItem).getByText('未分类');
+    const uncategorizedHint = within(uncategorizedItem).getByText('当前');
+    const uncategorizedIcon = uncategorizedLabel.previousElementSibling as HTMLElement | null;
+
+    expect(uncategorizedItem).toHaveAttribute('data-disabled', '');
+    expect(uncategorizedIcon).not.toBeNull();
+    expect(uncategorizedIcon).toHaveClass('text-primary');
+    expect(uncategorizedIcon?.className).not.toContain('emerald');
+    expect(uncategorizedHint).toHaveClass('border-primary/20', 'bg-primary/10', 'text-primary');
+    expect(uncategorizedHint.className).not.toContain('emerald');
   });
 
   it('disables save after edit url until validation succeeds', async () => {

@@ -431,7 +431,7 @@ export default function FeedList() {
                                   >
                                     <ContextMenuItemIcon
                                       aria-hidden="true"
-                                      className={cn(isCurrentCategory && 'text-emerald-300')}
+                                      className={cn(isCurrentCategory && 'text-primary')}
                                     >
                                       <FolderTree className="h-3.5 w-3.5" />
                                     </ContextMenuItemIcon>
@@ -439,7 +439,7 @@ export default function FeedList() {
                                     {isCurrentCategory ? (
                                       <ContextMenuItemHint
                                         aria-hidden="true"
-                                        className="border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200"
+                                        className="border-primary/20 bg-primary/10 text-primary"
                                       >
                                         当前
                                       </ContextMenuItemHint>
@@ -453,7 +453,7 @@ export default function FeedList() {
                               >
                                 <ContextMenuItemIcon
                                   aria-hidden="true"
-                                  className={cn(!feed.categoryId && 'text-emerald-300')}
+                                  className={cn(!feed.categoryId && 'text-primary')}
                                 >
                                   <FolderTree className="h-3.5 w-3.5" />
                                 </ContextMenuItemIcon>
@@ -461,7 +461,7 @@ export default function FeedList() {
                                 {!feed.categoryId ? (
                                   <ContextMenuItemHint
                                     aria-hidden="true"
-                                    className="border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200"
+                                    className="border-primary/20 bg-primary/10 text-primary"
                                   >
                                     当前
                                   </ContextMenuItemHint>

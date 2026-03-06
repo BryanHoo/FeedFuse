@@ -19,7 +19,7 @@ const ContextMenuSub = ContextMenuPrimitive.Sub;
 const ContextMenuRadioGroup = ContextMenuPrimitive.RadioGroup;
 
 const contextMenuPanelClassName =
-  'relative z-50 min-w-[11.25rem] overflow-hidden rounded-xl border border-border/70 bg-popover p-1 text-popover-foreground shadow-[0_18px_38px_-24px_rgba(15,23,42,0.24),0_10px_18px_-16px_rgba(15,23,42,0.18)] backdrop-blur-md supports-[backdrop-filter]:bg-popover/90 dark:border-border/90 dark:shadow-[0_20px_42px_-26px_rgba(2,6,23,0.72),0_10px_20px_-14px_rgba(2,6,23,0.58)] dark:supports-[backdrop-filter]:bg-popover/88 before:pointer-events-none before:absolute before:inset-x-3 before:top-0 before:h-px before:bg-black/5 dark:before:bg-white/10 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2';
+  'relative z-50 min-w-[11.25rem] overflow-hidden rounded-xl bg-popover p-1 text-popover-foreground shadow-[0_18px_38px_-24px_rgba(15,23,42,0.24),0_10px_18px_-16px_rgba(15,23,42,0.18)] backdrop-blur-md supports-[backdrop-filter]:bg-popover/90 dark:shadow-[0_20px_42px_-26px_rgba(2,6,23,0.72),0_10px_20px_-14px_rgba(2,6,23,0.58)] dark:supports-[backdrop-filter]:bg-popover/88 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2';
 
 const contextMenuItemClassName =
   'group relative flex min-h-8 cursor-default select-none items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-popover-foreground outline-none transition-[background-color,color,transform,opacity] duration-150 data-[highlighted]:bg-accent/80 data-[highlighted]:text-accent-foreground focus:bg-accent/80 focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:bg-transparent data-[disabled]:text-muted-foreground/60 data-[disabled]:opacity-100';
@@ -50,11 +50,13 @@ const ContextMenuSubContent = React.forwardRef<
   React.ElementRef<typeof ContextMenuPrimitive.SubContent>,
   React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.SubContent>
 >(({ className, ...props }, ref) => (
-  <ContextMenuPrimitive.SubContent
-    ref={ref}
-    className={cn(contextMenuPanelClassName, className)}
-    {...props}
-  />
+  <ContextMenuPortal>
+    <ContextMenuPrimitive.SubContent
+      ref={ref}
+      className={cn(contextMenuPanelClassName, className)}
+      {...props}
+    />
+  </ContextMenuPortal>
 ));
 ContextMenuSubContent.displayName = ContextMenuPrimitive.SubContent.displayName;
 
