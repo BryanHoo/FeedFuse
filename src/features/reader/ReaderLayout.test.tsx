@@ -220,29 +220,41 @@ describe('ReaderLayout', () => {
   });
 
 
-  it('shows only one resize handle indicator at a time on hover', () => {
+  it('highlights only one existing separator at a time on hover', () => {
     resetSettingsStore();
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 });
 
     renderWithNotifications();
 
+    const feedPane = screen.getByTestId('reader-feed-pane');
+    const articlePane = screen.getByTestId('reader-article-pane');
     const leftHandle = screen.getByTestId('reader-resize-handle-left');
     const middleHandle = screen.getByTestId('reader-resize-handle-middle');
 
-    expect(leftHandle).toHaveAttribute('data-visible', 'false');
-    expect(middleHandle).toHaveAttribute('data-visible', 'false');
+    expect(feedPane.className).toContain('border-border');
+    expect(articlePane.className).toContain('border-border');
+    expect(feedPane.className).not.toContain('border-primary/60');
+    expect(articlePane.className).not.toContain('border-primary/60');
+    expect(leftHandle).toHaveAttribute('data-active', 'false');
+    expect(middleHandle).toHaveAttribute('data-active', 'false');
 
     fireEvent.pointerEnter(leftHandle);
-    expect(leftHandle).toHaveAttribute('data-visible', 'true');
-    expect(middleHandle).toHaveAttribute('data-visible', 'false');
+    expect(feedPane.className).toContain('border-primary/60');
+    expect(articlePane.className).not.toContain('border-primary/60');
+    expect(leftHandle).toHaveAttribute('data-active', 'true');
+    expect(middleHandle).toHaveAttribute('data-active', 'false');
 
     fireEvent.pointerEnter(middleHandle);
-    expect(leftHandle).toHaveAttribute('data-visible', 'false');
-    expect(middleHandle).toHaveAttribute('data-visible', 'true');
+    expect(feedPane.className).not.toContain('border-primary/60');
+    expect(articlePane.className).toContain('border-primary/60');
+    expect(leftHandle).toHaveAttribute('data-active', 'false');
+    expect(middleHandle).toHaveAttribute('data-active', 'true');
 
     fireEvent.pointerLeave(middleHandle);
-    expect(leftHandle).toHaveAttribute('data-visible', 'false');
-    expect(middleHandle).toHaveAttribute('data-visible', 'false');
+    expect(feedPane.className).not.toContain('border-primary/60');
+    expect(articlePane.className).not.toContain('border-primary/60');
+    expect(leftHandle).toHaveAttribute('data-active', 'false');
+    expect(middleHandle).toHaveAttribute('data-active', 'false');
   });
 
   it('disables left pane width transition while dragging', () => {
@@ -261,11 +273,11 @@ describe('ReaderLayout', () => {
 
     expect(feedPane).toHaveStyle({ width: '320px' });
     expect(feedPane.className).toContain('transition-none');
-    expect(leftHandle).toHaveAttribute('data-visible', 'true');
+    expect(leftHandle).toHaveAttribute('data-active', 'true');
 
     fireEvent.pointerUp(window, { clientX: 320 });
 
     expect(feedPane.className).toContain('transition-[width]');
-    expect(leftHandle).toHaveAttribute('data-visible', 'false');
+    expect(leftHandle).toHaveAttribute('data-active', 'false');
   });
 });

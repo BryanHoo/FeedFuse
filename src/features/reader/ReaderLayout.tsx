@@ -148,7 +148,7 @@ export default function ReaderLayout() {
     stopDragging();
   };
 
-  const showResizeHandle = (target: ResizeTarget) => visibleResizeTarget === target;
+  const isResizeTargetActive = (target: ResizeTarget) => visibleResizeTarget === target;
 
   const handleResizeHandleEnter = (target: ResizeTarget) => {
     if (draggingTarget !== null) {
@@ -241,7 +241,8 @@ export default function ReaderLayout() {
       <div
         data-testid="reader-feed-pane"
         className={cn(
-          'shrink-0 overflow-hidden bg-muted/45',
+          'shrink-0 overflow-hidden border-r bg-muted/45',
+          isResizeTargetActive('left') ? 'border-primary/60' : 'border-border',
           draggingTarget === 'left' ? 'transition-none' : 'transition-[width] duration-300',
         )}
         style={{ width: `${leftPaneWidth}px` }}
@@ -252,7 +253,7 @@ export default function ReaderLayout() {
       {isDesktop ? (
         <ResizeHandle
           testId="reader-resize-handle-left"
-          visible={showResizeHandle('left')}
+          active={isResizeTargetActive('left')}
           onPointerDown={startLeftResize}
           onPointerEnter={() => handleResizeHandleEnter('left')}
           onPointerLeave={() => handleResizeHandleLeave('left')}
@@ -261,7 +262,10 @@ export default function ReaderLayout() {
 
       <div
         data-testid="reader-article-pane"
-        className="shrink-0 border-r border-border bg-muted/5"
+        className={cn(
+          'shrink-0 border-r bg-muted/5',
+          isResizeTargetActive('middle') ? 'border-primary/60' : 'border-border',
+        )}
         style={{ width: `${middlePaneWidth}px` }}
       >
         <MemoizedArticleList key={selectedView} />
@@ -270,7 +274,7 @@ export default function ReaderLayout() {
       {isDesktop ? (
         <ResizeHandle
           testId="reader-resize-handle-middle"
-          visible={showResizeHandle('middle')}
+          active={isResizeTargetActive('middle')}
           onPointerDown={startMiddleResize}
           onPointerEnter={() => handleResizeHandleEnter('middle')}
           onPointerLeave={() => handleResizeHandleLeave('middle')}
