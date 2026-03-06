@@ -32,7 +32,7 @@ describe('FeedDialog translation flags', () => {
 
     expect(screen.getByLabelText('URL')).toBeInTheDocument();
     expect(screen.getByLabelText('名称')).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: '分类' })).toBeInTheDocument();
+    expect(screen.getByLabelText('分类')).toBeInTheDocument();
 
     expect(screen.queryByRole('combobox', { name: '打开文章时抓取全文' })).not.toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: '获取文章后自动获取摘要' })).not.toBeInTheDocument();

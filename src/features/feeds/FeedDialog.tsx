@@ -12,23 +12,18 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import type { Category } from '../../types';
 import { mapApiErrorToUserMessage } from '../notifications/mapApiErrorToUserMessage';
 import { useNotify } from '../notifications/useNotify';
 import { validateRssUrl } from './services/rssValidationService';
+import CreatableCategoryField from './CreatableCategoryField';
 
 export interface FeedDialogSubmitPayload {
   title: string;
   url: string;
   siteUrl: string | null;
-  categoryId: string | null;
+  categoryId?: string | null;
+  categoryName?: string | null;
 }
 
 interface FeedDialogInitialValues {
@@ -118,14 +113,54 @@ const MODE_META: Record<FeedDialogProps['mode'], ModeMeta> = {
   },
 };
 
-function resolveInitialCategoryValue(
+const uncategorizedCategory: Category = {
+  id: 'cat-uncategorized',
+  name: '未分类',
+  expanded: true,
+};
+
+function normalizeCategoryText(value: string | null | undefined): string {
+  return value?.trim() ?? '';
+}
+
+function normalizeCategoryKey(value: string | null | undefined): string {
+  return normalizeCategoryText(value).toLowerCase();
+}
+
+function ensureCategoryOptions(categories: Category[]): Category[] {
+  if (categories.some((item) => item.name === uncategorizedCategory.name)) {
+    return categories;
+  }
+
+  return [uncategorizedCategory, ...categories];
+}
+
+function resolveInitialCategoryInput(
   categoryId: string | null | undefined,
   categories: Category[],
-  uncategorizedValue: string,
+  fallbackCategoryId: string | null,
 ) {
-  if (!categoryId) return uncategorizedValue;
-  const exists = categories.some((item) => item.id === categoryId && item.name !== '未分类');
-  return exists ? categoryId : uncategorizedValue;
+  const nextCategoryId = typeof categoryId === 'undefined' ? fallbackCategoryId : categoryId;
+  if (!nextCategoryId) return uncategorizedCategory.name;
+
+  return categories.find((item) => item.id === nextCategoryId)?.name ?? uncategorizedCategory.name;
+}
+
+function findMatchingCategory(categories: Category[], input: string): Category | undefined {
+  const normalizedInput = normalizeCategoryText(input);
+  if (!normalizedInput) return undefined;
+
+  const normalizedKey = normalizedInput.toLowerCase();
+  return categories.find(
+    (item) => item.id === normalizedInput || normalizeCategoryKey(item.name) === normalizedKey,
+  );
+}
+
+function isUncategorizedInput(value: string): boolean {
+  return (
+    !normalizeCategoryText(value) ||
+    normalizeCategoryKey(value) === normalizeCategoryKey(uncategorizedCategory.name)
+  );
 }
 
 export default function FeedDialog({
@@ -137,32 +172,24 @@ export default function FeedDialog({
   onSubmit,
 }: FeedDialogProps) {
   const urlInputRef = useRef<HTMLInputElement | null>(null);
-  const uncategorizedValue = '__uncategorized__';
-  const selectableCategories = categories.filter((item) => item.name !== '未分类');
-  const categoryOptions = categories.map((item) => ({
-    value: item.name === '未分类' ? uncategorizedValue : item.id,
-    label: item.name,
-  }));
-  if (!categories.some((item) => item.name === '未分类')) {
-    categoryOptions.unshift({
-      value: uncategorizedValue,
-      label: '未分类',
-    });
-  }
+  const categoryOptions = ensureCategoryOptions(categories);
+  const selectableCategories = categoryOptions.filter(
+    (item) => item.name !== uncategorizedCategory.name,
+  );
   const initialCategoryId =
     typeof initialValues?.categoryId === 'undefined'
       ? selectableCategories[0]?.id
       : initialValues.categoryId;
-  const defaultCategoryValue = resolveInitialCategoryValue(
+  const defaultCategoryInput = resolveInitialCategoryInput(
     initialCategoryId,
-    categories,
-    uncategorizedValue,
+    categoryOptions,
+    selectableCategories[0]?.id ?? null,
   );
   const initialUrl = initialValues?.url ?? '';
   const initialTrimmedUrl = initialUrl.trim();
   const [title, setTitle] = useState(initialValues?.title ?? '');
   const [url, setUrl] = useState(initialUrl);
-  const [categoryId, setCategoryId] = useState(defaultCategoryValue);
+  const [categoryInput, setCategoryInput] = useState(defaultCategoryInput);
   const [validationState, setValidationState] = useState<ValidationState>(
     initialTrimmedUrl ? 'verified' : 'idle',
   );
@@ -200,11 +227,18 @@ export default function FeedDialog({
     void (async () => {
       setSubmitting(true);
       try {
+        const matchedCategory = findMatchingCategory(categoryOptions, categoryInput);
+        const categoryPayload = isUncategorizedInput(categoryInput)
+          ? { categoryId: null }
+          : matchedCategory && matchedCategory.name !== uncategorizedCategory.name
+            ? { categoryId: matchedCategory.id }
+            : { categoryName: normalizeCategoryText(categoryInput) };
+
         await onSubmit({
           title: trimmedTitle,
           url: trimmedUrl,
           siteUrl: validatedSiteUrl,
-          categoryId: categoryId === uncategorizedValue ? null : categoryId,
+          ...categoryPayload,
         });
         notify.success(modeMeta.successMessage);
         onOpenChange(false);
@@ -334,18 +368,12 @@ export default function FeedDialog({
                 <Label htmlFor={`${fieldIdPrefix}-category`} className="text-xs">
                   分类
                 </Label>
-                <Select value={categoryId} onValueChange={setCategoryId}>
-                  <SelectTrigger id={`${fieldIdPrefix}-category`} aria-label="分类" name="category">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categoryOptions.map((item) => (
-                      <SelectItem key={`${item.value}-${item.label}`} value={item.value}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <CreatableCategoryField
+                  inputId={`${fieldIdPrefix}-category`}
+                  value={categoryInput}
+                  options={categoryOptions}
+                  onChange={setCategoryInput}
+                />
               </div>
             </div>
           </div>

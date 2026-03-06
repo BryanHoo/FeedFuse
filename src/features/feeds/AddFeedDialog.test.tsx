@@ -200,7 +200,7 @@ describe('AddFeedDialog', () => {
 
     expect(screen.getByLabelText('URL')).toBeInTheDocument();
     expect(screen.getByLabelText('名称')).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: '分类' })).toBeInTheDocument();
+    expect(screen.getByLabelText('分类')).toBeInTheDocument();
 
     expect(screen.queryByRole('combobox', { name: '打开文章时抓取全文' })).not.toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: '获取文章后自动获取摘要' })).not.toBeInTheDocument();
@@ -359,16 +359,7 @@ describe('AddFeedDialog', () => {
     fireEvent.change(urlInput, {
       target: { value: 'https://example.com/success.xml' },
     });
-
-    expect(screen.queryByRole('option', { name: '科技' })).not.toBeInTheDocument();
-
-    const categoryCombobox = screen.getByRole('combobox', { name: '分类' });
-    fireEvent.click(categoryCombobox);
-
-    await waitFor(() => {
-      expect(screen.getByRole('option', { name: '设计' })).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByRole('option', { name: '设计' }));
+    fireEvent.change(screen.getByLabelText('分类'), { target: { value: '设计' } });
     fireEvent.blur(urlInput);
 
     await waitFor(() => {
@@ -388,6 +379,46 @@ describe('AddFeedDialog', () => {
     expect(added?.categoryId).toBe('cat-design');
   });
 
+  it('submits categoryName when user enters a new category', async () => {
+    renderWithNotifications();
+    fireEvent.click(screen.getByLabelText('add-feed'));
+
+    fireEvent.change(screen.getByLabelText('分类'), {
+      target: { value: '新分类' },
+    });
+    fireEvent.change(screen.getByLabelText('名称'), { target: { value: 'My Feed' } });
+    const urlInput = screen.getByLabelText('URL');
+    fireEvent.change(urlInput, { target: { value: 'https://example.com/success.xml' } });
+    fireEvent.blur(urlInput);
+
+    fireEvent.click(await screen.findByRole('button', { name: '添加' }));
+
+    await waitFor(() => {
+      expect(lastCreateFeedBody).toMatchObject({ categoryName: '新分类' });
+      expect(lastCreateFeedBody?.categoryId).toBeUndefined();
+    });
+  });
+
+  it('reuses existing categoryId when input only differs by spaces', async () => {
+    renderWithNotifications();
+    fireEvent.click(screen.getByLabelText('add-feed'));
+
+    fireEvent.change(screen.getByLabelText('分类'), {
+      target: { value: '  科技  ' },
+    });
+    fireEvent.change(screen.getByLabelText('名称'), { target: { value: 'My Feed' } });
+    const urlInput = screen.getByLabelText('URL');
+    fireEvent.change(urlInput, { target: { value: 'https://example.com/success.xml' } });
+    fireEvent.blur(urlInput);
+
+    fireEvent.click(await screen.findByRole('button', { name: '添加' }));
+
+    await waitFor(() => {
+      expect(lastCreateFeedBody).toMatchObject({ categoryId: 'cat-tech' });
+      expect(lastCreateFeedBody?.categoryName).toBeUndefined();
+    });
+  });
+
   it('keeps category option order in add feed dialog after entry migration', async () => {
     useAppStore.setState({
       categories: [
@@ -403,10 +434,12 @@ describe('AddFeedDialog', () => {
 
     renderWithNotifications();
     fireEvent.click(screen.getByLabelText('add-feed'));
-    fireEvent.click(screen.getByRole('combobox', { name: '分类' }));
 
-    const options = screen.getAllByRole('option');
-    expect(options.map((item) => item.textContent)).toEqual(['未分类', '设计', '科技']);
+    const optionValues = Array.from(
+      document.querySelectorAll<HTMLDataListElement>('#feed-category-options option'),
+    ).map((item) => item.value);
+
+    expect(optionValues).toEqual(['未分类', '设计', '科技']);
   });
 
   it('shows success notification after add feed succeeds', async () => {
