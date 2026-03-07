@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -66,6 +66,8 @@ describe('FeedList manage', () => {
           articleListDisplayMode: feed.articleListDisplayMode ?? 'card',
           categoryId: feed.categoryId ?? null,
           fetchIntervalMinutes: 30,
+          lastFetchStatus: feed.fetchStatus ?? null,
+          lastFetchError: feed.fetchError ?? null,
           unreadCount: feed.unreadCount,
         })),
         articles: {
@@ -1103,6 +1105,108 @@ describe('FeedList manage', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/操作失败/)).toBeInTheDocument();
+    });
+  });
+
+  it('shows tooltip and error styling for feeds with fetchError', async () => {
+    useAppStore.setState({
+      categories: [{ id: 'cat-uncategorized', name: '未分类', expanded: true }],
+      feeds: [
+        {
+          id: 'feed-1',
+          title: 'Broken Feed',
+          url: 'https://example.com/rss.xml',
+          siteUrl: null,
+          icon: undefined,
+          unreadCount: 0,
+          enabled: true,
+          fullTextOnOpenEnabled: false,
+          aiSummaryOnOpenEnabled: false,
+          aiSummaryOnFetchEnabled: false,
+          bodyTranslateOnFetchEnabled: false,
+          bodyTranslateOnOpenEnabled: false,
+          titleTranslateEnabled: false,
+          bodyTranslateEnabled: false,
+          articleListDisplayMode: 'card',
+          categoryId: null,
+          category: null,
+          fetchStatus: 403,
+          fetchError: '更新失败：源站拒绝访问（HTTP 403）',
+        },
+      ],
+      articles: [],
+      selectedView: 'all',
+      selectedArticleId: null,
+    });
+
+    render(
+      <NotificationProvider>
+        <ReaderLayout />
+      </NotificationProvider>,
+    );
+
+    const feedButton = screen.getByRole('button', { name: /Broken Feed/i });
+    fireEvent.mouseEnter(feedButton);
+
+    expect((await screen.findAllByText('更新失败')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('更新失败：源站拒绝访问（HTTP 403）')).length).toBeGreaterThan(0);
+    expect(feedButton.className).toMatch(/destructive|red/);
+  });
+
+  it('returns to normal styling after fetchError is cleared', async () => {
+    useAppStore.setState({
+      categories: [{ id: 'cat-uncategorized', name: '未分类', expanded: true }],
+      feeds: [
+        {
+          id: 'feed-1',
+          title: 'Broken Feed',
+          url: 'https://example.com/rss.xml',
+          siteUrl: null,
+          icon: undefined,
+          unreadCount: 0,
+          enabled: true,
+          fullTextOnOpenEnabled: false,
+          aiSummaryOnOpenEnabled: false,
+          aiSummaryOnFetchEnabled: false,
+          bodyTranslateOnFetchEnabled: false,
+          bodyTranslateOnOpenEnabled: false,
+          titleTranslateEnabled: false,
+          bodyTranslateEnabled: false,
+          articleListDisplayMode: 'card',
+          categoryId: null,
+          category: null,
+          fetchStatus: 403,
+          fetchError: '更新失败：源站拒绝访问（HTTP 403）',
+        },
+      ],
+      articles: [],
+      selectedView: 'all',
+      selectedArticleId: null,
+    });
+
+    render(
+      <NotificationProvider>
+        <ReaderLayout />
+      </NotificationProvider>,
+    );
+
+    const feedButton = screen.getByRole('button', { name: /Broken Feed/i });
+    fireEvent.mouseEnter(feedButton);
+
+    expect((await screen.findAllByText('更新失败')).length).toBeGreaterThan(0);
+
+    act(() => {
+      useAppStore.setState((state) => ({
+        feeds: state.feeds.map((feed) =>
+          feed.id === 'feed-1' ? { ...feed, fetchStatus: null, fetchError: null } : feed,
+        ),
+      }));
+    });
+
+    await waitFor(() => {
+      expect(screen.queryAllByText('更新失败')).toHaveLength(0);
+      expect(screen.queryAllByText('更新失败：源站拒绝访问（HTTP 403）')).toHaveLength(0);
+      expect(screen.getByRole('button', { name: /Broken Feed/i }).className).not.toMatch(/destructive|red/);
     });
   });
 });

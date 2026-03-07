@@ -132,6 +132,54 @@ describe('appStore api integration', () => {
     expect(useAppStore.getState().articles[0].content).toBe('');
   });
 
+  it('loads feed fetch error from reader snapshot into store', async () => {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/reader/snapshot')) {
+        return jsonResponse({
+          ok: true,
+          data: {
+            categories: [],
+            feeds: [
+              {
+                id: 'feed-1',
+                title: 'Example',
+                url: 'https://example.com/rss.xml',
+                siteUrl: null,
+                iconUrl: null,
+                enabled: true,
+                fullTextOnOpenEnabled: false,
+                aiSummaryOnOpenEnabled: false,
+                aiSummaryOnFetchEnabled: false,
+                bodyTranslateOnFetchEnabled: false,
+                bodyTranslateOnOpenEnabled: false,
+                titleTranslateEnabled: false,
+                bodyTranslateEnabled: false,
+                articleListDisplayMode: 'card',
+                categoryId: null,
+                fetchIntervalMinutes: 30,
+                unreadCount: 0,
+                lastFetchStatus: 403,
+                lastFetchError: '更新失败：源站拒绝访问（HTTP 403）',
+              },
+            ],
+            articles: {
+              items: [],
+              nextCursor: null,
+            },
+          },
+        });
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    await useAppStore.getState().loadSnapshot({ view: 'all' });
+
+    expect(useAppStore.getState().feeds[0].fetchStatus).toBe(403);
+    expect(useAppStore.getState().feeds[0].fetchError).toBe('更新失败：源站拒绝访问（HTTP 403）');
+  });
+
   it('optimistically marks article as read and updates unreadCount', async () => {
     fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);

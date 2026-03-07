@@ -19,6 +19,8 @@ export interface FeedRow {
   articleListDisplayMode: 'card' | 'list';
   categoryId: string | null;
   fetchIntervalMinutes: number;
+  lastFetchStatus: number | null;
+  lastFetchError: string | null;
 }
 
 export async function listFeeds(db: DbClient): Promise<FeedRow[]> {
@@ -39,7 +41,9 @@ export async function listFeeds(db: DbClient): Promise<FeedRow[]> {
       body_translate_enabled as "bodyTranslateEnabled",
       article_list_display_mode as "articleListDisplayMode",
       category_id as "categoryId",
-      fetch_interval_minutes as "fetchIntervalMinutes"
+      fetch_interval_minutes as "fetchIntervalMinutes",
+      last_fetch_status as "lastFetchStatus",
+      last_fetch_error as "lastFetchError"
     from feeds
     order by created_at asc, id asc
   `);

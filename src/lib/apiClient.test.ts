@@ -1,6 +1,66 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ReaderSnapshotDto } from './apiClient';
-import { mapArticleDto, mapSnapshotArticleItem } from './apiClient';
+import { mapArticleDto, mapFeedDto, mapSnapshotArticleItem } from './apiClient';
+
+describe('mapFeedDto', () => {
+  it('maps fetch result fields from snapshot feeds', () => {
+    const mapped = mapFeedDto(
+      {
+        id: 'feed-1',
+        title: 'Example',
+        url: 'https://example.com/rss.xml',
+        siteUrl: null,
+        iconUrl: null,
+        enabled: true,
+        fullTextOnOpenEnabled: false,
+        aiSummaryOnOpenEnabled: false,
+        aiSummaryOnFetchEnabled: false,
+        bodyTranslateOnFetchEnabled: false,
+        bodyTranslateOnOpenEnabled: false,
+        titleTranslateEnabled: false,
+        bodyTranslateEnabled: false,
+        articleListDisplayMode: 'card',
+        categoryId: null,
+        fetchIntervalMinutes: 30,
+        unreadCount: 0,
+        lastFetchStatus: 403,
+        lastFetchError: '更新失败：源站拒绝访问（HTTP 403）',
+      },
+      [],
+    );
+
+    expect(mapped.fetchStatus).toBe(403);
+    expect(mapped.fetchError).toBe('更新失败：源站拒绝访问（HTTP 403）');
+  });
+
+  it('defaults missing fetch result fields to null for create/edit payloads', () => {
+    const mapped = mapFeedDto(
+      {
+        id: 'feed-2',
+        title: 'Created Feed',
+        url: 'https://example.com/new.xml',
+        siteUrl: null,
+        iconUrl: null,
+        enabled: true,
+        fullTextOnOpenEnabled: false,
+        aiSummaryOnOpenEnabled: false,
+        aiSummaryOnFetchEnabled: false,
+        bodyTranslateOnFetchEnabled: false,
+        bodyTranslateOnOpenEnabled: false,
+        titleTranslateEnabled: false,
+        bodyTranslateEnabled: false,
+        articleListDisplayMode: 'card',
+        categoryId: null,
+        fetchIntervalMinutes: 30,
+        unreadCount: 0,
+      } as Parameters<typeof mapFeedDto>[0],
+      [],
+    );
+
+    expect(mapped.fetchStatus).toBeNull();
+    expect(mapped.fetchError).toBeNull();
+  });
+});
 
 describe('mapSnapshotArticleItem', () => {
   it('maps preview image from snapshot payload', () => {

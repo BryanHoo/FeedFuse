@@ -42,6 +42,7 @@ import {
   JOB_REFRESH_ALL,
 } from '../server/queue/jobs';
 import { sampleQueueStats } from '../server/queue/observability';
+import { mapFeedFetchError } from '../server/tasks/feedFetchErrorMapping';
 import { normalizePersistedSettings } from '../features/settings/settingsSchema';
 import { registerWorkers } from './workerRegistry';
 import { buildFeedFetchJobData, selectFeedsForRefreshAll } from './refreshAll';
@@ -134,7 +135,7 @@ async function fetchAndIngestFeed(boss: PgBoss, feedId: string, input?: { force?
   if (!(await isSafeExternalUrl(feed.url))) {
     await recordFeedFetchResult(pool, feedId, {
       status: null,
-      error: 'Unsafe URL',
+      error: mapFeedFetchError('Unsafe URL').errorMessage,
     });
     return { inserted: 0 };
   }
@@ -162,7 +163,7 @@ async function fetchAndIngestFeed(boss: PgBoss, feedId: string, input?: { force?
     if (status === 304 || !res.xml) return { inserted: 0 };
 
     if (status < 200 || status >= 300) {
-      error = `HTTP ${status}`;
+      error = mapFeedFetchError(`HTTP ${status}`).errorMessage;
       return { inserted: 0 };
     }
 
@@ -206,7 +207,7 @@ async function fetchAndIngestFeed(boss: PgBoss, feedId: string, input?: { force?
 
     return { inserted };
   } catch (err) {
-    error = err instanceof Error ? err.message : 'Unknown error';
+    error = mapFeedFetchError(err).errorMessage;
     return { inserted: 0 };
   } finally {
     await recordFeedFetchResult(pool, feedId, {

@@ -83,6 +83,8 @@ export interface ReaderSnapshotDto {
     articleListDisplayMode: 'card' | 'list';
     categoryId: string | null;
     fetchIntervalMinutes: number;
+    lastFetchStatus: number | null;
+    lastFetchError: string | null;
     unreadCount: number;
   }>;
   articles: {
@@ -177,6 +179,14 @@ export interface FeedRowDto {
   categoryId: string | null;
   fetchIntervalMinutes: number;
 }
+
+type FeedDtoLike =
+  | ReaderSnapshotDto['feeds'][number]
+  | (FeedRowDto & {
+      unreadCount?: number;
+      lastFetchStatus?: number | null;
+      lastFetchError?: string | null;
+    });
 
 export async function patchFeed(
   feedId: string,
@@ -470,7 +480,7 @@ export async function deleteTranslationApiKey(): Promise<{ hasApiKey: boolean }>
   });
 }
 
-export function mapFeedDto(dto: ReaderSnapshotDto['feeds'][number], categories: Category[]): Feed {
+export function mapFeedDto(dto: FeedDtoLike, categories: Category[]): Feed {
   const categoryNameById = new Map(categories.map((category) => [category.id, category.name]));
   return {
     id: dto.id,
@@ -478,7 +488,7 @@ export function mapFeedDto(dto: ReaderSnapshotDto['feeds'][number], categories: 
     url: dto.url,
     siteUrl: dto.siteUrl,
     icon: dto.iconUrl ?? undefined,
-    unreadCount: dto.unreadCount,
+    unreadCount: 'unreadCount' in dto ? dto.unreadCount ?? 0 : 0,
     enabled: dto.enabled,
     fullTextOnOpenEnabled: dto.fullTextOnOpenEnabled,
     aiSummaryOnOpenEnabled: dto.aiSummaryOnOpenEnabled,
@@ -490,6 +500,8 @@ export function mapFeedDto(dto: ReaderSnapshotDto['feeds'][number], categories: 
     articleListDisplayMode: dto.articleListDisplayMode,
     categoryId: dto.categoryId,
     category: dto.categoryId ? categoryNameById.get(dto.categoryId) ?? null : null,
+    fetchStatus: ('lastFetchStatus' in dto ? dto.lastFetchStatus : null) ?? null,
+    fetchError: ('lastFetchError' in dto ? dto.lastFetchError : null) ?? null,
   };
 }
 

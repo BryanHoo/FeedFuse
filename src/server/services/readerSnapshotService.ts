@@ -91,11 +91,16 @@ export interface ReaderSnapshotFeed {
   enabled: boolean;
   fullTextOnOpenEnabled: boolean;
   aiSummaryOnOpenEnabled: boolean;
+  aiSummaryOnFetchEnabled: boolean;
+  bodyTranslateOnFetchEnabled: boolean;
+  bodyTranslateOnOpenEnabled: boolean;
   titleTranslateEnabled: boolean;
   bodyTranslateEnabled: boolean;
   articleListDisplayMode: 'card' | 'list';
   categoryId: string | null;
   fetchIntervalMinutes: number;
+  lastFetchStatus: number | null;
+  lastFetchError: string | null;
   unreadCount: number;
 }
 

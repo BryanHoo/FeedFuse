@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, CircleDot, FolderTree, Languages, Newspaper, PencilLine, Plus, Power, Sparkles, Star, Trash2 } from 'lucide-react';
+import { AlertCircle, ArrowDown, ArrowUp, ChevronDown, ChevronRight, CircleDot, FolderTree, Languages, Newspaper, PencilLine, Plus, Power, Sparkles, Star, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import AddFeedDialog from './AddFeedDialog';
@@ -31,6 +31,7 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { deleteCategory, patchCategory, reorderCategories } from '@/lib/apiClient';
 import { mapApiErrorToUserMessage } from '../notifications/mapApiErrorToUserMessage';
 import { useNotify } from '../notifications/useNotify';
@@ -62,6 +63,7 @@ export default function FeedList() {
   const [translationPolicyFeedId, setTranslationPolicyFeedId] = useState<string | null>(null);
   const [renameCategoryId, setRenameCategoryId] = useState<string | null>(null);
   const [deleteCategoryId, setDeleteCategoryId] = useState<string | null>(null);
+  const [hoveredFeedErrorId, setHoveredFeedErrorId] = useState<string | null>(null);
   const notify = useNotify();
 
   const smartViews = [
@@ -348,52 +350,102 @@ export default function FeedList() {
 
                 {expanded && (
                   <div className="mt-0.5 space-y-0.5 pl-4">
-                    {categoryFeeds.map((feed) => (
-                      <ContextMenu key={feed.id}>
-                        <ContextMenuTrigger asChild>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedView(feed.id)}
-                            className={cn(
-                              'flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-[13px] font-medium transition-colors',
-                              selectedView === feed.id
-                                ? 'bg-primary/10 text-primary'
-                                : 'text-foreground hover:bg-accent hover:text-accent-foreground',
-                              !feed.enabled && 'opacity-60',
-                            )}
-                          >
-                            <div className="flex min-w-0 flex-1 items-center gap-2">
-                              <span className="relative flex h-4 w-4 shrink-0 items-center justify-center">
-                                <span aria-hidden="true" className="text-[11px] leading-none">
-                                  📰
-                                </span>
-                                {feed.icon ? (
-                                  <img
-                                    src={feed.icon}
-                                    alt=""
-                                    aria-hidden="true"
-                                    loading="lazy"
-                                    width={16}
-                                    height={16}
-                                    className="absolute inset-0 h-full w-full rounded-[3px] bg-background object-cover"
-                                    onError={(event) => {
-                                      event.currentTarget.style.display = 'none';
-                                    }}
-                                  />
-                                ) : null}
+                    {categoryFeeds.map((feed) => {
+                      const isFeedErrored = Boolean(feed.fetchError);
+                      const feedButton = (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedView(feed.id)}
+                          onMouseEnter={() => {
+                            if (isFeedErrored) {
+                              setHoveredFeedErrorId(feed.id);
+                            }
+                          }}
+                          onMouseLeave={() => {
+                            setHoveredFeedErrorId((current) => (current === feed.id ? null : current));
+                          }}
+                          onFocus={() => {
+                            if (isFeedErrored) {
+                              setHoveredFeedErrorId(feed.id);
+                            }
+                          }}
+                          onBlur={() => {
+                            setHoveredFeedErrorId((current) => (current === feed.id ? null : current));
+                          }}
+                          className={cn(
+                            'flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-[13px] font-medium transition-colors',
+                            selectedView === feed.id
+                              ? 'bg-primary/10 text-primary'
+                              : 'text-foreground hover:bg-accent hover:text-accent-foreground',
+                            !feed.enabled && 'opacity-60',
+                            isFeedErrored && 'text-destructive hover:text-destructive',
+                          )}
+                        >
+                          <div className="flex min-w-0 flex-1 items-center gap-2">
+                            <span
+                              className={cn(
+                                'relative flex h-4 w-4 shrink-0 items-center justify-center',
+                                isFeedErrored && 'text-destructive',
+                              )}
+                            >
+                              <span aria-hidden="true" className="text-[11px] leading-none">
+                                📰
                               </span>
-                              <span className="truncate font-medium">{feed.title}</span>
-                            </div>
-                            {feed.unreadCount > 0 && (
+                              {feed.icon ? (
+                                <img
+                                  src={feed.icon}
+                                  alt=""
+                                  aria-hidden="true"
+                                  loading="lazy"
+                                  width={16}
+                                  height={16}
+                                  className="absolute inset-0 h-full w-full rounded-[3px] bg-background object-cover"
+                                  onError={(event) => {
+                                    event.currentTarget.style.display = 'none';
+                                  }}
+                                />
+                              ) : null}
+                            </span>
+                            <span className="truncate font-medium">{feed.title}</span>
+                            {isFeedErrored ? <span className="sr-only">该订阅源最近更新失败</span> : null}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {isFeedErrored ? (
+                              <AlertCircle className="h-3.5 w-3.5 text-destructive" aria-hidden="true" />
+                            ) : null}
+                            {feed.unreadCount > 0 ? (
                               <Badge
                                 variant="secondary"
                                 className="h-5 min-w-6 justify-center px-1.5 text-[10px] font-semibold tabular-nums"
                               >
                                 {feed.unreadCount}
                               </Badge>
-                            )}
-                          </button>
-                        </ContextMenuTrigger>
+                            ) : null}
+                          </div>
+                        </button>
+                      );
+
+                      return (
+                      <ContextMenu key={feed.id}>
+                        {isFeedErrored ? (
+                          <ContextMenuTrigger asChild>
+                            <span className="block">
+                              <TooltipProvider delayDuration={150}>
+                                <Tooltip open={hoveredFeedErrorId === feed.id}>
+                                  <TooltipTrigger asChild>{feedButton}</TooltipTrigger>
+                                  <TooltipContent side="right" className="max-w-64 whitespace-normal">
+                                    <div className="space-y-1">
+                                      <p className="font-medium">更新失败</p>
+                                      <p>{feed.fetchError}</p>
+                                    </div>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </span>
+                          </ContextMenuTrigger>
+                        ) : (
+                          <ContextMenuTrigger asChild>{feedButton}</ContextMenuTrigger>
+                        )}
                         <ContextMenuContent className="w-52">
                           <ContextMenuItem
                             onSelect={() => {
@@ -524,7 +576,7 @@ export default function FeedList() {
                           </ContextMenuItem>
                         </ContextMenuContent>
                       </ContextMenu>
-                    ))}
+                    );})}
                   </div>
                 )}
               </div>
