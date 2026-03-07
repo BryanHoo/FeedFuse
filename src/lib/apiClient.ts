@@ -227,6 +227,22 @@ export async function deleteFeed(feedId: string): Promise<{ deleted: true }> {
   });
 }
 
+
+export async function getFeedKeywordFilter(feedId: string): Promise<{ keywords: string[] }> {
+  return requestApi(`/api/feeds/${encodeURIComponent(feedId)}/keyword-filter`);
+}
+
+export async function patchFeedKeywordFilter(
+  feedId: string,
+  input: { keywords: string[] },
+): Promise<{ keywords: string[] }> {
+  return requestApi(`/api/feeds/${encodeURIComponent(feedId)}/keyword-filter`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}
+
 export interface CategoryDto {
   id: string;
   name: string;

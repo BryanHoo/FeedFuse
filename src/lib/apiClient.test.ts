@@ -435,3 +435,21 @@ it('getArticleTasks GETs /api/articles/:id/tasks', async () => {
     expect.objectContaining({}),
   );
 });
+
+
+it('requests feed keyword filter endpoints', async () => {
+  const fetchMock = vi.fn(async () => {
+    return new Response(JSON.stringify({ ok: true, data: { keywords: ['Sponsored'] } }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+
+  const mod = await import('./apiClient');
+  await mod.getFeedKeywordFilter('feed-1');
+  await mod.patchFeedKeywordFilter('feed-1', { keywords: ['Sponsored'] });
+
+  expect(fetchMock.mock.calls[0][0].toString()).toContain('/api/feeds/feed-1/keyword-filter');
+  expect(fetchMock.mock.calls[1][1]?.method).toBe('PATCH');
+});

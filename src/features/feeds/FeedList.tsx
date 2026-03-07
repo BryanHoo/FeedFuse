@@ -5,6 +5,7 @@ import AddFeedDialog from './AddFeedDialog';
 import EditFeedDialog from './EditFeedDialog';
 import FeedSummaryPolicyDialog from './FeedSummaryPolicyDialog';
 import FeedTranslationPolicyDialog from './FeedTranslationPolicyDialog';
+import FeedKeywordFilterDialog from './FeedKeywordFilterDialog';
 import RenameCategoryDialog from './RenameCategoryDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -61,6 +62,7 @@ export default function FeedList() {
   const [deleteFeedId, setDeleteFeedId] = useState<string | null>(null);
   const [summaryPolicyFeedId, setSummaryPolicyFeedId] = useState<string | null>(null);
   const [translationPolicyFeedId, setTranslationPolicyFeedId] = useState<string | null>(null);
+  const [keywordFilterFeedId, setKeywordFilterFeedId] = useState<string | null>(null);
   const [renameCategoryId, setRenameCategoryId] = useState<string | null>(null);
   const [deleteCategoryId, setDeleteCategoryId] = useState<string | null>(null);
   const [hoveredFeedErrorId, setHoveredFeedErrorId] = useState<string | null>(null);
@@ -189,6 +191,11 @@ export default function FeedList() {
     () =>
       translationPolicyFeedId ? feeds.find((feed) => feed.id === translationPolicyFeedId) ?? null : null,
     [translationPolicyFeedId, feeds],
+  );
+
+  const activeKeywordFilterFeed = useMemo(
+    () => (keywordFilterFeedId ? feeds.find((feed) => feed.id === keywordFilterFeedId) ?? null : null),
+    [keywordFilterFeedId, feeds],
   );
 
   const moveCategory = async (categoryId: string, direction: 'up' | 'down') => {
@@ -536,6 +543,16 @@ export default function FeedList() {
                             </ContextMenuItemIcon>
                             <ContextMenuItemLabel>翻译配置</ContextMenuItemLabel>
                           </ContextMenuItem>
+                          <ContextMenuItem
+                            onSelect={() => {
+                              setKeywordFilterFeedId(feed.id);
+                            }}
+                          >
+                            <ContextMenuItemIcon aria-hidden="true">
+                              <AlertCircle className="h-3.5 w-3.5" />
+                            </ContextMenuItemIcon>
+                            <ContextMenuItemLabel>配置关键词过滤</ContextMenuItemLabel>
+                          </ContextMenuItem>
                           <ContextMenuSeparator />
                           <ContextMenuItem
                             onSelect={() => {
@@ -635,6 +652,16 @@ export default function FeedList() {
         onSubmit={async (patch) => {
           if (!activeTranslationPolicyFeed) return;
           await updateFeed(activeTranslationPolicyFeed.id, patch);
+        }}
+      />
+
+      <FeedKeywordFilterDialog
+        open={Boolean(activeKeywordFilterFeed)}
+        feed={activeKeywordFilterFeed}
+        onOpenChange={(open) => {
+          if (!open) {
+            setKeywordFilterFeedId(null);
+          }
         }}
       />
 

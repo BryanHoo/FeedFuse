@@ -37,6 +37,7 @@ function jsonResponse(payload: unknown) {
 describe('FeedList manage', () => {
   let lastPatchBody: Record<string, unknown> | null = null;
   let lastReorderBody: Record<string, unknown> | null = null;
+  let feedKeywordFilterKeywords: string[] = [];
 
   function snapshotResponseFromStore() {
     const state = useAppStore.getState();
@@ -106,6 +107,7 @@ describe('FeedList manage', () => {
   beforeEach(() => {
     lastPatchBody = null;
     lastReorderBody = null;
+    feedKeywordFilterKeywords = [];
     useAppStore.setState({
       feeds: [
         {
@@ -156,6 +158,19 @@ describe('FeedList manage', () => {
 
         if (url.includes('/api/reader/snapshot') && method === 'GET') {
           return snapshotResponseFromStore();
+        }
+
+        if (url.includes('/api/feeds/feed-1/keyword-filter') && method === 'GET') {
+          return jsonResponse({ ok: true, data: { keywords: feedKeywordFilterKeywords } });
+        }
+
+        if (url.includes('/api/feeds/feed-1/keyword-filter') && method === 'PATCH') {
+          const body = typeof init?.body === 'string' ? JSON.parse(init.body) : {};
+          feedKeywordFilterKeywords = Array.isArray(body.keywords)
+            ? body.keywords.map((item: unknown) => String(item))
+            : [];
+
+          return jsonResponse({ ok: true, data: { keywords: feedKeywordFilterKeywords } });
         }
 
         if (url.includes('/api/feeds/feed-1') && method === 'PATCH') {
@@ -764,6 +779,24 @@ describe('FeedList manage', () => {
         aiSummaryOnFetchEnabled: true,
         aiSummaryOnOpenEnabled: false,
       });
+    });
+  });
+
+
+  it('opens keyword filter dialog from feed context menu and saves changes', async () => {
+    renderWithNotifications();
+
+    fireEvent.contextMenu(screen.getByRole('button', { name: /My Feed.*2/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: '配置关键词过滤' }));
+
+    const textarea = await screen.findByLabelText('订阅源文章关键词隐藏');
+    fireEvent.change(textarea, { target: { value: 'Sponsored' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+    await waitFor(() => {
+      const calls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+      expect(calls.some(([input]) => String(input).includes('/api/feeds/feed-1/keyword-filter'))).toBe(true);
+      expect(calls.filter(([input]) => String(input).includes('/api/reader/snapshot')).length).toBeGreaterThan(0);
     });
   });
 
