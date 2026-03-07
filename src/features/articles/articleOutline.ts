@@ -168,7 +168,7 @@ export function buildArticleOutlinePanelLayout({
     !Number.isFinite(viewportRight) ||
     !Number.isFinite(contentRight) ||
     !Number.isFinite(availableWidth) ||
-    availableWidth < OUTLINE_PANEL_HIDE_THRESHOLD_PX
+    availableWidth < OUTLINE_PANEL_MIN_WIDTH_PX
   ) {
     return { visible: false, width: 0, right: OUTLINE_PANEL_RIGHT_PADDING_PX };
   }

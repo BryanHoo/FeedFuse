@@ -222,7 +222,7 @@ describe('ArticleView outline panel', () => {
     expect(screen.queryByRole('navigation', { name: '文章目录' })).not.toBeInTheDocument();
   });
 
-  it('hides the outline panel when the remaining right-side width is too cramped', async () => {
+  it('keeps the outline panel visible when the right-side gap can still fit a narrowed panel', async () => {
     await renderArticleViewWithHeadings();
 
     const scrollContainer = await screen.findByTestId('article-scroll-container');
@@ -262,7 +262,7 @@ describe('ArticleView outline panel', () => {
       await Promise.resolve();
     });
 
-    expect(screen.queryByRole('navigation', { name: '文章目录' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('navigation', { name: '文章目录' })).toBeInTheDocument();
   });
 
   it('scrolls the article container when an outline item is clicked', async () => {

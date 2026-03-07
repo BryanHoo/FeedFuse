@@ -75,13 +75,13 @@ describe('buildArticleOutlinePanelLayout', () => {
     ).toMatchObject({ visible: false });
   });
 
-  it('hides the panel when the remaining width is too cramped after spacing is applied', () => {
+  it('keeps the panel visible when the right-side gap can still fit a narrowed panel', () => {
     expect(
       buildArticleOutlinePanelLayout({
         viewportLeft: 0,
         viewportRight: 1080,
         contentRight: 860,
       }),
-    ).toMatchObject({ visible: false });
+    ).toMatchObject({ visible: true, width: 180, right: 24 });
   });
 });
