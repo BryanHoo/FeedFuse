@@ -1,6 +1,3 @@
-import { ChevronUp } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-
 interface ArticleScrollAssistProps {
   visible: boolean;
   percent: number;
@@ -21,7 +18,9 @@ export default function ArticleScrollAssist({
   onBackToTop,
 }: ArticleScrollAssistProps) {
   const safePercent = clampPercent(percent);
-  const radius = 20;
+  const label = safePercent >= 100 ? 'Top' : `${safePercent}%`;
+  const radius = 21;
+  const strokeWidth = 2.5;
   const circumference = 2 * Math.PI * radius;
   const dashOffset = circumference * (1 - safePercent / 100);
 
@@ -30,34 +29,42 @@ export default function ArticleScrollAssist({
   }
 
   return (
-    <div className="absolute bottom-6 right-6 z-20 flex flex-col gap-2">
-      <div className="flex h-14 w-14 items-center justify-center rounded-full border border-border/60 bg-background/80 shadow-sm backdrop-blur-sm">
-        <svg viewBox="0 0 48 48" className="absolute h-12 w-12 -rotate-90">
-          <circle cx="24" cy="24" r={radius} className="fill-none stroke-border/50" strokeWidth="4" />
-          <circle
-            cx="24"
-            cy="24"
-            r={radius}
-            className="fill-none stroke-primary transition-all"
-            strokeWidth="4"
-            strokeDasharray={circumference}
-            strokeDashoffset={dashOffset}
-            strokeLinecap="round"
-          />
-        </svg>
-        <span className="relative text-xs font-medium text-foreground">{safePercent}%</span>
-      </div>
-
-      <Button
+    <div className="absolute bottom-6 right-6 z-20">
+      <button
         type="button"
-        size="icon"
-        variant="outline"
         aria-label="回到顶部"
-        className="h-14 w-14 rounded-full bg-background/80 shadow-sm backdrop-blur-sm"
+        className="relative inline-flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-border/50 bg-background/70 text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
         onClick={onBackToTop}
       >
-        <ChevronUp className="size-5" />
-      </Button>
+        <span
+          aria-hidden="true"
+          data-testid="article-scroll-assist-ring"
+          className="pointer-events-none absolute inset-[2px]"
+        >
+          <svg viewBox="0 0 48 48" className="h-full w-full -rotate-90">
+            <circle
+              cx="24"
+              cy="24"
+              r={radius}
+              className="fill-none stroke-border/45"
+              strokeWidth={strokeWidth}
+            />
+            <circle
+              cx="24"
+              cy="24"
+              r={radius}
+              className="fill-none stroke-primary/75 transition-all"
+              strokeWidth={strokeWidth}
+              strokeDasharray={circumference}
+              strokeDashoffset={dashOffset}
+              strokeLinecap="round"
+            />
+          </svg>
+        </span>
+        <span className="relative z-10 text-[9px] font-medium leading-none text-foreground/90">
+          {label}
+        </span>
+      </button>
     </div>
   );
 }
