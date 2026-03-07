@@ -25,6 +25,8 @@ export const mockFeeds: Feed[] = [
     articleListDisplayMode: 'card',
     categoryId: 'cat-tech',
     category: '科技',
+    fetchStatus: null,
+    fetchError: null,
   },
   {
     id: 'feed-2',
@@ -43,6 +45,8 @@ export const mockFeeds: Feed[] = [
     articleListDisplayMode: 'card',
     categoryId: 'cat-tech',
     category: '科技',
+    fetchStatus: null,
+    fetchError: null,
   },
   {
     id: 'feed-3',
@@ -61,6 +65,8 @@ export const mockFeeds: Feed[] = [
     articleListDisplayMode: 'card',
     categoryId: 'cat-design',
     category: '设计',
+    fetchStatus: null,
+    fetchError: null,
   },
   {
     id: 'feed-4',
@@ -79,6 +85,8 @@ export const mockFeeds: Feed[] = [
     articleListDisplayMode: 'card',
     categoryId: 'cat-design',
     category: '设计',
+    fetchStatus: null,
+    fetchError: null,
   },
   {
     id: 'feed-5',
@@ -97,6 +105,8 @@ export const mockFeeds: Feed[] = [
     articleListDisplayMode: 'card',
     categoryId: 'cat-dev',
     category: '开发',
+    fetchStatus: null,
+    fetchError: null,
   },
   {
     id: 'feed-6',
@@ -115,6 +125,8 @@ export const mockFeeds: Feed[] = [
     articleListDisplayMode: 'card',
     categoryId: null,
     category: null,
+    fetchStatus: null,
+    fetchError: null,
   },
 ];
 
