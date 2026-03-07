@@ -14,11 +14,13 @@ export interface ParsedFeedItem {
 export interface ParsedFeed {
   title: string | null;
   link: string | null;
+  language: string | null;
   items: ParsedFeedItem[];
 }
 
 const parser = new Parser({
   customFields: {
+    feed: ['language'],
     item: [
       ['media:thumbnail', 'mediaThumbnail', { keepArray: true }],
       ['media:content', 'mediaContent', { keepArray: true }],
@@ -160,6 +162,7 @@ export async function parseFeed(xml: string, fetchedAt: Date): Promise<ParsedFee
 
   const title = typeof feed.title === 'string' ? feed.title : null;
   const link = typeof feed.link === 'string' ? feed.link : null;
+  const language = typeof feed.language === 'string' ? feed.language : null;
 
   const items: ParsedFeedItem[] = (feed.items ?? []).map((item) => {
     const baseUrl =
@@ -203,5 +206,5 @@ export async function parseFeed(xml: string, fetchedAt: Date): Promise<ParsedFee
     };
   });
 
-  return { title, link, items };
+  return { title, link, language, items };
 }

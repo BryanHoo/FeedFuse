@@ -80,6 +80,7 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
   );
   const hasImmersiveSegments = immersiveTranslation.segments.length > 0;
   const hasAiTranslationContent = hasLegacyAiTranslationContent || hasImmersiveSegments;
+  const bodyTranslationEligible = article?.bodyTranslationEligible !== false;
 
   const reportTitleVisibility = useCallback(
     (isVisible: boolean) => {
@@ -289,11 +290,13 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
     const articleId = article?.id ?? null;
     if (!articleId) return;
     if (!feedBodyTranslateOnOpenEnabled) return;
+    if (!bodyTranslationEligible) return;
     if (hasAiTranslationContent || immersiveTranslationSession) return;
 
     void requestImmersiveTranslation({ force: false, autoView: true });
   }, [
     article?.id,
+    bodyTranslationEligible,
     feedBodyTranslateOnOpenEnabled,
     hasAiTranslationContent,
     immersiveTranslationSession,
@@ -473,15 +476,17 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
                 <span>{article.isStarred ? '已收藏' : '收藏'}</span>
               </Button>
 
-              <Button
-                type="button"
-                variant="secondary"
-                className="h-8 px-3 text-sm cursor-pointer transition-shadow hover:shadow-md"
-                onClick={onAiTranslationButtonClick}
-              >
-                <Languages />
-                <span>翻译</span>
-              </Button>
+              {bodyTranslationEligible ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-8 px-3 text-sm cursor-pointer transition-shadow hover:shadow-md"
+                  onClick={onAiTranslationButtonClick}
+                >
+                  <Languages />
+                  <span>翻译</span>
+                </Button>
+              ) : null}
 
               <Button
                 type="button"

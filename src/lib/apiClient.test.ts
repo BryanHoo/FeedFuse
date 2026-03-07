@@ -209,6 +209,58 @@ it('mapArticleDto maps bilingual translation and title fields', () => {
   expect(mapped.aiTranslationBilingualHtml).toContain('ff-bilingual-block');
 });
 
+it('maps body translation eligibility from article dto and snapshot items', () => {
+  expect(
+    mapArticleDto({
+      id: 'article-1',
+      feedId: 'feed-1',
+      dedupeKey: 'dedupe',
+      title: '标题',
+      titleOriginal: '标题',
+      titleZh: null,
+      link: null,
+      author: null,
+      publishedAt: null,
+      contentHtml: '<p>正文</p>',
+      contentFullHtml: null,
+      contentFullFetchedAt: null,
+      contentFullError: null,
+      contentFullSourceUrl: null,
+      aiSummary: null,
+      aiSummaryModel: null,
+      aiSummarizedAt: null,
+      aiTranslationBilingualHtml: null,
+      aiTranslationZhHtml: null,
+      aiTranslationModel: null,
+      aiTranslatedAt: null,
+      summary: null,
+      isRead: false,
+      readAt: null,
+      isStarred: false,
+      starredAt: null,
+      bodyTranslationEligible: false,
+      bodyTranslationBlockedReason: 'source_is_simplified_chinese',
+    }).bodyTranslationEligible,
+  ).toBe(false);
+
+  expect(
+    mapSnapshotArticleItem({
+      id: 'article-1',
+      feedId: 'feed-1',
+      title: '标题',
+      summary: null,
+      previewImage: null,
+      author: null,
+      publishedAt: null,
+      link: null,
+      isRead: false,
+      isStarred: false,
+      bodyTranslationEligible: false,
+      bodyTranslationBlockedReason: 'source_is_simplified_chinese',
+    }).bodyTranslationBlockedReason,
+  ).toBe('source_is_simplified_chinese');
+});
+
 describe('refreshAllFeeds', () => {
   it('POSTs /api/feeds/refresh', async () => {
     const fetchMock = vi.fn(async () => {

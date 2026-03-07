@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { evaluateArticleBodyTranslationEligibility } from '../../../../server/ai/articleTranslationEligibility';
 import { getPool } from '../../../../server/db/pool';
 import { ok, fail } from '../../../../server/http/apiResponse';
 import { NotFoundError, ValidationError } from '../../../../server/http/errors';
@@ -51,7 +52,18 @@ export async function GET(
     const article = await getArticleById(pool, paramsParsed.data.id);
     if (!article) return fail(new NotFoundError('Article not found'));
 
-    return ok(article);
+    const eligibility = evaluateArticleBodyTranslationEligibility({
+      sourceLanguage: article.sourceLanguage,
+      contentHtml: article.contentHtml,
+      contentFullHtml: article.contentFullHtml,
+      summary: article.summary,
+    });
+
+    return ok({
+      ...article,
+      bodyTranslationEligible: eligibility.bodyTranslationEligible,
+      bodyTranslationBlockedReason: eligibility.bodyTranslationBlockedReason,
+    });
   } catch (err) {
     return fail(err);
   }

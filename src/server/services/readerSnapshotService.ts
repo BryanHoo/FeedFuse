@@ -1,4 +1,5 @@
 import type { Pool } from 'pg';
+import { evaluateArticleBodyTranslationEligibility } from '../ai/articleTranslationEligibility';
 import { listCategories } from '../repositories/categoriesRepo';
 import { listFeeds } from '../repositories/feedsRepo';
 
@@ -80,6 +81,8 @@ export interface ReaderSnapshotArticleItem {
   link: string | null;
   isRead: boolean;
   isStarred: boolean;
+  bodyTranslationEligible: boolean;
+  bodyTranslationBlockedReason: string | null;
 }
 
 export interface ReaderSnapshotFeed {
@@ -147,7 +150,12 @@ export async function getReaderSnapshot(
   const limitParamIndex = queryParams.length;
 
   const { rows } = await pool.query<
-    ReaderSnapshotArticleItem & { sortPublishedAt: unknown }
+    ReaderSnapshotArticleItem & {
+      sortPublishedAt: unknown;
+      sourceLanguage: string | null;
+      contentHtml: string | null;
+      contentFullHtml: string | null;
+    }
   >(
     `
       select
@@ -165,6 +173,9 @@ export async function getReaderSnapshot(
         author,
         published_at as "publishedAt",
         link,
+        source_language as "sourceLanguage",
+        content_html as "contentHtml",
+        content_full_html as "contentFullHtml",
         is_read as "isRead",
         is_starred as "isStarred",
         coalesce(published_at, 'epoch'::timestamptz) as "sortPublishedAt"
@@ -192,9 +203,25 @@ export async function getReaderSnapshot(
     feeds: feedsWithUnread,
     articles: {
       items: items.map((item) => {
-        const { sortPublishedAt, ...rest } = item;
+        const {
+          sortPublishedAt,
+          sourceLanguage,
+          contentHtml,
+          contentFullHtml,
+          ...rest
+        } = item;
+        const eligibility = evaluateArticleBodyTranslationEligibility({
+          sourceLanguage,
+          contentHtml,
+          contentFullHtml,
+          summary: item.summary,
+        });
         void sortPublishedAt;
-        return rest;
+        return {
+          ...rest,
+          bodyTranslationEligible: eligibility.bodyTranslationEligible,
+          bodyTranslationBlockedReason: eligibility.bodyTranslationBlockedReason,
+        };
       }),
       nextCursor,
     },

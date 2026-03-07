@@ -3,6 +3,7 @@ import { getPool } from '../../../../../server/db/pool';
 import { ok, fail } from '../../../../../server/http/apiResponse';
 import { NotFoundError, ValidationError } from '../../../../../server/http/errors';
 import { normalizePersistedSettings } from '../../../../../features/settings/settingsSchema';
+import { evaluateArticleBodyTranslationEligibility } from '../../../../../server/ai/articleTranslationEligibility';
 import { resolveTranslationConfig } from '../../../../../server/ai/translationConfig';
 import { extractImmersiveSegments, hashSourceHtml } from '../../../../../server/ai/immersiveTranslationSession';
 import { getArticleById, type ArticleRow } from '../../../../../server/repositories/articlesRepo';
@@ -141,6 +142,16 @@ export async function POST(
 
     const article = await getArticleById(pool, articleId);
     if (!article) return fail(new NotFoundError('Article not found'));
+
+    const eligibility = evaluateArticleBodyTranslationEligibility({
+      sourceLanguage: article.sourceLanguage,
+      contentHtml: article.contentHtml,
+      contentFullHtml: article.contentFullHtml,
+      summary: article.summary,
+    });
+    if (!eligibility.bodyTranslationEligible) {
+      return ok({ enqueued: false, reason: 'source_is_simplified_chinese' });
+    }
 
     const [aiApiKey, translationApiKey, uiSettings] = await Promise.all([
       getAiApiKey(pool),

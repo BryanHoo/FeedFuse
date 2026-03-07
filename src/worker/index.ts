@@ -180,6 +180,7 @@ async function fetchAndIngestFeed(boss: PgBoss, feedId: string, input?: { force?
         contentHtml: sanitizeContent(item.contentHtml, { baseUrl }),
         previewImageUrl: item.previewImage,
         summary: item.summary,
+        sourceLanguage: parsed.language,
       });
       if (!created) continue;
       inserted += 1;

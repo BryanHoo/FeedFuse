@@ -256,6 +256,34 @@ describe('/api/articles', () => {
     expect(json.data.id).toBe(articleId);
   });
 
+  it('GET /:id returns body translation eligibility', async () => {
+    getArticleByIdMock.mockResolvedValue({
+      id: articleId,
+      feedId: 'feed-1',
+      title: '标题',
+      titleOriginal: '标题',
+      titleZh: null,
+      contentHtml: '<p>这是简体中文正文。</p>',
+      contentFullHtml: null,
+      sourceLanguage: null,
+      summary: null,
+      aiSummary: null,
+      aiTranslationBilingualHtml: null,
+      aiTranslationZhHtml: null,
+      isRead: false,
+      isStarred: false,
+    });
+
+    const mod = await import('./[id]/route');
+    const response = await mod.GET(new Request(`http://localhost/api/articles/${articleId}`), {
+      params: Promise.resolve({ id: articleId }),
+    });
+    const json = await response.json();
+
+    expect(json.data.bodyTranslationEligible).toBe(false);
+    expect(json.data.bodyTranslationBlockedReason).toBe('source_is_simplified_chinese');
+  });
+
   it('GET returns not_found when missing', async () => {
     getArticleByIdMock.mockResolvedValue(null);
 
@@ -1465,6 +1493,40 @@ describe('/api/articles', () => {
     expect(json.ok).toBe(true);
     expect(json.data.enqueued).toBe(true);
     expect(json.data.jobId).toBe('job-id-force-translate-2');
+  });
+
+  it('POST /:id/ai-translate returns source_is_simplified_chinese when article body is already simplified Chinese', async () => {
+    getAiApiKeyMock.mockResolvedValue('sk-test');
+    getFeedBodyTranslateEnabledMock.mockResolvedValue(true);
+    getFeedFullTextOnOpenEnabledMock.mockResolvedValue(false);
+    getArticleByIdMock.mockResolvedValue({
+      id: articleId,
+      feedId: 'feed-1',
+      title: '标题',
+      titleOriginal: '标题',
+      titleZh: null,
+      sourceLanguage: 'zh-CN',
+      contentHtml: '<p>这是简体中文正文。</p>',
+      contentFullHtml: null,
+      contentFullError: null,
+      summary: null,
+      aiTranslationBilingualHtml: null,
+      aiTranslationZhHtml: null,
+    });
+
+    const mod = await import('./[id]/ai-translate/route');
+    const response = await mod.POST(
+      new Request(`http://localhost/api/articles/${articleId}/ai-translate`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ force: true }),
+      }),
+      { params: Promise.resolve({ id: articleId }) },
+    );
+    const json = await response.json();
+
+    expect(json.data).toEqual({ enqueued: false, reason: 'source_is_simplified_chinese' });
+    expect(enqueueWithResultMock).not.toHaveBeenCalled();
   });
 
   it('POST /:id/ai-translate force=true bypasses queue singleton dedupe window', async () => {

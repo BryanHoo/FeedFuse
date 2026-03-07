@@ -58,4 +58,29 @@ describe('auto ai triggers', () => {
 
     expect(send).not.toHaveBeenCalled();
   });
+
+  it('does not enqueue ai_translate when article body is already simplified Chinese', async () => {
+    const send = vi.fn().mockResolvedValue('job-id-1');
+    const { enqueueAutoAiTriggersOnFetch } = await import('./autoAiTriggers');
+
+    await enqueueAutoAiTriggersOnFetch({ send } as never, {
+      feed: { aiSummaryOnFetchEnabled: false, bodyTranslateOnFetchEnabled: true },
+      created: {
+        id: 'article-1',
+        aiSummary: null,
+        aiTranslationBilingualHtml: null,
+        aiTranslationZhHtml: null,
+        sourceLanguage: 'zh-CN',
+        contentHtml: '<p>这是简体中文正文。</p>',
+        contentFullHtml: null,
+        summary: null,
+      },
+    });
+
+    expect(send).not.toHaveBeenCalledWith(
+      JOB_AI_TRANSLATE,
+      expect.anything(),
+      expect.anything(),
+    );
+  });
 });

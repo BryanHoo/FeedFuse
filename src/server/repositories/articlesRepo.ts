@@ -28,6 +28,7 @@ export interface ArticleRow {
   aiTranslationModel: string | null;
   aiTranslatedAt: string | null;
   summary: string | null;
+  sourceLanguage: string | null;
   isRead: boolean;
   readAt: string | null;
   isStarred: boolean;
@@ -46,6 +47,7 @@ export async function insertArticleIgnoreDuplicate(
     contentHtml?: string | null;
     previewImageUrl?: string | null;
     summary?: string | null;
+    sourceLanguage?: string | null;
   },
 ): Promise<ArticleRow | null> {
   const { rows } = await pool.query<ArticleRow>(
@@ -60,9 +62,10 @@ export async function insertArticleIgnoreDuplicate(
         published_at,
         content_html,
         summary,
-        preview_image_url
+        preview_image_url,
+        source_language
       )
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       on conflict (feed_id, dedupe_key) do nothing
       returning
         id,
@@ -92,6 +95,7 @@ export async function insertArticleIgnoreDuplicate(
         ai_translation_model as "aiTranslationModel",
         ai_translated_at as "aiTranslatedAt",
         summary,
+        source_language as "sourceLanguage",
         is_read as "isRead",
         read_at as "readAt",
         is_starred as "isStarred",
@@ -108,6 +112,7 @@ export async function insertArticleIgnoreDuplicate(
       input.contentHtml ?? null,
       input.summary ?? null,
       input.previewImageUrl ?? null,
+      input.sourceLanguage ?? null,
     ],
   );
   return rows[0] ?? null;
@@ -147,6 +152,7 @@ export async function getArticleById(
         ai_translation_model as "aiTranslationModel",
         ai_translated_at as "aiTranslatedAt",
         summary,
+        source_language as "sourceLanguage",
         is_read as "isRead",
         read_at as "readAt",
         is_starred as "isStarred",

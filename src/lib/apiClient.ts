@@ -101,6 +101,8 @@ export interface ReaderSnapshotDto {
       link: string | null;
       isRead: boolean;
       isStarred: boolean;
+      bodyTranslationEligible?: boolean;
+      bodyTranslationBlockedReason?: string | null;
     }>;
     nextCursor: string | null;
   };
@@ -316,6 +318,8 @@ export interface ArticleDto {
   readAt: string | null;
   isStarred: boolean;
   starredAt: string | null;
+  bodyTranslationEligible?: boolean;
+  bodyTranslationBlockedReason?: string | null;
 }
 
 export async function getArticle(articleId: string): Promise<ArticleDto> {
@@ -524,6 +528,8 @@ export function mapSnapshotArticleItem(dto: ReaderSnapshotDto['articles']['items
     link: dto.link ?? '',
     isRead: dto.isRead,
     isStarred: dto.isStarred,
+    bodyTranslationEligible: dto.bodyTranslationEligible,
+    bodyTranslationBlockedReason: dto.bodyTranslationBlockedReason,
   };
 }
 
@@ -544,5 +550,7 @@ export function mapArticleDto(dto: ArticleDto): Article {
     link: dto.link ?? '',
     isRead: dto.isRead,
     isStarred: dto.isStarred,
+    bodyTranslationEligible: dto.bodyTranslationEligible,
+    bodyTranslationBlockedReason: dto.bodyTranslationBlockedReason,
   };
 }

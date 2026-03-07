@@ -113,6 +113,8 @@ describe('appStore api integration', () => {
                   link: 'https://example.com/hello',
                   isRead: false,
                   isStarred: false,
+                  bodyTranslationEligible: false,
+                  bodyTranslationBlockedReason: 'source_is_simplified_chinese',
                 },
               ],
               nextCursor: null,
@@ -130,6 +132,8 @@ describe('appStore api integration', () => {
     expect(useAppStore.getState().categories.some((c) => c.id === 'cat-tech')).toBe(true);
     expect(useAppStore.getState().feeds[0].category).toBe('科技');
     expect(useAppStore.getState().articles[0].content).toBe('');
+    expect(useAppStore.getState().articles[0].bodyTranslationEligible).toBe(false);
+    expect(useAppStore.getState().articles[0].bodyTranslationBlockedReason).toBe('source_is_simplified_chinese');
   });
 
   it('loads feed fetch error from reader snapshot into store', async () => {

@@ -45,6 +45,8 @@ export interface Article {
   link: string;
   isRead: boolean;
   isStarred: boolean;
+  bodyTranslationEligible?: boolean;
+  bodyTranslationBlockedReason?: string | null;
 }
 
 export interface UserSettings {

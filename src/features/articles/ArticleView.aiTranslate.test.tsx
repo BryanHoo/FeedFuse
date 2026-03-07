@@ -97,6 +97,8 @@ function seedArticleViewState(input?: {
   bodyTranslateOnOpenEnabled?: boolean;
   fullTextOnOpenEnabled?: boolean;
   content?: string;
+  feed?: Record<string, unknown>;
+  article?: Record<string, unknown>;
 }) {
   const bodyTranslateEnabled = input?.bodyTranslateEnabled ?? true;
   const bodyTranslateOnOpenEnabled = input?.bodyTranslateOnOpenEnabled ?? false;
@@ -120,6 +122,7 @@ function seedArticleViewState(input?: {
           categoryId: null,
           category: null,
           articleListDisplayMode: 'card',
+          ...input?.feed,
         },
       ],
       categories: [{ id: 'cat-uncategorized', name: '未分类', expanded: true }],
@@ -134,6 +137,7 @@ function seedArticleViewState(input?: {
           link: 'https://example.com/a1',
           isRead: true,
           isStarred: false,
+          ...input?.article,
         },
       ],
       selectedView: 'all',
@@ -335,6 +339,42 @@ describe('ArticleView ai translate', () => {
       expect(apiClient.enqueueArticleAiTranslate).toHaveBeenCalledWith('article-1', {
         force: true,
       });
+    });
+  });
+
+  it('does not render translate button when bodyTranslationEligible is false', async () => {
+    const apiClient = await import('../../lib/apiClient');
+    await seedArticleViewState({
+      article: {
+        bodyTranslationEligible: false,
+        bodyTranslationBlockedReason: 'source_is_simplified_chinese',
+      },
+    });
+
+    const { default: ArticleView } = await import('./ArticleView');
+    render(<ArticleView />);
+
+    await waitFor(() => {
+      expect(apiClient.getArticleTasks).toHaveBeenCalled();
+    });
+    expect(screen.queryByRole('button', { name: '翻译' })).not.toBeInTheDocument();
+  });
+
+  it('does not auto-request translation on open when bodyTranslationEligible is false', async () => {
+    const apiClient = await import('../../lib/apiClient');
+    await seedArticleViewState({
+      feed: { bodyTranslateOnOpenEnabled: true },
+      article: {
+        bodyTranslationEligible: false,
+        bodyTranslationBlockedReason: 'source_is_simplified_chinese',
+      },
+    });
+
+    const { default: ArticleView } = await import('./ArticleView');
+    render(<ArticleView />);
+
+    await waitFor(() => {
+      expect(apiClient.enqueueArticleAiTranslate).not.toHaveBeenCalled();
     });
   });
 

@@ -55,6 +55,13 @@ describe('rss parsing', () => {
     expect(feed.items[0].publishedAt.toISOString()).toBe('2026-02-25T00:00:00.000Z');
   });
 
+  it('parses optional feed language metadata', async () => {
+    const xml = '<?xml version="1.0"?><rss version="2.0"><channel><title>Example</title><language>zh-CN</language><item><title>Item</title></item></channel></rss>';
+    const feed = await parseFeed(xml, new Date('2026-03-07T00:00:00Z'));
+
+    expect(feed.language).toBe('zh-CN');
+  });
+
   it('sanitizes scripts and event handlers', () => {
     const cleaned = sanitizeContent(
       '<p>Hi</p><script>alert(1)</script><img src="https://example.com/a.png" onerror="alert(1)" />',

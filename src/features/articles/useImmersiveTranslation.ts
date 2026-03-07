@@ -349,6 +349,11 @@ export function useImmersiveTranslation(
         return;
       }
 
+      if (enqueueResult.reason === 'source_is_simplified_chinese') {
+        setLoadingState(false);
+        return;
+      }
+
       if (enqueueResult.reason === 'already_translated') {
         setLoadingState(false);
         if (autoView) {
