@@ -839,6 +839,25 @@ describe('ArticleList', () => {
     expect(screen.queryByRole('heading', { level: 2, name: '文章' })).not.toBeInTheDocument();
   });
 
+  it('renders empty state when the middle column has no articles', () => {
+    useAppStore.setState({
+      selectedView: 'feed-1',
+      showUnreadOnly: false,
+      articles: [],
+      selectedArticleId: null,
+    });
+
+    renderWithNotifications();
+
+    const emptyHint = screen.getByText('这个订阅源还没有文章');
+
+    expect(emptyHint).toBeInTheDocument();
+    expect(emptyHint).toHaveClass('text-muted-foreground');
+    expect(screen.queryByText('刷新订阅源后，新文章会出现在这里。')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('article-list-empty-state')).not.toBeInTheDocument();
+    expect(screen.getByText('0 篇')).toBeInTheDocument();
+  });
+
   it('shows display mode toggle only in feed view and hides it in all/unread/starred views', () => {
     useAppStore.setState({ selectedView: 'feed-1' });
     renderWithNotifications();

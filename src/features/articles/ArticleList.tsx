@@ -368,6 +368,22 @@ export default function ArticleList() {
     return Boolean(selectedFeed?.enabled);
   })();
 
+  const emptyStateMessage = (() => {
+    if (showUnreadFilterActive) {
+      return selectedFeed ? "这个订阅源暂时没有未读文章" : "未读列表暂时是空的";
+    }
+
+    if (selectedView === "starred") {
+      return "还没有收藏文章";
+    }
+
+    if (selectedFeed) {
+      return canRefresh ? "这个订阅源还没有文章" : "这个订阅源还没有可显示的文章";
+    }
+
+    return "这里还没有文章";
+  })();
+
   const refreshButtonTitle = isAggregateView ? "刷新全部订阅源" : "刷新订阅源";
 
   const onRefreshClick = () => {
@@ -529,165 +545,171 @@ export default function ArticleList() {
       </div>
 
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pb-3 pt-1">
-        {articleSections.map((section, sectionIndex) => (
-          <div
-            key={`${section.key}-${sectionIndex}`}
-            className="mt-3 first:mt-0"
-          >
-            <div className="px-4 py-2">
-              <h3 className="text-[18px] font-semibold tracking-tight text-foreground">
-                {section.title}
-              </h3>
-            </div>
+        {articleSections.length === 0 ? (
+          <div className="flex min-h-full items-center justify-center px-6 py-10">
+            <p className="text-center text-muted-foreground">{emptyStateMessage}</p>
+          </div>
+        ) : (
+          articleSections.map((section, sectionIndex) => (
+            <div
+              key={`${section.key}-${sectionIndex}`}
+              className="mt-3 first:mt-0"
+            >
+              <div className="px-4 py-2">
+                <h3 className="text-[18px] font-semibold tracking-tight text-foreground">
+                  {section.title}
+                </h3>
+              </div>
 
-            {section.articles.map((article) => {
-              const previewImage = previewImageByArticleId.get(article.id);
-              const previewImageStatus = previewImage
-                ? previewImageStatuses.get(previewImage.key)
-                : undefined;
-              const showPreviewImage = previewImageStatus === "ready";
-              const displayTitle = article.titleZh?.trim() || article.title;
+              {section.articles.map((article) => {
+                const previewImage = previewImageByArticleId.get(article.id);
+                const previewImageStatus = previewImage
+                  ? previewImageStatuses.get(previewImage.key)
+                  : undefined;
+                const showPreviewImage = previewImageStatus === "ready";
+                const displayTitle = article.titleZh?.trim() || article.title;
 
-              if (effectiveDisplayMode === "list") {
-                return (
-                  <button
-                    key={article.id}
-                    type="button"
-                    onClick={() => setSelectedArticle(article.id)}
-                    className={cn(
-                      "w-full px-4 py-2 text-left transition-colors duration-150",
-                      selectedArticleId === article.id ? "bg-accent" : "hover:bg-accent",
-                    )}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <span
-                        data-testid={`article-list-row-${article.id}-title`}
-                        title={displayTitle}
-                        className={cn(
-                          "min-w-0 flex-1 truncate text-[0.94rem] leading-[1.35]",
-                          article.isRead
-                            ? "font-medium text-muted-foreground"
-                            : "font-semibold text-foreground",
-                        )}
-                      >
-                        {displayTitle}
-                      </span>
-                      <div className="shrink-0 flex items-center gap-1.5 text-[11px]">
-                        {!article.isRead && (
-                          <span
-                            data-testid={`article-list-row-${article.id}-unread-dot`}
-                            aria-hidden="true"
-                            className="h-1.5 w-1.5 rounded-full bg-primary"
-                          />
-                        )}
+                if (effectiveDisplayMode === "list") {
+                  return (
+                    <button
+                      key={article.id}
+                      type="button"
+                      onClick={() => setSelectedArticle(article.id)}
+                      className={cn(
+                        "w-full px-4 py-2 text-left transition-colors duration-150",
+                        selectedArticleId === article.id ? "bg-accent" : "hover:bg-accent",
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-3">
                         <span
-                          data-testid={`article-list-row-${article.id}-time`}
-                          className={article.isRead ? "text-muted-foreground" : "text-primary"}
-                        >
-                          {formatRelativeTime(article.publishedAt)}
-                        </span>
-                      </div>
-                    </div>
-                  </button>
-                );
-              }
-
-              return (
-                <button
-                  key={article.id}
-                  data-article-id={article.id}
-                  ref={(node) => {
-                    if (node) {
-                      articleCardRefs.current.set(article.id, node);
-                      return;
-                    }
-
-                    articleCardRefs.current.delete(article.id);
-                  }}
-                  type="button"
-                  onClick={() => setSelectedArticle(article.id)}
-                  className={cn(
-                    "h-[6.5rem] w-full px-4 py-2.5 text-left transition-colors duration-150",
-                    selectedArticleId === article.id ? "bg-accent" : "hover:bg-accent",
-                  )}
-                >
-                  <div className="flex h-full items-stretch gap-3">
-                    <div className="flex h-full min-w-0 flex-1 flex-col">
-                      <h3
-                        data-testid={`article-card-${article.id}-title`}
-                        ref={(titleElement) => {
-                          if (titleElement) {
-                            cardTitleRefs.current.set(article.id, titleElement);
-                            return;
-                          }
-
-                          cardTitleRefs.current.delete(article.id);
-                        }}
-                        className={cn(
-                          "line-clamp-2 text-[0.94rem] leading-[1.35]",
-                          article.isRead
-                            ? "font-medium text-muted-foreground"
-                            : "font-semibold text-foreground",
-                        )}
-                      >
-                        {displayTitle}
-                      </h3>
-
-                      <p
-                        data-testid={`article-card-${article.id}-summary`}
-                        className={cn(
-                          "mt-0.5 text-[12px] leading-relaxed text-muted-foreground",
-                          wrappedCardTitleArticleIds.has(article.id) ? "line-clamp-1" : "line-clamp-2",
-                        )}
-                      >
-                        {article.summary}
-                      </p>
-
-                      <div className="mt-auto flex items-center justify-between gap-3 pt-1.5 text-[11px]">
-                        <span className="max-w-[10.5rem] truncate font-medium text-muted-foreground">
-                          {getFeedTitle(article.feedId)}
-                        </span>
-                        <div className="shrink-0 flex items-center gap-1.5">
-                          {!article.isRead && (
-                            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-primary" />
+                          data-testid={`article-list-row-${article.id}-title`}
+                          title={displayTitle}
+                          className={cn(
+                            "min-w-0 flex-1 truncate text-[0.94rem] leading-[1.35]",
+                            article.isRead
+                              ? "font-medium text-muted-foreground"
+                              : "font-semibold text-foreground",
                           )}
-                          <span className={article.isRead ? "text-muted-foreground" : "text-primary"}>
+                        >
+                          {displayTitle}
+                        </span>
+                        <div className="shrink-0 flex items-center gap-1.5 text-[11px]">
+                          {!article.isRead && (
+                            <span
+                              data-testid={`article-list-row-${article.id}-unread-dot`}
+                              aria-hidden="true"
+                              className="h-1.5 w-1.5 rounded-full bg-primary"
+                            />
+                          )}
+                          <span
+                            data-testid={`article-list-row-${article.id}-time`}
+                            className={article.isRead ? "text-muted-foreground" : "text-primary"}
+                          >
                             {formatRelativeTime(article.publishedAt)}
                           </span>
                         </div>
                       </div>
-                    </div>
+                    </button>
+                  );
+                }
 
-                    {showPreviewImage && previewImage ? (
-                      <div className="h-full w-24 shrink-0 overflow-hidden rounded-md bg-muted">
-                        <img
-                          src={previewImage.src}
-                          alt=""
-                          aria-hidden="true"
-                          loading="lazy"
-                          width={96}
-                          height={104}
-                          className="h-full w-full object-cover"
-                          onError={() => {
-                            setPreviewImageStatuses((previousStatuses) => {
-                              if (previousStatuses.get(previewImage.key) === "failed") {
-                                return previousStatuses;
-                              }
+                return (
+                  <button
+                    key={article.id}
+                    data-article-id={article.id}
+                    ref={(node) => {
+                      if (node) {
+                        articleCardRefs.current.set(article.id, node);
+                        return;
+                      }
 
-                              const nextStatuses = new Map(previousStatuses);
-                              nextStatuses.set(previewImage.key, "failed");
-                              return nextStatuses;
-                            });
+                      articleCardRefs.current.delete(article.id);
+                    }}
+                    type="button"
+                    onClick={() => setSelectedArticle(article.id)}
+                    className={cn(
+                      "h-[6.5rem] w-full px-4 py-2.5 text-left transition-colors duration-150",
+                      selectedArticleId === article.id ? "bg-accent" : "hover:bg-accent",
+                    )}
+                  >
+                    <div className="flex h-full items-stretch gap-3">
+                      <div className="flex h-full min-w-0 flex-1 flex-col">
+                        <h3
+                          data-testid={`article-card-${article.id}-title`}
+                          ref={(titleElement) => {
+                            if (titleElement) {
+                              cardTitleRefs.current.set(article.id, titleElement);
+                              return;
+                            }
+
+                            cardTitleRefs.current.delete(article.id);
                           }}
-                        />
+                          className={cn(
+                            "line-clamp-2 text-[0.94rem] leading-[1.35]",
+                            article.isRead
+                              ? "font-medium text-muted-foreground"
+                              : "font-semibold text-foreground",
+                          )}
+                        >
+                          {displayTitle}
+                        </h3>
+
+                        <p
+                          data-testid={`article-card-${article.id}-summary`}
+                          className={cn(
+                            "mt-0.5 text-[12px] leading-relaxed text-muted-foreground",
+                            wrappedCardTitleArticleIds.has(article.id) ? "line-clamp-1" : "line-clamp-2",
+                          )}
+                        >
+                          {article.summary}
+                        </p>
+
+                        <div className="mt-auto flex items-center justify-between gap-3 pt-1.5 text-[11px]">
+                          <span className="max-w-[10.5rem] truncate font-medium text-muted-foreground">
+                            {getFeedTitle(article.feedId)}
+                          </span>
+                          <div className="shrink-0 flex items-center gap-1.5">
+                            {!article.isRead && (
+                              <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-primary" />
+                            )}
+                            <span className={article.isRead ? "text-muted-foreground" : "text-primary"}>
+                              {formatRelativeTime(article.publishedAt)}
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                    ) : null}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        ))}
+
+                      {showPreviewImage && previewImage ? (
+                        <div className="h-full w-24 shrink-0 overflow-hidden rounded-md bg-muted">
+                          <img
+                            src={previewImage.src}
+                            alt=""
+                            aria-hidden="true"
+                            loading="lazy"
+                            width={96}
+                            height={104}
+                            className="h-full w-full object-cover"
+                            onError={() => {
+                              setPreviewImageStatuses((previousStatuses) => {
+                                if (previousStatuses.get(previewImage.key) === "failed") {
+                                  return previousStatuses;
+                                }
+
+                                const nextStatuses = new Map(previousStatuses);
+                                nextStatuses.set(previewImage.key, "failed");
+                                return nextStatuses;
+                              });
+                            }}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
