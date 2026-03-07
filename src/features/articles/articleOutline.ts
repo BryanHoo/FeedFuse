@@ -5,6 +5,18 @@ export interface ArticleOutlineItem {
   element: HTMLHeadingElement;
 }
 
+export interface ArticleOutlineMarker {
+  id: string;
+  level: 1 | 2 | 3;
+  text: string;
+  topRatio: number;
+}
+
+export interface ArticleOutlineViewport {
+  top: number;
+  height: number;
+}
+
 const selector = 'h1, h2, h3';
 
 function slugifyHeading(text: string) {
