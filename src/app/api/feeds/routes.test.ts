@@ -10,6 +10,8 @@ const listFeedsMock = vi.fn();
 const createFeedWithCategoryResolutionMock = vi.fn();
 const updateFeedWithCategoryResolutionMock = vi.fn();
 const deleteFeedAndCleanupCategoryMock = vi.fn();
+const getUiSettingsMock = vi.fn();
+const updateUiSettingsMock = vi.fn();
 
 const enqueueMock = vi.fn();
 const enqueueWithResultMock = vi.fn();
@@ -48,6 +50,18 @@ vi.mock('../../../../server/services/feedCategoryLifecycleService', () => ({
     deleteFeedAndCleanupCategoryMock(...args),
 }));
 
+
+
+vi.mock('../../../server/repositories/settingsRepo', () => ({
+  getUiSettings: (...args: unknown[]) => getUiSettingsMock(...args),
+  updateUiSettings: (...args: unknown[]) => updateUiSettingsMock(...args),
+}));
+
+vi.mock('../../../../server/repositories/settingsRepo', () => ({
+  getUiSettings: (...args: unknown[]) => getUiSettingsMock(...args),
+  updateUiSettings: (...args: unknown[]) => updateUiSettingsMock(...args),
+}));
+
 vi.mock('../../../server/queue/queue', () => ({
   enqueue: (...args: unknown[]) => enqueueMock(...args),
   enqueueWithResult: (...args: unknown[]) => enqueueWithResultMock(...args),
@@ -71,6 +85,8 @@ describe('/api/feeds', () => {
     createFeedWithCategoryResolutionMock.mockReset();
     updateFeedWithCategoryResolutionMock.mockReset();
     deleteFeedAndCleanupCategoryMock.mockReset();
+    getUiSettingsMock.mockReset();
+    updateUiSettingsMock.mockReset();
     enqueueMock.mockReset();
     enqueueWithResultMock.mockReset();
   });
@@ -553,6 +569,29 @@ describe('/api/feeds', () => {
     const json = await res.json();
 
     expect(json.ok).toBe(true);
+  });
+
+
+  it('DELETE clears the deleted feed keyword filter settings', async () => {
+    deleteFeedAndCleanupCategoryMock.mockResolvedValue(true);
+    getUiSettingsMock.mockResolvedValue({
+      rss: {
+        articleKeywordFilter: {
+          globalKeywords: [],
+          feedKeywordsByFeedId: { [feedId]: ['Sponsored'] },
+        },
+      },
+    });
+    updateUiSettingsMock.mockResolvedValue({
+      rss: { articleKeywordFilter: { globalKeywords: [], feedKeywordsByFeedId: {} } },
+    });
+
+    const mod = await import('./[id]/route');
+    await mod.DELETE(new Request(`http://localhost/api/feeds/${feedId}`), {
+      params: Promise.resolve({ id: feedId }),
+    });
+
+    expect(updateUiSettingsMock).toHaveBeenCalled();
   });
 
   it('POST /refresh enqueues feed.fetch', async () => {
