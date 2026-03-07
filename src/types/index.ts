@@ -16,6 +16,8 @@ export interface Feed {
   articleListDisplayMode: 'card' | 'list';
   categoryId?: string | null;
   category?: string | null;
+  fetchStatus: number | null;
+  fetchError: string | null;
 }
 
 export interface Category {
