@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, vi } from 'vitest';
 import ReaderLayout from '../reader/ReaderLayout';
+import { ApiNotificationBridge } from '../notifications/ApiNotificationBridge';
 import { NotificationProvider } from '../notifications/NotificationProvider';
 import { useAppStore } from '../../store/appStore';
 
@@ -166,6 +167,7 @@ describe('AddFeedDialog', () => {
   function renderWithNotifications() {
     return render(
       <NotificationProvider>
+        <ApiNotificationBridge />
         <ReaderLayout />
       </NotificationProvider>,
     );
@@ -491,7 +493,7 @@ describe('AddFeedDialog', () => {
             ok: false,
             error: {
               code: 'conflict',
-              message: 'feed existed',
+              message: '订阅源已存在',
             },
           });
         }
@@ -516,8 +518,7 @@ describe('AddFeedDialog', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '添加' }));
 
-    await waitFor(() => {
-      expect(screen.getByText(/操作失败/)).toBeInTheDocument();
-    });
+    expect(await screen.findByText('订阅源已存在')).toBeInTheDocument();
+    expect(screen.queryByText('操作失败：数据已存在。')).not.toBeInTheDocument();
   });
 });

@@ -13,7 +13,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { Category } from '../../types';
-import { mapApiErrorToUserMessage } from '../notifications/mapApiErrorToUserMessage';
 import { useNotify } from '../notifications/useNotify';
 import { validateRssUrl } from './services/rssValidationService';
 import CreatableCategoryField from './CreatableCategoryField';
@@ -60,7 +59,6 @@ interface ModeMeta {
   submitLabel: string;
   submittingLabel: string;
   successMessage: string;
-  errorAction: string;
 }
 
 const VALIDATION_STATE_META: Record<ValidationState, ValidationStateMeta> = {
@@ -99,7 +97,6 @@ const MODE_META: Record<FeedDialogProps['mode'], ModeMeta> = {
     submitLabel: '添加',
     submittingLabel: '添加中…',
     successMessage: '已添加订阅源',
-    errorAction: 'create-feed',
   },
   edit: {
     closeLabel: 'close-edit-feed',
@@ -109,7 +106,6 @@ const MODE_META: Record<FeedDialogProps['mode'], ModeMeta> = {
     submitLabel: '保存',
     submittingLabel: '保存中…',
     successMessage: '保存成功',
-    errorAction: 'update-feed',
   },
 };
 
@@ -242,8 +238,8 @@ export default function FeedDialog({
         });
         notify.success(modeMeta.successMessage);
         onOpenChange(false);
-      } catch (err) {
-        notify.error(mapApiErrorToUserMessage(err, modeMeta.errorAction));
+      } catch {
+        // apiClient handles failure notifications globally
       } finally {
         setSubmitting(false);
       }

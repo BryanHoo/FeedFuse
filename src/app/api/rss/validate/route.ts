@@ -1,5 +1,5 @@
 import Parser from 'rss-parser';
-import { NextResponse } from 'next/server';
+import { ok } from '../../../../server/http/apiResponse';
 import { getFetchUrlCandidates } from '../../../../server/rss/fetchUrlCandidates';
 import { isSafeExternalUrl } from '../../../../server/rss/ssrfGuard';
 
@@ -13,17 +13,17 @@ type RssValidationErrorCode =
   | 'not_feed'
   | 'network_error';
 
-type RssValidationResult =
+type RssValidationResultData =
   | {
-      ok: true;
+      valid: true;
       kind: 'rss' | 'atom';
       title?: string;
       siteUrl?: string;
     }
   | {
-      ok: false;
-      errorCode: RssValidationErrorCode;
-      message?: string;
+      valid: false;
+      reason: RssValidationErrorCode;
+      message: string;
     };
 
 const parser = new Parser();
@@ -34,8 +34,8 @@ function detectKind(xml: string): 'rss' | 'atom' {
   return 'rss';
 }
 
-function toJson(result: RssValidationResult) {
-  return NextResponse.json(result, { status: 200 });
+function toJson(result: RssValidationResultData) {
+  return ok(result);
 }
 
 function normalizeHttpUrl(value: unknown): string | null {
@@ -58,23 +58,19 @@ export async function GET(request: Request) {
   try {
     url = new URL(urlParam);
   } catch {
-    return toJson({ ok: false, errorCode: 'invalid_url', message: 'URL is invalid.' });
+    return toJson({ valid: false, reason: 'invalid_url', message: '链接格式不正确' });
   }
 
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     return toJson({
-      ok: false,
-      errorCode: 'invalid_url',
-      message: 'URL must use http or https.',
+      valid: false,
+      reason: 'invalid_url',
+      message: '链接必须使用 http 或 https',
     });
   }
 
   if (!(await isSafeExternalUrl(urlParam))) {
-    return toJson({
-      ok: false,
-      errorCode: 'invalid_url',
-      message: 'URL is invalid.',
-    });
+    return toJson({ valid: false, reason: 'invalid_url', message: '链接格式不正确' });
   }
 
   const controller = new AbortController();
@@ -110,17 +106,17 @@ export async function GET(request: Request) {
 
     if (res.status === 401 || res.status === 403) {
       return toJson({
-        ok: false,
-        errorCode: 'unauthorized',
-        message: 'Source requires authorization.',
+        valid: false,
+        reason: 'unauthorized',
+        message: '源站需要授权访问',
       });
     }
 
     if (!res.ok) {
       return toJson({
-        ok: false,
-        errorCode: 'network_error',
-        message: 'Network error.',
+        valid: false,
+        reason: 'network_error',
+        message: '校验失败，请稍后重试',
       });
     }
 
@@ -131,30 +127,30 @@ export async function GET(request: Request) {
       const feed = await parser.parseString(xml);
       const parsedSiteUrl = normalizeHttpUrl(feed.link);
       return toJson({
-        ok: true,
+        valid: true,
         kind,
         title: typeof feed.title === 'string' ? feed.title : undefined,
         siteUrl: parsedSiteUrl ?? undefined,
       });
     } catch {
       return toJson({
-        ok: false,
-        errorCode: 'not_feed',
-        message: 'Response is not a valid RSS/Atom feed.',
+        valid: false,
+        reason: 'not_feed',
+        message: '响应不是合法的 RSS/Atom 源',
       });
     }
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
       return toJson({
-        ok: false,
-        errorCode: 'timeout',
-        message: 'Validation timed out.',
+        valid: false,
+        reason: 'timeout',
+        message: '校验超时，请稍后重试',
       });
     }
     return toJson({
-      ok: false,
-      errorCode: 'network_error',
-      message: 'Network error.',
+      valid: false,
+      reason: 'network_error',
+      message: '校验失败，请稍后重试',
     });
   } finally {
     clearTimeout(timeout);

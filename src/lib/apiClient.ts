@@ -1,4 +1,5 @@
 import type { Article, Category, Feed, PersistedSettings } from '../types';
+import { notifyApiError } from './apiErrorNotifier';
 
 export interface ApiErrorPayload {
   code: string;
@@ -20,6 +21,11 @@ type ApiOk<T> = { ok: true; data: T };
 type ApiFail = { ok: false; error: ApiErrorPayload };
 type ApiEnvelope<T> = ApiOk<T> | ApiFail;
 
+export interface RequestApiOptions {
+  notifyOnError?: boolean;
+  notifyMessage?: string;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -35,7 +41,7 @@ function toAbsoluteUrl(path: string): string {
   return new URL(path, getBaseUrl()).toString();
 }
 
-async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
+async function requestApi<T>(path: string, init?: RequestInit, options?: RequestApiOptions): Promise<T> {
   const res = await fetch(toAbsoluteUrl(path), {
     ...init,
     headers: {
@@ -53,6 +59,11 @@ async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
   if (envelope.ok) return envelope.data;
 
   const payload = envelope.error;
+  const message = options?.notifyMessage ?? payload?.message ?? '请求失败';
+  if (options?.notifyOnError !== false) {
+    notifyApiError(message);
+  }
+
   throw new ApiError(
     payload?.message ?? 'Request failed',
     payload?.code ?? 'unknown_error',
@@ -108,18 +119,21 @@ export interface ReaderSnapshotDto {
   };
 }
 
-export async function getReaderSnapshot(input?: {
-  view?: string;
-  limit?: number;
-  cursor?: string;
-}): Promise<ReaderSnapshotDto> {
+export async function getReaderSnapshot(
+  input?: {
+    view?: string;
+    limit?: number;
+    cursor?: string;
+  },
+  options?: RequestApiOptions,
+): Promise<ReaderSnapshotDto> {
   const params = new URLSearchParams();
   if (input?.view) params.set('view', input.view);
   if (typeof input?.limit === 'number') params.set('limit', String(input.limit));
   if (input?.cursor) params.set('cursor', input.cursor);
 
   const suffix = params.size > 0 ? `?${params.toString()}` : '';
-  return requestApi<ReaderSnapshotDto>(`/api/reader/snapshot${suffix}`);
+  return requestApi<ReaderSnapshotDto>(`/api/reader/snapshot${suffix}`, undefined, options);
 }
 
 export async function createFeed(input: {
@@ -291,20 +305,32 @@ export async function reorderCategories(
 export async function patchArticle(
   articleId: string,
   input: { isRead?: boolean; isStarred?: boolean },
+  options?: RequestApiOptions,
 ): Promise<{ updated: true }> {
-  return requestApi(`/api/articles/${encodeURIComponent(articleId)}`, {
-    method: 'PATCH',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(input),
-  });
+  return requestApi(
+    `/api/articles/${encodeURIComponent(articleId)}`,
+    {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+    options,
+  );
 }
 
-export async function markAllRead(input: { feedId?: string } = {}): Promise<{ updatedCount: number }> {
-  return requestApi('/api/articles/mark-all-read', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(input),
-  });
+export async function markAllRead(
+  input: { feedId?: string } = {},
+  options?: RequestApiOptions,
+): Promise<{ updatedCount: number }> {
+  return requestApi(
+    '/api/articles/mark-all-read',
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+    options,
+  );
 }
 
 export interface ArticleDto {
@@ -338,8 +364,11 @@ export interface ArticleDto {
   bodyTranslationBlockedReason?: string | null;
 }
 
-export async function getArticle(articleId: string): Promise<ArticleDto> {
-  return requestApi(`/api/articles/${encodeURIComponent(articleId)}`);
+export async function getArticle(
+  articleId: string,
+  options?: RequestApiOptions,
+): Promise<ArticleDto> {
+  return requestApi(`/api/articles/${encodeURIComponent(articleId)}`, undefined, options);
 }
 
 export type ArticleTaskType = 'fulltext' | 'ai_summary' | 'ai_translate';
@@ -452,16 +481,23 @@ export function createArticleAiTranslateEventSource(articleId: string): EventSou
   return new EventSource(toAbsoluteUrl(path));
 }
 
-export async function getSettings(): Promise<PersistedSettings> {
-  return requestApi('/api/settings');
+export async function getSettings(options?: RequestApiOptions): Promise<PersistedSettings> {
+  return requestApi('/api/settings', undefined, options);
 }
 
-export async function putSettings(input: PersistedSettings): Promise<PersistedSettings> {
-  return requestApi('/api/settings', {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(input),
-  });
+export async function putSettings(
+  input: PersistedSettings,
+  options?: RequestApiOptions,
+): Promise<PersistedSettings> {
+  return requestApi(
+    '/api/settings',
+    {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+    options,
+  );
 }
 
 export async function putAiApiKey(input: { apiKey: string }): Promise<{ hasApiKey: boolean }> {
@@ -472,8 +508,10 @@ export async function putAiApiKey(input: { apiKey: string }): Promise<{ hasApiKe
   });
 }
 
-export async function getAiApiKeyStatus(): Promise<{ hasApiKey: boolean }> {
-  return requestApi('/api/settings/ai/api-key');
+export async function getAiApiKeyStatus(
+  options?: RequestApiOptions,
+): Promise<{ hasApiKey: boolean }> {
+  return requestApi('/api/settings/ai/api-key', undefined, options);
 }
 
 export async function deleteAiApiKey(): Promise<{ hasApiKey: boolean }> {
@@ -490,8 +528,10 @@ export async function putTranslationApiKey(input: { apiKey: string }): Promise<{
   });
 }
 
-export async function getTranslationApiKeyStatus(): Promise<{ hasApiKey: boolean }> {
-  return requestApi('/api/settings/translation/api-key');
+export async function getTranslationApiKeyStatus(
+  options?: RequestApiOptions,
+): Promise<{ hasApiKey: boolean }> {
+  return requestApi('/api/settings/translation/api-key', undefined, options);
 }
 
 export async function deleteTranslationApiKey(): Promise<{ hasApiKey: boolean }> {

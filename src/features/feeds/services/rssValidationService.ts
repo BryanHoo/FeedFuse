@@ -14,6 +14,25 @@ export interface RssValidationResult {
   message?: string;
 }
 
+type RssValidationEnvelope =
+  | {
+      ok: true;
+      data: {
+        valid: boolean;
+        reason?: RssValidationErrorCode;
+        message?: string;
+        kind?: 'rss' | 'atom';
+        title?: string;
+        siteUrl?: string;
+      };
+    }
+  | {
+      ok: false;
+      error: {
+        message: string;
+      };
+    };
+
 function getBaseUrl(): string {
   if (typeof window !== 'undefined' && window.location?.origin) {
     return window.location.origin;
@@ -27,11 +46,11 @@ export async function validateRssUrl(url: string): Promise<RssValidationResult> 
   try {
     parsed = new URL(url);
   } catch {
-    return { ok: false, errorCode: 'invalid_url', message: 'URL is invalid.' };
+    return { ok: false, errorCode: 'invalid_url', message: '链接格式不正确' };
   }
 
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    return { ok: false, errorCode: 'invalid_url', message: 'URL must use http or https.' };
+    return { ok: false, errorCode: 'invalid_url', message: '链接必须使用 http 或 https' };
   }
 
   const controller = new AbortController();
@@ -48,16 +67,39 @@ export async function validateRssUrl(url: string): Promise<RssValidationResult> 
     });
 
     const json: unknown = await res.json().catch(() => null);
-    if (typeof json === 'object' && json !== null && 'ok' in json) {
-      return json as RssValidationResult;
+    if (typeof json !== 'object' || json === null || !('ok' in json)) {
+      return { ok: false, errorCode: 'network_error', message: '校验失败，请稍后重试' };
     }
 
-    return { ok: false, errorCode: 'network_error', message: 'Network error.' };
+    const envelope = json as RssValidationEnvelope;
+
+    if (!envelope.ok) {
+      return {
+        ok: false,
+        errorCode: 'network_error',
+        message: envelope.error.message,
+      };
+    }
+
+    if (envelope.data.valid) {
+      return {
+        ok: true,
+        kind: envelope.data.kind,
+        title: envelope.data.title,
+        siteUrl: envelope.data.siteUrl,
+      };
+    }
+
+    return {
+      ok: false,
+      errorCode: envelope.data.reason,
+      message: envelope.data.message,
+    };
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
-      return { ok: false, errorCode: 'timeout', message: 'Validation timed out.' };
+      return { ok: false, errorCode: 'timeout', message: '校验超时，请稍后重试' };
     }
-    return { ok: false, errorCode: 'network_error', message: 'Network error.' };
+    return { ok: false, errorCode: 'network_error', message: '校验失败，请稍后重试' };
   } finally {
     clearTimeout(timeout);
   }

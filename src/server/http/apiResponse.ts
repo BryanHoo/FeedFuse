@@ -18,7 +18,7 @@ export function fail(err: unknown) {
   }
 
   return NextResponse.json(
-    { ok: false, error: { code: 'internal_error', message: 'Internal error' } },
+    { ok: false, error: { code: 'internal_error', message: '服务暂时不可用，请稍后重试' } },
     { status: 500 },
   );
 }

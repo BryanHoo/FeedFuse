@@ -153,9 +153,9 @@ export const useSettingsStore = create<SettingsState>()(
 
         try {
           const [remoteSettingsResult, apiKeyStatusResult, translationApiKeyStatusResult] = await Promise.allSettled([
-            getSettings(),
-            getAiApiKeyStatus(),
-            getTranslationApiKeyStatus(),
+            getSettings({ notifyOnError: false }),
+            getAiApiKeyStatus({ notifyOnError: false }),
+            getTranslationApiKeyStatus({ notifyOnError: false }),
           ]);
 
           const remoteSettings =
@@ -231,7 +231,7 @@ export const useSettingsStore = create<SettingsState>()(
         const nextPersistedSettings = ensureAiTranslationSettings(state.draft.persisted);
 
         try {
-          const savedSettings = await putSettings(nextPersistedSettings);
+          const savedSettings = await putSettings(nextPersistedSettings, { notifyOnError: true });
           const shouldClearApiKey = state.draft.session.ai.clearApiKey;
           const apiKey = state.draft.session.ai.apiKey.trim();
           const shouldClearTranslationApiKey = state.draft.session.ai.clearTranslationApiKey ?? false;

@@ -6,6 +6,7 @@ import type { ViewType } from '../../types';
 type ArticleListModule = typeof import('./ArticleList');
 type AppStoreModule = typeof import('../../store/appStore');
 type NotificationModule = typeof import('../notifications/NotificationProvider');
+type ApiNotificationBridgeModule = typeof import('../notifications/ApiNotificationBridge');
 type LoadSnapshot = (input?: { view?: ViewType }) => Promise<void>;
 
 function jsonResponse(payload: unknown, init?: ResponseInit) {
@@ -97,11 +98,13 @@ describe('ArticleList', () => {
   let ArticleList: ArticleListModule['default'];
   let useAppStore: AppStoreModule['useAppStore'];
   let NotificationProvider: NotificationModule['NotificationProvider'];
+  let ApiNotificationBridge: ApiNotificationBridgeModule['ApiNotificationBridge'];
   let fetchMock: ReturnType<typeof vi.fn>;
 
   function renderWithNotifications() {
     return render(
       <NotificationProvider>
+        <ApiNotificationBridge />
         <ArticleList />
       </NotificationProvider>,
     );
@@ -150,6 +153,7 @@ describe('ArticleList', () => {
 
     ({ default: ArticleList } = await import('./ArticleList'));
     ({ NotificationProvider } = await import('../notifications/NotificationProvider'));
+    ({ ApiNotificationBridge } = await import('../notifications/ApiNotificationBridge'));
     ({ useAppStore } = await import('../../store/appStore'));
 
     useAppStore.setState({
@@ -754,13 +758,13 @@ describe('ArticleList', () => {
     }
   });
 
-  it('shows error notification when refreshing all feeds fails', async () => {
+  it('relies on global api notification for refresh failures', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
         ok: false,
         error: {
-          code: 'unknown_error',
-          message: 'Refresh failed',
+          code: 'fetch_timeout',
+          message: '刷新失败：请求超时',
         },
       }),
     );
@@ -775,7 +779,8 @@ describe('ArticleList', () => {
     fireEvent.click(screen.getByRole('button', { name: 'refresh-feeds' }));
 
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toHaveTextContent('操作失败：Refresh failed');
+      expect(screen.getByText('刷新失败：请求超时')).toBeInTheDocument();
+      expect(screen.queryByText('操作失败：刷新失败：请求超时')).not.toBeInTheDocument();
     });
   });
 
@@ -939,9 +944,17 @@ describe('ArticleList', () => {
     getComputedStyleSpy.mockRestore();
   });
 
-  it('rolls back display mode and shows error when patchFeed fails', async () => {
+  it('rolls back display mode and relies on global api notification when patchFeed fails', async () => {
     useAppStore.setState({ selectedView: 'feed-1' });
-    fetchMock.mockRejectedValueOnce(new Error('network'));
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        ok: false,
+        error: {
+          code: 'internal_error',
+          message: '显示模式切换失败，请稍后重试',
+        },
+      }),
+    );
 
     renderWithNotifications();
     fireEvent.click(screen.getByRole('button', { name: 'toggle-display-mode' }));
@@ -949,7 +962,8 @@ describe('ArticleList', () => {
     await waitFor(() => {
       const feed = useAppStore.getState().feeds.find((item) => item.id === 'feed-1');
       expect(feed?.articleListDisplayMode).toBe('card');
-      expect(screen.getByRole('alert')).toHaveTextContent('操作失败，请稍后重试。');
+      expect(screen.getByText('显示模式切换失败，请稍后重试')).toBeInTheDocument();
+      expect(screen.queryByText('操作失败：显示模式切换失败，请稍后重试')).not.toBeInTheDocument();
     });
   });
 

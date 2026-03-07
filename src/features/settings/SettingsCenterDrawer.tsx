@@ -128,10 +128,6 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
     const previous = lastAutosaveStatusRef.current;
     const current = autosave.status;
 
-    if (current === 'error' && previous !== 'error') {
-      notify.error('设置自动保存失败，请检查后重试');
-    }
-
     if (current === 'saved' && previous !== 'saved') {
       const now = Date.now();
       if (now - lastSavedNotifyAtRef.current >= 30000) {

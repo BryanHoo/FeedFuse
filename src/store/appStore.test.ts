@@ -27,6 +27,111 @@ beforeEach(async () => {
 });
 
 describe('appStore api integration', () => {
+  it('keeps snapshot loading failures silent', async () => {
+    const { setApiErrorNotifier, clearApiErrorNotifier } = await import('../lib/apiErrorNotifier');
+    const notifyError = vi.fn();
+    setApiErrorNotifier(notifyError);
+
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/reader/snapshot')) {
+        return jsonResponse(
+          {
+            ok: false,
+            error: {
+              code: 'internal_error',
+              message: '服务暂时不可用，请稍后重试',
+            },
+          },
+          { status: 500 },
+        );
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    await useAppStore.getState().loadSnapshot({ view: 'all' });
+
+    expect(notifyError).not.toHaveBeenCalled();
+    clearApiErrorNotifier();
+  });
+
+  it('notifies for optimistic write failures started from store actions', async () => {
+    const { setApiErrorNotifier, clearApiErrorNotifier } = await import('../lib/apiErrorNotifier');
+    const notifyError = vi.fn();
+    setApiErrorNotifier(notifyError);
+
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+
+      if (url.includes('/api/reader/snapshot')) {
+        return jsonResponse({
+          ok: true,
+          data: {
+            categories: [],
+            feeds: [
+              {
+                id: 'feed-1',
+                title: 'Example',
+                url: 'https://example.com/rss.xml',
+                siteUrl: null,
+                iconUrl: null,
+                enabled: true,
+                fullTextOnOpenEnabled: false,
+                aiSummaryOnOpenEnabled: false,
+                aiSummaryOnFetchEnabled: false,
+                bodyTranslateOnFetchEnabled: false,
+                bodyTranslateOnOpenEnabled: false,
+                categoryId: null,
+                fetchIntervalMinutes: 30,
+                unreadCount: 1,
+              },
+            ],
+            articles: {
+              items: [
+                {
+                  id: 'article-1',
+                  feedId: 'feed-1',
+                  title: 'Hello',
+                  summary: null,
+                  author: null,
+                  publishedAt: null,
+                  link: null,
+                  isRead: false,
+                  isStarred: false,
+                },
+              ],
+              nextCursor: null,
+            },
+          },
+        });
+      }
+
+      if (url.includes('/api/articles/article-1') && method === 'PATCH') {
+        return jsonResponse(
+          {
+            ok: false,
+            error: {
+              code: 'internal_error',
+              message: '更新失败，请稍后重试',
+            },
+          },
+          { status: 500 },
+        );
+      }
+
+      throw new Error(`Unexpected fetch: ${method} ${url}`);
+    });
+
+    await useAppStore.getState().loadSnapshot({ view: 'all' });
+    useAppStore.getState().markAsRead('article-1');
+    await flushPromises();
+
+    expect(notifyError).toHaveBeenCalledWith('更新失败，请稍后重试');
+    clearApiErrorNotifier();
+  });
+
   it('maps new feed trigger flags from dto into app store feed', async () => {
     fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
       const url = String(input);

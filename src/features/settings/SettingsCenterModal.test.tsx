@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultPersistedSettings } from './settingsSchema';
 import ReaderLayout from '../reader/ReaderLayout';
+import { ApiNotificationBridge } from '../notifications/ApiNotificationBridge';
 import { NotificationProvider } from '../notifications/NotificationProvider';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useAppStore } from '../../store/appStore';
@@ -41,6 +42,7 @@ function resetSettingsStore() {
 function renderWithNotifications() {
   return render(
     <NotificationProvider>
+      <ApiNotificationBridge />
       <ReaderLayout />
     </NotificationProvider>,
   );
@@ -362,7 +364,7 @@ describe('SettingsCenterModal', () => {
     });
   });
 
-  it('shows notification when autosave fails', async () => {
+  it('shows backend autosave error through global api notification', async () => {
     resetSettingsStore();
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -391,7 +393,7 @@ describe('SettingsCenterModal', () => {
               ok: false,
               error: {
                 code: 'validation_error',
-                message: 'save failed',
+                message: '设置保存失败，请稍后重试',
               },
             }),
             { status: 400, headers: { 'content-type': 'application/json' } },
@@ -418,9 +420,8 @@ describe('SettingsCenterModal', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '深色' }));
 
-    await waitFor(() => {
-      expect(screen.getByText('设置自动保存失败，请检查后重试')).toBeInTheDocument();
-    });
+    expect(await screen.findByText('设置保存失败，请稍后重试')).toBeInTheDocument();
+    expect(screen.queryByText('设置自动保存失败，请检查后重试')).not.toBeInTheDocument();
 
     consoleErrorSpy.mockRestore();
   });

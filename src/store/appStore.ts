@@ -213,7 +213,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     void (async () => {
       try {
-        const dto = await getArticle(id);
+        const dto = await getArticle(id, { notifyOnError: false });
         const mapped = mapArticleDto(dto);
         set((state) => {
           const existing = state.articles.find((item) => item.id === mapped.id);
@@ -234,7 +234,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   toggleShowUnreadOnly: () => set((state) => ({ showUnreadOnly: !state.showUnreadOnly })),
   refreshArticle: async (articleId) => {
     try {
-      const dto = await getArticle(articleId);
+      const dto = await getArticle(articleId, { notifyOnError: false });
       const hasFulltext = Boolean(dto.contentFullHtml);
       const hasFulltextError = Boolean(dto.contentFullError);
       const hasAiSummary = Boolean(dto.aiSummary?.trim());
@@ -266,7 +266,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     try {
       const view = input?.view ?? get().selectedView;
-      const snapshot = await getReaderSnapshot({ view });
+      const snapshot = await getReaderSnapshot({ view }, { notifyOnError: false });
 
       if (requestId !== snapshotRequestId) return;
 
@@ -324,7 +324,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       ),
     }));
 
-    void patchArticle(articleId, { isRead: true }).catch((err) => console.error(err));
+    void patchArticle(articleId, { isRead: true }, { notifyOnError: true }).catch(() => {});
   },
 
   markAllAsRead: (feedId) => {
@@ -341,7 +341,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       }),
     }));
 
-    void markAllRead(feedId ? { feedId } : {}).catch((err) => console.error(err));
+    void markAllRead(feedId ? { feedId } : {}, { notifyOnError: true }).catch(() => {});
   },
 
   addFeed: async (payload) => {
@@ -444,7 +444,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       ),
     }));
 
-    void patchArticle(articleId, { isStarred: nextValue }).catch((err) => console.error(err));
+    void patchArticle(articleId, { isStarred: nextValue }, { notifyOnError: true }).catch(() => {});
   },
 
   toggleCategory: (categoryId) =>

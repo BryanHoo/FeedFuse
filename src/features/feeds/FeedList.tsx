@@ -34,16 +34,12 @@ import {
 } from '@/components/ui/context-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { deleteCategory, patchCategory, reorderCategories } from '@/lib/apiClient';
-import { mapApiErrorToUserMessage } from '../notifications/mapApiErrorToUserMessage';
 import { useNotify } from '../notifications/useNotify';
 import { cn } from '@/lib/utils';
 
 const uncategorizedName = '未分类';
 const uncategorizedId = 'cat-uncategorized';
 
-function getCategoryErrorMessage(error: unknown): string {
-  return mapApiErrorToUserMessage(error, 'update-category');
-}
 
 export default function FeedList() {
   const {
@@ -214,8 +210,8 @@ export default function FeedList() {
       await reorderCategories(nextOrder.map((item, index) => ({ id: item.id, position: index })));
       await loadSnapshot({ view: selectedView });
       notify.success('已更新分类顺序');
-    } catch (error) {
-      notify.error(getCategoryErrorMessage(error));
+    } catch {
+      // apiClient handles failure notifications globally
     }
   };
 
@@ -232,8 +228,8 @@ export default function FeedList() {
       await deleteCategory(categoryId);
       await loadSnapshot({ view: selectedView });
       notify.success('已删除分类');
-    } catch (error) {
-      notify.error(getCategoryErrorMessage(error));
+    } catch {
+      // apiClient handles failure notifications globally
     }
   };
 
@@ -241,8 +237,8 @@ export default function FeedList() {
     try {
       await updateFeed(feedId, { categoryId });
       notify.success(`已移动到「${categoryName}」`);
-    } catch (error) {
-      notify.error(mapApiErrorToUserMessage(error, 'update-feed'));
+    } catch {
+      // apiClient handles failure notifications globally
     }
   };
 
@@ -560,8 +556,8 @@ export default function FeedList() {
                                 try {
                                   await updateFeed(feed.id, { enabled: !feed.enabled });
                                   notify.success(feed.enabled ? '已停用订阅源' : '已启用订阅源');
-                                } catch (err) {
-                                  notify.error(mapApiErrorToUserMessage(err, 'toggle-feed-enabled'));
+                                } catch {
+                                  // apiClient handles failure notifications globally
                                 }
                               })();
                             }}
@@ -691,8 +687,8 @@ export default function FeedList() {
                     await removeFeed(deleteFeedId);
                     setDeleteFeedId(null);
                     notify.success('已删除订阅源');
-                  } catch (err) {
-                    notify.error(mapApiErrorToUserMessage(err, 'delete-feed'));
+                  } catch {
+                    // apiClient handles failure notifications globally
                   }
                 })();
               }}

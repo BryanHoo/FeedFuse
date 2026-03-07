@@ -453,3 +453,59 @@ it('requests feed keyword filter endpoints', async () => {
   expect(fetchMock.mock.calls[0][0].toString()).toContain('/api/feeds/feed-1/keyword-filter');
   expect(fetchMock.mock.calls[1][1]?.method).toBe('PATCH');
 });
+
+
+describe('apiClient notification bridge', () => {
+  it('notifies once for failing mutation requests by default', async () => {
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: { code: 'conflict', message: '订阅源已存在' },
+        }),
+        { status: 409, headers: { 'content-type': 'application/json' } },
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const notifier = await import('./apiErrorNotifier');
+    const { createFeed } = await import('./apiClient');
+    const notifyError = vi.fn();
+    notifier.setApiErrorNotifier(notifyError);
+
+    await expect(
+      createFeed({ title: 'A', url: 'https://example.com/rss.xml' }),
+    ).rejects.toMatchObject({
+      code: 'conflict',
+      message: '订阅源已存在',
+    });
+    expect(notifyError).toHaveBeenCalledWith('订阅源已存在');
+
+    notifier.clearApiErrorNotifier();
+  });
+
+  it('keeps GET snapshot requests silent when notifyOnError is false', async () => {
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: { code: 'internal_error', message: '服务暂时不可用，请稍后重试' },
+        }),
+        { status: 500, headers: { 'content-type': 'application/json' } },
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const notifier = await import('./apiErrorNotifier');
+    const { ApiError, getReaderSnapshot } = await import('./apiClient');
+    const notifyError = vi.fn();
+    notifier.setApiErrorNotifier(notifyError);
+
+    await expect(
+      getReaderSnapshot({ view: 'all' }, { notifyOnError: false }),
+    ).rejects.toBeInstanceOf(ApiError);
+    expect(notifyError).not.toHaveBeenCalled();
+
+    notifier.clearApiErrorNotifier();
+  });
+});

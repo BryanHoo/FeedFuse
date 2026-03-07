@@ -24,6 +24,7 @@ vi.mock('../articles/ArticleView', () => ({
 }));
 
 import ReaderLayout from '../reader/ReaderLayout';
+import { ApiNotificationBridge } from '../notifications/ApiNotificationBridge';
 import { NotificationProvider } from '../notifications/NotificationProvider';
 import { useAppStore } from '../../store/appStore';
 
@@ -92,6 +93,7 @@ describe('FeedList manage', () => {
   function renderWithNotifications() {
     return render(
       <NotificationProvider>
+        <ApiNotificationBridge />
         <ReaderLayout />
       </NotificationProvider>,
     );
@@ -247,16 +249,22 @@ describe('FeedList manage', () => {
           if (feedUrl.includes('changed.example.com')) {
             return jsonResponse({
               ok: true,
-              kind: 'rss',
-              title: 'Validated Feed Title',
-              siteUrl: 'https://changed.example.com/',
+              data: {
+                valid: true,
+                kind: 'rss',
+                title: 'Validated Feed Title',
+                siteUrl: 'https://changed.example.com/',
+              },
             });
           }
           return jsonResponse({
             ok: true,
-            kind: 'rss',
-            title: 'My Feed',
-            siteUrl: 'https://example.com/',
+            data: {
+              valid: true,
+              kind: 'rss',
+              title: 'My Feed',
+              siteUrl: 'https://example.com/',
+            },
           });
         }
 
@@ -1096,7 +1104,7 @@ describe('FeedList manage', () => {
             ok: false,
             error: {
               code: 'validation_error',
-              message: 'invalid feed patch',
+              message: '更新失败，请稍后重试',
             },
           });
         }
@@ -1151,9 +1159,8 @@ describe('FeedList manage', () => {
     fireEvent.contextMenu(screen.getByRole('button', { name: /My Feed.*2/ }));
     fireEvent.click(await screen.findByRole('menuitem', { name: '停用' }));
 
-    await waitFor(() => {
-      expect(screen.getByText(/操作失败/)).toBeInTheDocument();
-    });
+    expect(await screen.findByText('更新失败，请稍后重试')).toBeInTheDocument();
+    expect(screen.queryByText('操作失败：输入不合法。')).not.toBeInTheDocument();
   });
 
   it('shows tooltip and error styling for feeds with fetchError', async () => {

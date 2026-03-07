@@ -16,13 +16,13 @@ export class ValidationError extends AppError {
 }
 
 export class NotFoundError extends AppError {
-  constructor(message = 'Not found') {
+  constructor(message = '目标不存在') {
     super(message, 'not_found', 404);
   }
 }
 
 export class ConflictError extends AppError {
-  constructor(message = 'Conflict', fields?: Record<string, string>) {
+  constructor(message = '操作冲突，请稍后重试', fields?: Record<string, string>) {
     super(message, 'conflict', 409, fields);
   }
 }

@@ -78,6 +78,55 @@ describe('ReaderApp', () => {
     expect(screen.getByTestId('notification-viewport')).toBeInTheDocument();
   });
 
+  it('registers notification bridge for api client failures', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const method = init?.method ?? 'GET';
+        if (url.includes('/api/settings/ai/api-key')) {
+          return jsonResponse({ ok: true, data: { hasApiKey: false } });
+        }
+        if (url.includes('/api/settings/translation/api-key')) {
+          return jsonResponse({ ok: true, data: { hasApiKey: false } });
+        }
+        if (url.includes('/api/settings')) {
+          return jsonResponse({ ok: true, data: structuredClone(defaultPersistedSettings) });
+        }
+        if (url.includes('/api/reader/snapshot')) {
+          return jsonResponse({
+            ok: true,
+            data: {
+              categories: [],
+              feeds: [],
+              articles: { items: [], nextCursor: null },
+            },
+          });
+        }
+        if (url.includes('/api/feeds') && method === 'POST') {
+          return jsonResponse({
+            ok: false,
+            error: { code: 'conflict', message: '订阅源已存在' },
+          });
+        }
+        throw new Error(`Unexpected fetch: ${method} ${url}`);
+      }),
+    );
+
+    await act(async () => {
+      render(<ReaderApp />);
+    });
+
+    const { createFeed } = await import('../../lib/apiClient');
+    await act(async () => {
+      await expect(
+        createFeed({ title: 'A', url: 'https://example.com/rss.xml' }),
+      ).rejects.toMatchObject({ code: 'conflict' });
+    });
+
+    expect(await screen.findByText('订阅源已存在')).toBeInTheDocument();
+  });
+
   it('does not apply removed sidebarCollapsed setting from persisted settings', async () => {
     const remoteSettings = structuredClone(defaultPersistedSettings);
     remoteSettings.general.sidebarCollapsed = true;

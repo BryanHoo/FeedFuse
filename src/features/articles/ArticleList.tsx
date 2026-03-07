@@ -5,7 +5,6 @@ import { formatRelativeTime, getArticleSectionHeading, getLocalDayKey } from "..
 import { patchFeed, refreshAllFeeds, refreshFeed } from "../../lib/apiClient";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { mapApiErrorToUserMessage } from "../notifications/mapApiErrorToUserMessage";
 import { useNotify } from "../notifications/useNotify";
 
 const sessionVisibleArticleIds = new Set<string>();
@@ -419,10 +418,8 @@ export default function ArticleList() {
 
         if (refreshRequestIdRef.current !== requestId) return;
         notify.success(isGlobalView ? "已完成刷新全部订阅源" : "已完成刷新订阅源");
-      } catch (err) {
-        notify.error(
-          mapApiErrorToUserMessage(err, isGlobalView ? "refresh-all-feeds" : "refresh-feed"),
-        );
+      } catch {
+        // apiClient handles failure notifications globally
       } finally {
         if (refreshRequestIdRef.current === requestId) {
           setRefreshing(false);
@@ -458,14 +455,13 @@ export default function ArticleList() {
           ),
         }));
       })
-      .catch((err) => {
+      .catch(() => {
         if (displayModeRequestIdRef.current !== requestId) return;
         useAppStore.setState((state) => ({
           feeds: state.feeds.map((feed) =>
             feed.id === feedId ? { ...feed, articleListDisplayMode: previousMode } : feed,
           ),
         }));
-        notify.error(mapApiErrorToUserMessage(err, "toggle-feed-article-list-display-mode"));
       })
       .finally(() => {
         if (displayModeRequestIdRef.current !== requestId) return;
