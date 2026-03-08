@@ -145,6 +145,59 @@ describe('ArticleView title link', () => {
     expect(feedIcon).toHaveAttribute('src', 'https://example.com/favicon.ico');
   });
 
+  it('wraps long mixed-language title and metadata without overflowing action layout', async () => {
+    const longTitle =
+      '这是一篇非常非常长的文章标题🙂 مع عنوان عربي طويل للغاية with extra German compound words Donaudampfschifffahrtsgesellschaft';
+    const longFeedTitle =
+      '来源名称非常非常长🙂 مع اسم مصدر طويل للغاية for layout hardening';
+    const longAuthor = '作者名字非常非常长🙂 مع اسم كاتب طويل للغاية';
+
+    useAppStore.setState({
+      feeds: [
+        {
+          id: 'feed-1',
+          title: longFeedTitle,
+          url: 'https://example.com/rss.xml',
+          unreadCount: 1,
+          enabled: true,
+          fullTextOnOpenEnabled: false,
+          aiSummaryOnOpenEnabled: false,
+          categoryId: 'cat-uncategorized',
+          category: '未分类',
+        },
+      ],
+      articles: [
+        {
+          id: 'article-1',
+          feedId: 'feed-1',
+          title: longTitle,
+          author: longAuthor,
+          content: '<p>content</p>',
+          summary: 'summary',
+          publishedAt: new Date().toISOString(),
+          link: 'https://example.com/a1',
+          isRead: true,
+          isStarred: false,
+        },
+      ],
+      selectedView: 'all',
+      selectedArticleId: 'article-1',
+    });
+
+    await act(async () => {
+      render(<ArticleView />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const titleLink = screen.getByRole('link', { name: longTitle });
+    expect(screen.getByRole('heading', { level: 1 })).toHaveClass('break-words');
+    expect(titleLink).toHaveClass('max-w-full');
+    expect(titleLink).toHaveClass('break-words');
+    expect(screen.getByText(longFeedTitle)).toHaveClass('break-words');
+    expect(screen.getByText(longAuthor)).toHaveClass('break-words');
+  });
+
   it('does not commit again when unrelated app store state changes', async () => {
     let commitCount = 0;
 

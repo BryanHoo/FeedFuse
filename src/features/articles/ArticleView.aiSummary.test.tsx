@@ -569,4 +569,54 @@ describe('ArticleView ai summary', () => {
       expect(enqueueArticleAiSummaryMock).toHaveBeenCalledTimes(2);
     });
   });
+
+  it('wraps long ai summary failure messages without squeezing out retry action', async () => {
+    const longError =
+      '摘要生成失败：这是一个非常非常长的错误消息🙂 مع رسالة خطأ طويلة للغاية with extra details to verify wrapping behavior';
+
+    getArticleTasksMock.mockResolvedValue({
+      fulltext: { type: 'fulltext', status: 'idle', jobId: null, requestedAt: null, startedAt: null, finishedAt: null, attempts: 0, errorCode: null, errorMessage: null },
+      ai_summary: { type: 'ai_summary', status: 'failed', jobId: 'job-1', requestedAt: null, startedAt: null, finishedAt: null, attempts: 1, errorCode: 'ai_timeout', errorMessage: longError },
+      ai_translate: { type: 'ai_translate', status: 'idle', jobId: null, requestedAt: null, startedAt: null, finishedAt: null, attempts: 0, errorCode: null, errorMessage: null },
+    });
+
+    useAppStore.setState({
+      feeds: [
+        {
+          id: 'feed-1',
+          title: 'Feed 1',
+          url: 'https://example.com/rss.xml',
+          unreadCount: 1,
+          enabled: true,
+          fullTextOnOpenEnabled: false,
+          aiSummaryOnOpenEnabled: false,
+          categoryId: null,
+          category: null,
+        },
+      ],
+      categories: [{ id: 'cat-uncategorized', name: '未分类', expanded: true }],
+      articles: [
+        {
+          id: 'article-1',
+          feedId: 'feed-1',
+          title: 'Article 1',
+          content: '<p>Hello</p>',
+          summary: 'hello',
+          publishedAt: new Date('2026-02-28T00:00:00.000Z').toISOString(),
+          link: 'https://example.com/a1',
+          isRead: true,
+          isStarred: false,
+        },
+      ],
+      selectedView: 'all',
+      selectedArticleId: 'article-1',
+    });
+
+    render(<ArticleView />);
+
+    const errorMessage = await screen.findByText(longError);
+    expect(errorMessage).toHaveClass('min-w-0');
+    expect(errorMessage).toHaveClass('break-words');
+    expect(screen.getByRole('button', { name: '重试' })).toBeInTheDocument();
+  });
 });

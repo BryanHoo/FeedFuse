@@ -441,6 +441,34 @@ describe('ArticleView ai translate', () => {
     });
   });
 
+  it('wraps long ai translate failure messages without squeezing out retry action', async () => {
+    const longError =
+      '翻译失败：这是一条非常非常长的错误消息🙂 مع رسالة خطأ طويلة للغاية with extra details to verify wrapping behavior';
+    const apiClient = await import('../../lib/apiClient');
+
+    vi.mocked(apiClient.getArticleTasks).mockResolvedValue({
+      ...idleTasks,
+      ai_translate: {
+        ...idleTasks.ai_translate,
+        status: 'failed',
+        jobId: 'job-1',
+        attempts: 1,
+        errorCode: 'ai_timeout',
+        errorMessage: longError,
+      },
+    });
+
+    await seedArticleViewState();
+
+    const { default: ArticleView } = await import('./ArticleView');
+    render(<ArticleView />);
+
+    const errorMessage = await screen.findByText(longError);
+    expect(errorMessage).toHaveClass('min-w-0');
+    expect(errorMessage).toHaveClass('break-words');
+    expect(screen.getByRole('button', { name: '重试' })).toBeInTheDocument();
+  });
+
   it('bodyTranslateOnOpenEnabled=true opens article and auto requests translation then auto enters translation view', async () => {
     const apiClient = await import('../../lib/apiClient');
     await seedArticleViewState({ bodyTranslateOnOpenEnabled: true });

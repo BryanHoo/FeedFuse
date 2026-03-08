@@ -73,7 +73,7 @@ export default function RenameCategoryDialog({
       <DialogContent closeLabel="close-rename-category" className="max-w-sm">
         <DialogHeader>
           <DialogTitle>重命名分类</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="break-words">
             {category ? `更新「${category.name}」的分类名称。` : '更新分类名称。'}
           </DialogDescription>
         </DialogHeader>

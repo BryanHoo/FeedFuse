@@ -257,28 +257,39 @@ export default function FeedDialog({
     setValidationState('validating');
     setValidationMessage('正在验证链接…');
 
-    const result = await validateRssUrl(urlToValidate);
-    if (requestId !== validationRequestIdRef.current) {
-      return;
-    }
-
-    if (result.ok) {
-      setValidationState('verified');
-      setLastVerifiedUrl(urlToValidate);
-      setValidatedSiteUrl(typeof result.siteUrl === 'string' ? result.siteUrl : null);
-      setValidationMessage('链接可用，已识别为 RSS 源。');
-
-      const suggestedTitle = typeof result.title === 'string' ? result.title.trim() : '';
-      if (suggestedTitle) {
-        setTitle(suggestedTitle);
+    try {
+      const result = await validateRssUrl(urlToValidate);
+      if (requestId !== validationRequestIdRef.current) {
+        return;
       }
-      return;
-    }
 
-    setValidationState('failed');
-    setLastVerifiedUrl(null);
-    setValidatedSiteUrl(null);
-    setValidationMessage(result.message ?? '暂时无法验证该链接，请检查后重试。');
+      if (result.ok) {
+        setValidationState('verified');
+        setLastVerifiedUrl(urlToValidate);
+        setValidatedSiteUrl(typeof result.siteUrl === 'string' ? result.siteUrl : null);
+        setValidationMessage('链接可用，已识别为 RSS 源。');
+
+        const suggestedTitle = typeof result.title === 'string' ? result.title.trim() : '';
+        if (suggestedTitle) {
+          setTitle(suggestedTitle);
+        }
+        return;
+      }
+
+      setValidationState('failed');
+      setLastVerifiedUrl(null);
+      setValidatedSiteUrl(null);
+      setValidationMessage(result.message ?? '暂时无法验证该链接，请检查后重试。');
+    } catch {
+      if (requestId !== validationRequestIdRef.current) {
+        return;
+      }
+
+      setValidationState('failed');
+      setLastVerifiedUrl(null);
+      setValidatedSiteUrl(null);
+      setValidationMessage('暂时无法验证该链接，请检查后重试。');
+    }
   };
 
   return (
@@ -335,7 +346,11 @@ export default function FeedDialog({
                   }}
                   placeholder="https://example.com/feed.xml"
                 />
-                <p role="status" aria-live="polite" className={`mt-1 text-xs ${validationMeta.messageTone}`}>
+                <p
+                  role="status"
+                  aria-live="polite"
+                  className={`mt-1 break-all text-xs ${validationMeta.messageTone}`}
+                >
                   {validationMessage ? (
                     <span className="inline-flex items-center gap-1">
                       {ValidationIcon ? <ValidationIcon size={13} className={validationMeta.iconClassName} /> : null}

@@ -670,7 +670,7 @@ export default function FeedList() {
       <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>确认删除</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="break-words">
               {activeDeleteFeed ? `确定删除「${activeDeleteFeed.title}」？` : '确定删除该订阅源？'}
               删除后将移除订阅源及其文章，且无法恢复。
             </AlertDialogDescription>
@@ -708,11 +708,11 @@ export default function FeedList() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>确认删除</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="break-words">
               {activeDeleteCategory ? `确定删除「${activeDeleteCategory.name}」？` : '确定删除该分类？'}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <p className="text-sm text-muted-foreground">
+          <p className="break-words text-sm text-muted-foreground">
             删除分类不会删除订阅源，订阅源会自动归并到“未分类”。
           </p>
           <AlertDialogFooter>

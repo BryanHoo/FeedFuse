@@ -668,6 +668,45 @@ describe('FeedList manage', () => {
     expect(screen.getByRole('dialog', { name: '重命名分类' })).toBeInTheDocument();
   });
 
+  it('wraps long category names in rename dialog description', async () => {
+    const longCategoryName = '这是一个非常非常长的分类名称🙂 مع اسم تصنيف طويل للغاية for dialog hardening';
+
+    useAppStore.setState((state) => ({
+      ...state,
+      categories: [
+        { id: 'cat-long', name: longCategoryName, expanded: true },
+        { id: 'cat-uncategorized', name: '未分类', expanded: true },
+      ],
+      feeds: [
+        {
+          id: 'feed-1',
+          title: 'My Feed',
+          url: 'https://example.com/rss.xml',
+          unreadCount: 2,
+          enabled: true,
+          fullTextOnOpenEnabled: false,
+          aiSummaryOnOpenEnabled: false,
+          aiSummaryOnFetchEnabled: false,
+          bodyTranslateOnFetchEnabled: false,
+          bodyTranslateOnOpenEnabled: false,
+          titleTranslateEnabled: false,
+          bodyTranslateEnabled: false,
+          articleListDisplayMode: 'card',
+          categoryId: 'cat-long',
+          category: longCategoryName,
+        },
+      ],
+    }));
+
+    renderWithNotifications();
+
+    fireEvent.contextMenu(screen.getByRole('button', { name: longCategoryName }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: '编辑' }));
+
+    const description = screen.getByText(`更新「${longCategoryName}」的分类名称。`);
+    expect(description).toHaveClass('break-words');
+  });
+
   it('moves category down from the context menu', async () => {
     useAppStore.setState((state) => ({
       ...state,
@@ -1091,6 +1130,42 @@ describe('FeedList manage', () => {
     });
 
     expect(screen.getByText('已删除订阅源')).toBeInTheDocument();
+  });
+
+  it('wraps long feed titles in delete confirmation description', async () => {
+    const longFeedTitle = '这是一个非常非常长的订阅源标题🙂 مع عنوان طويل للغاية for delete dialog hardening';
+
+    useAppStore.setState((state) => ({
+      ...state,
+      feeds: [
+        {
+          ...state.feeds[0],
+          id: 'feed-1',
+          title: longFeedTitle,
+          unreadCount: 2,
+        },
+      ],
+    }));
+
+    renderWithNotifications();
+
+    const trigger = screen
+      .getAllByText(longFeedTitle)
+      .find((item) => item.closest('button')?.getAttribute('type') === 'button')
+      ?.closest('button');
+    expect(trigger).toBeTruthy();
+
+    fireEvent.contextMenu(trigger as HTMLElement);
+    fireEvent.click(await screen.findByRole('menuitem', { name: '删除' }));
+
+    const dialog = screen.getByRole('alertdialog');
+    const description = within(dialog).getByText(
+      (_, element) =>
+        element?.tagName === 'P' &&
+        (element.textContent?.includes(`确定删除「${longFeedTitle}」？`) ?? false),
+    );
+
+    expect(description).toHaveClass('break-words');
   });
 
   it('shows error notification when toggle enabled fails', async () => {

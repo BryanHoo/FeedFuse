@@ -492,34 +492,39 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
             data-testid="article-content-shell"
           >
           <div className="mb-8">
-            <h1 className="mb-4 text-3xl font-bold tracking-tight">
+            <h1 className="mb-4 break-words text-3xl font-bold tracking-tight">
               {article.link ? (
                 <a
                   href={article.link}
                   target="_blank"
                   rel="noopener noreferrer"
                   className={cn(
-                    'group rounded-sm underline-offset-4 transition-colors hover:text-foreground/90 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                    'group max-w-full break-words rounded-sm underline-offset-4 transition-colors hover:text-foreground/90 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
                     showBilingualTitle ? 'inline-flex flex-col items-start gap-1' : 'inline-flex items-center gap-2',
                   )}
                 >
-                  <span>{titleOriginal}</span>
+                  <span className="break-words">{titleOriginal}</span>
                   {showBilingualTitle ? (
-                    <span className="text-base font-medium text-muted-foreground">{titleZh}</span>
+                    <span className="break-words text-base font-medium text-muted-foreground">{titleZh}</span>
                   ) : null}
                 </a>
               ) : (
-                <span className={showBilingualTitle ? 'inline-flex flex-col items-start gap-1' : undefined}>
-                  <span>{titleOriginal}</span>
+                <span
+                  className={cn(
+                    'max-w-full break-words',
+                    showBilingualTitle ? 'inline-flex flex-col items-start gap-1' : undefined,
+                  )}
+                >
+                  <span className="break-words">{titleOriginal}</span>
                   {showBilingualTitle ? (
-                    <span className="text-base font-medium text-muted-foreground">{titleZh}</span>
+                    <span className="break-words text-base font-medium text-muted-foreground">{titleZh}</span>
                   ) : null}
                 </span>
               )}
             </h1>
 
             <div className="mb-4 flex items-center text-sm text-muted-foreground">
-              <div className="flex min-w-0 items-center gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <span className="relative flex h-4 w-4 shrink-0 items-center justify-center">
                   <span aria-hidden="true" className="text-[11px] leading-none">
                     📰
@@ -540,13 +545,17 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
                     />
                   ) : null}
                 </span>
-                <span>{feed?.title}</span>
-                <span>·</span>
-                <span>{formatRelativeTime(article.publishedAt)}</span>
+                <span className="min-w-0 break-words">{feed?.title}</span>
+                <span aria-hidden="true" className="shrink-0">
+                  ·
+                </span>
+                <span className="shrink-0">{formatRelativeTime(article.publishedAt)}</span>
                 {article.author && (
                   <>
-                    <span>·</span>
-                    <span>{article.author}</span>
+                    <span aria-hidden="true" className="shrink-0">
+                      ·
+                    </span>
+                    <span className="min-w-0 break-words">{article.author}</span>
                   </>
                 )}
               </div>
@@ -701,8 +710,10 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
           !aiSummaryTimedOut &&
           tasks?.ai_summary.status === 'failed' ? (
             <div className="mb-4 rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span>{tasks.ai_summary.errorMessage || '暂时无法生成摘要'}</span>
+              <div className="flex flex-wrap items-start justify-between gap-2 sm:items-center">
+                <span className="min-w-0 flex-1 break-words">
+                  {tasks.ai_summary.errorMessage || '暂时无法生成摘要'}
+                </span>
                 <Button type="button" variant="secondary" size="sm" onClick={onAiSummaryButtonClick}>
                   重试
                 </Button>
@@ -751,8 +762,10 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
           !aiTranslationWaitingFulltext &&
           tasks?.ai_translate.status === 'failed' ? (
             <div className="mb-4 rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span>{tasks.ai_translate.errorMessage || '暂时无法完成翻译'}</span>
+              <div className="flex flex-wrap items-start justify-between gap-2 sm:items-center">
+                <span className="min-w-0 flex-1 break-words">
+                  {tasks.ai_translate.errorMessage || '暂时无法完成翻译'}
+                </span>
                 <Button
                   type="button"
                   variant="secondary"

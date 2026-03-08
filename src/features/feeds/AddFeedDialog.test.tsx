@@ -4,6 +4,7 @@ import ReaderLayout from '../reader/ReaderLayout';
 import { ApiNotificationBridge } from '../notifications/ApiNotificationBridge';
 import { NotificationProvider } from '../notifications/NotificationProvider';
 import { useAppStore } from '../../store/appStore';
+import { validateRssUrl } from './services/rssValidationService';
 
 function jsonResponse(payload: unknown) {
   return new Response(JSON.stringify(payload), {
@@ -350,6 +351,27 @@ describe('AddFeedDialog', () => {
       target: { value: 'https://example.com/changed.xml' },
     });
     expect(submitButton).toBeDisabled();
+  });
+
+  it('falls back to failed validation state when validation throws unexpectedly', async () => {
+    vi.mocked(validateRssUrl).mockRejectedValueOnce(new Error('socket hang up'));
+
+    renderWithNotifications();
+    fireEvent.click(screen.getByLabelText('add-feed'));
+
+    fireEvent.change(screen.getByLabelText('名称'), { target: { value: 'My Feed' } });
+    const urlInput = screen.getByLabelText('URL');
+    fireEvent.change(urlInput, {
+      target: { value: 'https://example.com/broken.xml' },
+    });
+
+    fireEvent.blur(urlInput);
+
+    await waitFor(() => {
+      expect(screen.getByText('验证失败')).toBeInTheDocument();
+      expect(screen.getByText('暂时无法验证该链接，请检查后重试。')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '添加' })).toBeDisabled();
+    });
   });
 
   it('submits selected categoryId from category dropdown', async () => {

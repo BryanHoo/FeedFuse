@@ -469,9 +469,14 @@ export default function ArticleList() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-12 items-center justify-between px-4">
-        <h2 className="text-[0.96rem] font-semibold tracking-[0.01em]">{headerTitle}</h2>
-        <div className="flex items-center gap-2">
+      <div className="flex h-12 min-w-0 items-center justify-between gap-3 px-4">
+        <h2
+          className="min-w-0 truncate text-[0.96rem] font-semibold tracking-[0.01em]"
+          title={headerTitle}
+        >
+          {headerTitle}
+        </h2>
+        <div className="shrink-0 flex items-center gap-2">
           <Button
             onClick={onRefreshClick}
             type="button"

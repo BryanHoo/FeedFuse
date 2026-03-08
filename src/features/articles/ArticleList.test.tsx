@@ -847,6 +847,34 @@ describe('ArticleList', () => {
     expect(screen.queryByRole('heading', { level: 2, name: '文章' })).not.toBeInTheDocument();
   });
 
+  it('truncates long selected feed titles in header while preserving full title tooltip', () => {
+    const longTitle = '这是一个非常非常长的订阅源标题🙂 مع نص عربي طويل للغاية for overflow hardening';
+
+    useAppStore.setState({
+      selectedView: 'feed-1',
+      feeds: [
+        {
+          id: 'feed-1',
+          title: longTitle,
+          url: 'https://example.com/rss.xml',
+          unreadCount: 2,
+          enabled: true,
+          fullTextOnOpenEnabled: false,
+          aiSummaryOnOpenEnabled: false,
+          articleListDisplayMode: 'card',
+          categoryId: null,
+        },
+      ],
+    });
+
+    renderWithNotifications();
+
+    const heading = screen.getByRole('heading', { level: 2, name: longTitle });
+    expect(heading).toHaveClass('min-w-0');
+    expect(heading).toHaveClass('truncate');
+    expect(heading).toHaveAttribute('title', longTitle);
+  });
+
   it('renders empty state when the middle column has no articles', () => {
     useAppStore.setState({
       selectedView: 'feed-1',
