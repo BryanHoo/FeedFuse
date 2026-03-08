@@ -31,17 +31,15 @@ function areSetsEqual(left: Set<string>, right: Set<string>) {
 }
 
 export default function ArticleList() {
-  const {
-    articles,
-    feeds,
-    selectedView,
-    selectedArticleId,
-    setSelectedArticle,
-    markAllAsRead,
-    showUnreadOnly,
-    toggleShowUnreadOnly,
-    loadSnapshot,
-  } = useAppStore();
+  const articles = useAppStore((state) => state.articles);
+  const feeds = useAppStore((state) => state.feeds);
+  const selectedView = useAppStore((state) => state.selectedView);
+  const selectedArticleId = useAppStore((state) => state.selectedArticleId);
+  const setSelectedArticle = useAppStore((state) => state.setSelectedArticle);
+  const markAllAsRead = useAppStore((state) => state.markAllAsRead);
+  const showUnreadOnly = useAppStore((state) => state.showUnreadOnly);
+  const toggleShowUnreadOnly = useAppStore((state) => state.toggleShowUnreadOnly);
+  const loadSnapshot = useAppStore((state) => state.loadSnapshot);
   const notify = useNotify();
   const refreshRequestIdRef = useRef(0);
   const displayModeRequestIdRef = useRef(0);

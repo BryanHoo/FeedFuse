@@ -42,17 +42,15 @@ const uncategorizedId = 'cat-uncategorized';
 
 
 export default function FeedList() {
-  const {
-    categories: appCategories,
-    feeds,
-    loadSnapshot,
-    selectedView,
-    setSelectedView,
-    toggleCategory,
-    addFeed,
-    updateFeed,
-    removeFeed,
-  } = useAppStore();
+  const appCategories = useAppStore((state) => state.categories);
+  const feeds = useAppStore((state) => state.feeds);
+  const loadSnapshot = useAppStore((state) => state.loadSnapshot);
+  const selectedView = useAppStore((state) => state.selectedView);
+  const setSelectedView = useAppStore((state) => state.setSelectedView);
+  const toggleCategory = useAppStore((state) => state.toggleCategory);
+  const addFeed = useAppStore((state) => state.addFeed);
+  const updateFeed = useAppStore((state) => state.updateFeed);
+  const removeFeed = useAppStore((state) => state.removeFeed);
   const [addFeedOpen, setAddFeedOpen] = useState(false);
   const [editFeedId, setEditFeedId] = useState<string | null>(null);
   const [deleteFeedId, setDeleteFeedId] = useState<string | null>(null);

@@ -1,4 +1,5 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
+import { Profiler } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 type ApiClientModule = typeof import('../../lib/apiClient');
 
@@ -142,5 +143,69 @@ describe('ArticleView title link', () => {
     expect(screen.queryByText('https://example.com/favicon.ico')).not.toBeInTheDocument();
     const feedIcon = screen.getByTestId('article-feed-icon');
     expect(feedIcon).toHaveAttribute('src', 'https://example.com/favicon.ico');
+  });
+
+  it('does not commit again when unrelated app store state changes', async () => {
+    let commitCount = 0;
+
+    useAppStore.setState({
+      feeds: [
+        {
+          id: 'feed-1',
+          title: 'Feed 1',
+          url: 'https://example.com/rss.xml',
+          icon: 'https://example.com/favicon.ico',
+          unreadCount: 1,
+          enabled: true,
+          fullTextOnOpenEnabled: false,
+          aiSummaryOnOpenEnabled: false,
+          categoryId: 'cat-uncategorized',
+          category: '未分类',
+        },
+      ],
+      articles: [
+        {
+          id: 'article-1',
+          feedId: 'feed-1',
+          title: 'Article 1',
+          content: '<p>content</p>',
+          summary: 'summary',
+          publishedAt: new Date().toISOString(),
+          link: 'https://example.com/a1',
+          isRead: true,
+          isStarred: false,
+        },
+      ],
+      selectedView: 'all',
+      selectedArticleId: 'article-1',
+    });
+
+    await act(async () => {
+      render(
+        <Profiler
+          id="article-view"
+          onRender={() => {
+            commitCount += 1;
+          }}
+        >
+          <ArticleView />
+        </Profiler>,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const apiClient = await import('../../lib/apiClient');
+    await waitFor(() => {
+      expect(apiClient.getArticleTasks).toHaveBeenCalledWith('article-1');
+    });
+
+    const baselineCommitCount = commitCount;
+
+    act(() => {
+      useAppStore.setState({ sidebarCollapsed: true });
+    });
+
+    expect(commitCount).toBe(baselineCommitCount);
   });
 });

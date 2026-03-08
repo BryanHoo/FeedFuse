@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { useEffect } from 'react';
+import { Profiler, useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../articles/ArticleView', () => ({
@@ -24,6 +24,7 @@ vi.mock('../articles/ArticleView', () => ({
 }));
 
 import ReaderLayout from '../reader/ReaderLayout';
+import FeedList from './FeedList';
 import { ApiNotificationBridge } from '../notifications/ApiNotificationBridge';
 import { NotificationProvider } from '../notifications/NotificationProvider';
 import { useAppStore } from '../../store/appStore';
@@ -1263,5 +1264,30 @@ describe('FeedList manage', () => {
       expect(screen.queryAllByText('更新失败：源站拒绝访问（HTTP 403）')).toHaveLength(0);
       expect(screen.getByRole('button', { name: /Broken Feed/i }).className).not.toMatch(/destructive|red/);
     });
+  });
+
+  it('does not commit again when unrelated app store state changes', () => {
+    let commitCount = 0;
+
+    render(
+      <Profiler
+        id="feed-list"
+        onRender={() => {
+          commitCount += 1;
+        }}
+      >
+        <NotificationProvider>
+          <FeedList />
+        </NotificationProvider>
+      </Profiler>,
+    );
+
+    const baselineCommitCount = commitCount;
+
+    act(() => {
+      useAppStore.setState({ sidebarCollapsed: true });
+    });
+
+    expect(commitCount).toBe(baselineCommitCount);
   });
 });

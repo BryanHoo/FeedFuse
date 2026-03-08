@@ -24,8 +24,18 @@ interface ArticleViewProps {
 }
 
 export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProps = {}) {
-  const { articles, feeds, selectedArticleId, markAsRead, toggleStar, refreshArticle } =
-    useAppStore();
+  const article = useAppStore(
+    (state) => state.articles.find((item) => item.id === state.selectedArticleId) ?? null,
+  );
+  const feed = useAppStore((state) => {
+    const currentArticle = state.articles.find((item) => item.id === state.selectedArticleId);
+    return currentArticle
+      ? state.feeds.find((item) => item.id === currentArticle.feedId) ?? null
+      : null;
+  });
+  const markAsRead = useAppStore((state) => state.markAsRead);
+  const toggleStar = useAppStore((state) => state.toggleStar);
+  const refreshArticle = useAppStore((state) => state.refreshArticle);
   const general = useSettingsStore((state) => state.persistedSettings.general);
   const autoMarkReadEnabled = useSettingsStore(
     (state) => state.persistedSettings.general.autoMarkReadEnabled,
@@ -47,14 +57,14 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
   const lastReportedTitleVisibilityRef = useRef<boolean | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const articleContentRef = useRef<HTMLDivElement | null>(null);
+  const [scrollAssistArticleId, setScrollAssistArticleId] = useState<string | null>(null);
   const [scrollAssistPercent, setScrollAssistPercent] = useState(0);
   const [articleTitleVisible, setArticleTitleVisible] = useState(true);
+  const [hasScrollableContent, setHasScrollableContent] = useState(false);
   const [isDesktop, setIsDesktop] = useState(
     () => typeof window !== 'undefined' && window.innerWidth >= READER_RESIZE_DESKTOP_MIN_WIDTH,
   );
 
-  const article = articles.find((item) => item.id === selectedArticleId);
-  const feed = article ? feeds.find((item) => item.id === article.feedId) : null;
   const feedFullTextOnOpenEnabled = feed?.fullTextOnOpenEnabled ?? false;
   const feedAiSummaryOnOpenEnabled = feed?.aiSummaryOnOpenEnabled ?? false;
   const feedBodyTranslateOnOpenEnabled = feed?.bodyTranslateOnOpenEnabled ?? false;
@@ -104,9 +114,11 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
   const updateScrollAssistState = useCallback((element: HTMLDivElement) => {
     const maxScroll = Math.max(element.scrollHeight - element.clientHeight, 0);
     const nextProgress = maxScroll <= 0 ? 0 : Math.min(1, Math.max(0, element.scrollTop / maxScroll));
+    setScrollAssistArticleId(currentArticleId);
+    setHasScrollableContent(maxScroll > 0);
     setScrollAssistPercent(Math.round(nextProgress * 100));
     setArticleTitleVisible(element.scrollTop <= FLOATING_TITLE_SCROLL_THRESHOLD_PX);
-  }, []);
+  }, [currentArticleId]);
 
   const onArticleScroll = useCallback(
     (event: UIEvent<HTMLDivElement>) => {
@@ -144,8 +156,6 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
   useEffect(() => {
     lastReportedTitleVisibilityRef.current = null;
     reportTitleVisibility(true);
-    setScrollAssistPercent(0);
-    setArticleTitleVisible(true);
   }, [article?.id, reportTitleVisibility]);
 
   useEffect(() => {
@@ -397,6 +407,26 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
             '')
         : article?.content || '';
 
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const element = scrollContainerRef.current;
+    if (!element) {
+      return undefined;
+    }
+
+    const rafId = window.requestAnimationFrame(() => {
+      reportTitleVisibility(element.scrollTop <= FLOATING_TITLE_SCROLL_THRESHOLD_PX);
+      updateScrollAssistState(element);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+    };
+  }, [article?.id, bodyHtml, isDesktop, reportTitleVisibility, updateScrollAssistState]);
+
   if (!article) {
     return (
       <div className="flex h-full flex-col bg-background text-foreground">
@@ -441,10 +471,11 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
   const titleOriginal = article.titleOriginal?.trim() || article.title;
   const titleZh = article.titleZh?.trim();
   const showBilingualTitle = aiTranslationViewing && Boolean(titleZh);
-  const showScrollAssist =
-    isDesktop &&
-    !articleTitleVisible &&
-    (scrollContainerRef.current?.scrollHeight ?? 0) > (scrollContainerRef.current?.clientHeight ?? 0);
+  const scrollStateMatchesCurrentArticle = scrollAssistArticleId === currentArticleId;
+  const effectiveScrollAssistPercent = scrollStateMatchesCurrentArticle ? scrollAssistPercent : 0;
+  const effectiveArticleTitleVisible = scrollStateMatchesCurrentArticle ? articleTitleVisible : true;
+  const effectiveHasScrollableContent = scrollStateMatchesCurrentArticle ? hasScrollableContent : false;
+  const showScrollAssist = isDesktop && !effectiveArticleTitleVisible && effectiveHasScrollableContent;
 
   return (
     <div className="flex h-full flex-col bg-background text-foreground">
@@ -751,7 +782,7 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
 
         <ArticleScrollAssist
           visible={showScrollAssist}
-          percent={scrollAssistPercent}
+          percent={effectiveScrollAssistPercent}
           onBackToTop={handleBackToTop}
         />
       </div>

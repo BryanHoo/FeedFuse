@@ -55,12 +55,9 @@ vi.mock('../../lib/apiClient', async () => {
 
 function setupResizeObserverMock() {
   const original = globalThis.ResizeObserver;
-  let callback: ResizeObserverCallback = () => undefined;
 
   class MockResizeObserver {
-    constructor(nextCallback: ResizeObserverCallback) {
-      callback = nextCallback;
-    }
+    constructor() {}
 
     observe = vi.fn();
     unobserve = vi.fn();

@@ -310,6 +310,9 @@ describe('ArticleList', () => {
 
     act(() => {
       useAppStore.setState({ selectedView: 'unread', showUnreadOnly: false });
+    });
+
+    act(() => {
       useAppStore.setState({ selectedView: 'all', showUnreadOnly: true });
     });
 
@@ -1030,5 +1033,36 @@ describe('ArticleList', () => {
       await Promise.resolve();
     });
     expect(useAppStore.getState().feeds[0].articleListDisplayMode).toBe('list');
+  });
+
+  it('does not commit again when unrelated app store state changes', async () => {
+    let commitCount = 0;
+
+    render(
+      <React.Profiler
+        id="article-list"
+        onRender={() => {
+          commitCount += 1;
+        }}
+      >
+        <NotificationProvider>
+          <ApiNotificationBridge />
+          <ArticleList />
+        </NotificationProvider>
+      </React.Profiler>,
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const baselineCommitCount = commitCount;
+
+    act(() => {
+      useAppStore.setState({ sidebarCollapsed: true });
+    });
+
+    expect(commitCount).toBe(baselineCommitCount);
   });
 });
