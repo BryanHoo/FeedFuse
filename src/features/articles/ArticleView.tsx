@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type UIEvent } from 'react';
-import { Languages, Sparkles, Star } from 'lucide-react';
+import { FileText, Languages, Sparkles, Star } from 'lucide-react';
 import { useAppStore } from '../../store/appStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import {
@@ -183,6 +183,31 @@ export default function ArticleView({
     return () => clearTimeout(timer);
   }, [article, autoMarkReadDelayMs, autoMarkReadEnabled, markAsRead]);
 
+  const requestFulltext = useCallback(
+    async (articleId: string, input?: { signal?: AbortSignal; force?: boolean }) => {
+      const signal = input?.signal;
+      const force = Boolean(input?.force);
+
+      await enqueueArticleFulltext(articleId, { force });
+      const result = await pollWithBackoff({
+        fn: () => getArticleTasks(articleId),
+        stop: (value) => {
+          const status = value.fulltext.status;
+          return status === 'idle' || status === 'succeeded' || status === 'failed';
+        },
+        onValue: (value) => {
+          if (!signal?.aborted) setTasks(value);
+        },
+        signal,
+      });
+
+      if (result.value?.fulltext.status === 'succeeded') {
+        await refreshArticle(articleId);
+      }
+    },
+    [refreshArticle],
+  );
+
   useEffect(() => {
     const articleId = article?.id ?? null;
     const articleLink = article?.link ?? '';
@@ -207,33 +232,11 @@ export default function ArticleView({
       if (!articleLink) return;
 
       try {
-        await enqueueArticleFulltext(articleId);
+        await requestFulltext(articleId, { signal, force: false });
         if (signal.aborted) return;
       } catch (err) {
         console.error(err);
         return;
-      }
-
-      const result = await pollWithBackoff({
-        fn: () => getArticleTasks(articleId),
-        stop: (value) => {
-          const status = value.fulltext.status;
-          return status === 'idle' || status === 'succeeded' || status === 'failed';
-        },
-        onValue: (value) => {
-          if (!signal.aborted) setTasks(value);
-        },
-        signal,
-      });
-
-      if (signal.aborted) return;
-
-      if (result.value?.fulltext.status === 'succeeded') {
-        const refreshed = await refreshArticle(articleId);
-        if (signal.aborted) return;
-        if (refreshed.hasFulltext || refreshed.hasFulltextError) {
-          return;
-        }
       }
     })();
 
@@ -241,7 +244,7 @@ export default function ArticleView({
       controller.abort();
       setTasks(null);
     };
-  }, [article?.id, article?.link, feedFullTextOnOpenEnabled, refreshArticle]);
+  }, [article?.id, article?.link, feedFullTextOnOpenEnabled, requestFulltext]);
 
   const requestAiSummary = useCallback(
     async (
@@ -361,7 +364,13 @@ export default function ArticleView({
     requestImmersiveTranslation,
   ]);
 
+  const fulltextButtonDisabled = fulltextPending;
   const aiSummaryButtonDisabled = feedFullTextOnOpenEnabled && fulltextPending;
+
+  function onFulltextButtonClick() {
+    if (!article?.id) return;
+    void requestFulltext(article.id, { force: true });
+  }
 
   function onAiSummaryButtonClick() {
     if (!article?.id) return;
@@ -574,6 +583,17 @@ export default function ArticleView({
               >
                 <Star fill={article.isStarred ? 'currentColor' : 'none'} />
                 <span>{article.isStarred ? '已收藏' : '收藏'}</span>
+              </Button>
+
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-8 px-3 text-sm cursor-pointer transition-shadow hover:shadow-md"
+                onClick={onFulltextButtonClick}
+                disabled={fulltextButtonDisabled}
+              >
+                <FileText />
+                <span>抓取全文</span>
               </Button>
 
               {bodyTranslationEligible ? (

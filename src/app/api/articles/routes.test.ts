@@ -550,6 +550,45 @@ describe('/api/articles', () => {
     expect(enqueueMock).not.toHaveBeenCalled();
   });
 
+  it('POST /:id/fulltext force=true bypasses disabled flag and enqueues', async () => {
+    getFeedFullTextOnOpenEnabledMock.mockResolvedValue(false);
+    getArticleByIdMock.mockResolvedValue({
+      id: articleId,
+      feedId,
+      dedupeKey: 'guid:1',
+      title: 'Hello',
+      link: 'https://example.com/a',
+      author: null,
+      publishedAt: null,
+      contentHtml: '<p>rss</p>',
+      contentFullHtml: null,
+      contentFullFetchedAt: null,
+      contentFullError: null,
+      contentFullSourceUrl: null,
+      summary: null,
+      isRead: false,
+      readAt: null,
+      isStarred: false,
+      starredAt: null,
+    });
+    enqueueWithResultMock.mockResolvedValue({ status: 'enqueued', jobId: 'job-id-force-1' });
+
+    const mod = await import('./[id]/fulltext/route');
+    const res = await mod.POST(
+      new Request(`http://localhost/api/articles/${articleId}/fulltext`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ force: true }),
+      }),
+      { params: Promise.resolve({ id: articleId }) },
+    );
+    const json = await res.json();
+
+    expect(json.ok).toBe(true);
+    expect(json.data.enqueued).toBe(true);
+    expect(json.data.jobId).toBe('job-id-force-1');
+  });
+
   it('POST /:id/fulltext returns enqueued=false when link is missing', async () => {
     getFeedFullTextOnOpenEnabledMock.mockResolvedValue(true);
     getArticleByIdMock.mockResolvedValue({

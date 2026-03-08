@@ -1,8 +1,9 @@
-import { AlertCircle, ArrowDown, ArrowUp, ChevronDown, ChevronRight, CircleDot, FolderTree, Languages, Newspaper, PencilLine, Plus, Power, Sparkles, Star, Trash2 } from 'lucide-react';
+import { AlertCircle, ArrowDown, ArrowUp, ChevronDown, ChevronRight, CircleDot, FileText, FolderTree, Languages, Newspaper, PencilLine, Plus, Power, Sparkles, Star, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import AddFeedDialog from './AddFeedDialog';
 import EditFeedDialog from './EditFeedDialog';
+import FeedFulltextPolicyDialog from './FeedFulltextPolicyDialog';
 import FeedSummaryPolicyDialog from './FeedSummaryPolicyDialog';
 import FeedTranslationPolicyDialog from './FeedTranslationPolicyDialog';
 import FeedKeywordFilterDialog from './FeedKeywordFilterDialog';
@@ -58,6 +59,7 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
   const [addFeedOpen, setAddFeedOpen] = useState(false);
   const [editFeedId, setEditFeedId] = useState<string | null>(null);
   const [deleteFeedId, setDeleteFeedId] = useState<string | null>(null);
+  const [fulltextPolicyFeedId, setFulltextPolicyFeedId] = useState<string | null>(null);
   const [summaryPolicyFeedId, setSummaryPolicyFeedId] = useState<string | null>(null);
   const [translationPolicyFeedId, setTranslationPolicyFeedId] = useState<string | null>(null);
   const [keywordFilterFeedId, setKeywordFilterFeedId] = useState<string | null>(null);
@@ -180,6 +182,10 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
   const activeDeleteCategory = useMemo(
     () => (deleteCategoryId ? categoryMaster.find((category) => category.id === deleteCategoryId) ?? null : null),
     [categoryMaster, deleteCategoryId],
+  );
+  const activeFulltextPolicyFeed = useMemo(
+    () => (fulltextPolicyFeedId ? feeds.find((feed) => feed.id === fulltextPolicyFeedId) ?? null : null),
+    [fulltextPolicyFeedId, feeds],
   );
   const activeSummaryPolicyFeed = useMemo(
     () => (summaryPolicyFeedId ? feeds.find((feed) => feed.id === summaryPolicyFeedId) ?? null : null),
@@ -526,6 +532,16 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
                           <ContextMenuSeparator />
                           <ContextMenuItem
                             onSelect={() => {
+                              setFulltextPolicyFeedId(feed.id);
+                            }}
+                          >
+                            <ContextMenuItemIcon aria-hidden="true">
+                              <FileText className="h-3.5 w-3.5" />
+                            </ContextMenuItemIcon>
+                            <ContextMenuItemLabel>全文抓取配置</ContextMenuItemLabel>
+                          </ContextMenuItem>
+                          <ContextMenuItem
+                            onSelect={() => {
                               setSummaryPolicyFeedId(feed.id);
                             }}
                           >
@@ -639,6 +655,20 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
         onSubmit={async (patch) => {
           if (!activeSummaryPolicyFeed) return;
           await updateFeed(activeSummaryPolicyFeed.id, patch);
+        }}
+      />
+
+      <FeedFulltextPolicyDialog
+        open={Boolean(activeFulltextPolicyFeed)}
+        feed={activeFulltextPolicyFeed}
+        onOpenChange={(open) => {
+          if (!open) {
+            setFulltextPolicyFeedId(null);
+          }
+        }}
+        onSubmit={async (patch) => {
+          if (!activeFulltextPolicyFeed) return;
+          await updateFeed(activeFulltextPolicyFeed.id, patch);
         }}
       />
 

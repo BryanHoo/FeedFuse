@@ -16,6 +16,10 @@ const paramsSchema = z.object({
   id: z.string().uuid(),
 });
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
 function normalizeWhitespace(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
 }
@@ -60,7 +64,7 @@ function zodIssuesToFields(error: z.ZodError): Record<string, string> {
 }
 
 export async function POST(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
   try {
@@ -72,20 +76,22 @@ export async function POST(
       );
     }
 
+    const json = await request.json().catch(() => null);
+    const force = Boolean(isRecord(json) && json.force === true);
+
+    const articleId = paramsParsed.data.id;
     const pool = getPool();
-    const article = await getArticleById(pool, paramsParsed.data.id);
+    const article = await getArticleById(pool, articleId);
     if (!article) return fail(new NotFoundError('Article not found'));
 
     const fullTextOnOpenEnabled = await getFeedFullTextOnOpenEnabled(pool, article.feedId);
-    if (fullTextOnOpenEnabled !== true) {
+    if (!force && fullTextOnOpenEnabled !== true) {
       return ok({ enqueued: false });
     }
 
     if (!article.link) return ok({ enqueued: false });
     if (article.contentFullHtml) return ok({ enqueued: false });
     if (rssContentLooksFull(article.contentHtml, article.summary)) return ok({ enqueued: false });
-
-    const articleId = paramsParsed.data.id;
 
     const enqueueResult = await enqueueWithResult(
       JOB_ARTICLE_FULLTEXT_FETCH,

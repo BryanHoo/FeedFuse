@@ -412,6 +412,25 @@ describe('ArticleView ai translate', () => {
     expect(screen.getByText('请先等待全文抓取完成，再开始翻译')).toBeInTheDocument();
   });
 
+  it('全文任务排队中时禁用抓取全文按钮', async () => {
+    const apiClient = await import('../../lib/apiClient');
+    vi.mocked(apiClient.getArticleTasks).mockResolvedValue({
+      ...idleTasks,
+      fulltext: {
+        ...idleTasks.fulltext,
+        status: 'queued',
+        jobId: 'job-fulltext-1',
+      },
+    });
+
+    await seedArticleViewState();
+
+    const { default: ArticleView } = await import('./ArticleView');
+    render(<ArticleView />);
+
+    expect(await screen.findByRole('button', { name: '抓取全文' })).toBeDisabled();
+  });
+
   it('triggers retry API from delegated retry button inside rendered html', async () => {
     const apiClient = await import('../../lib/apiClient');
     const { default: ArticleView } = await import('./ArticleView');

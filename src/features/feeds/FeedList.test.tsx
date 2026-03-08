@@ -830,6 +830,24 @@ describe('FeedList manage', () => {
     });
   });
 
+  it('opens fulltext policy dialog from feed context menu and saves patch', async () => {
+    renderWithNotifications();
+
+    fireEvent.contextMenu(screen.getByRole('button', { name: /My Feed.*2/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: '全文抓取配置' }));
+
+    expect(screen.getByRole('dialog', { name: '全文抓取配置' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('switch', { name: '打开文章时自动抓取全文' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存配置' }));
+
+    await waitFor(() => {
+      expect(lastPatchBody).toEqual({
+        fullTextOnOpenEnabled: true,
+      });
+    });
+  });
+
 
   it('opens keyword filter dialog from feed context menu and saves changes', async () => {
     renderWithNotifications();

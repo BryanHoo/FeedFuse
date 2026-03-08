@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Feed } from '../../types';
+import FeedFulltextPolicyDialog from './FeedFulltextPolicyDialog';
 import FeedSummaryPolicyDialog from './FeedSummaryPolicyDialog';
 import FeedTranslationPolicyDialog from './FeedTranslationPolicyDialog';
 
@@ -94,5 +95,25 @@ describe('FeedPolicyDialogs', () => {
       'data-state',
       'checked',
     );
+  });
+
+  it('fulltext policy dialog saves fullTextOnOpenEnabled', async () => {
+    const onSubmit = vi.fn(async () => undefined);
+
+    render(
+      <FeedFulltextPolicyDialog
+        open
+        feed={buildFeed({ fullTextOnOpenEnabled: false })}
+        onOpenChange={() => {}}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('switch', { name: '打开文章时自动抓取全文' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存配置' }));
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith({ fullTextOnOpenEnabled: true });
+    });
   });
 });

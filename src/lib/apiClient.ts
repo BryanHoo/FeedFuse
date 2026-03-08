@@ -398,9 +398,12 @@ export async function getArticleTasks(articleId: string): Promise<ArticleTasksDt
 
 export async function enqueueArticleFulltext(
   articleId: string,
+  input?: { force?: boolean },
 ): Promise<{ enqueued: boolean; jobId?: string }> {
   return requestApi(`/api/articles/${encodeURIComponent(articleId)}/fulltext`, {
     method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ force: Boolean(input?.force) }),
   });
 }
 

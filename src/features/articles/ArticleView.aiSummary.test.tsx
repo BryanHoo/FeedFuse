@@ -327,6 +327,71 @@ describe('ArticleView ai summary', () => {
     });
   });
 
+  it('自动全文抓取关闭时仍显示抓取全文按钮，并允许手动触发', async () => {
+    enqueueArticleFulltextMock.mockResolvedValue({
+      enqueued: true,
+      jobId: 'job-fulltext-manual-1',
+    });
+    getArticleTasksMock
+      .mockResolvedValueOnce(idleTasks)
+      .mockResolvedValueOnce({
+        ...idleTasks,
+        fulltext: {
+          ...idleTasks.fulltext,
+          status: 'succeeded',
+          jobId: 'job-fulltext-manual-1',
+        },
+      });
+
+    const refreshArticleMock = vi.fn().mockResolvedValue({
+      hasFulltext: true,
+      hasFulltextError: false,
+      hasAiSummary: false,
+      hasAiTranslation: false,
+    });
+
+    useAppStore.setState({
+      feeds: [
+        {
+          id: 'feed-1',
+          title: 'Feed 1',
+          url: 'https://example.com/rss.xml',
+          unreadCount: 1,
+          enabled: true,
+          fullTextOnOpenEnabled: false,
+          aiSummaryOnOpenEnabled: false,
+          categoryId: null,
+          category: null,
+        },
+      ],
+      categories: [{ id: 'cat-uncategorized', name: '未分类', expanded: true }],
+      articles: [
+        {
+          id: 'article-1',
+          feedId: 'feed-1',
+          title: 'Article 1',
+          content: '<p>Hello</p>',
+          summary: 'hello',
+          publishedAt: new Date('2026-02-28T00:00:00.000Z').toISOString(),
+          link: 'https://example.com/a1',
+          isRead: true,
+          isStarred: false,
+        },
+      ],
+      selectedView: 'all',
+      selectedArticleId: 'article-1',
+      refreshArticle: refreshArticleMock,
+    });
+
+    render(<ArticleView />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '抓取全文' }));
+
+    await waitFor(() => {
+      expect(enqueueArticleFulltextMock).toHaveBeenCalledWith('article-1', { force: true });
+    });
+  });
+
   it('自动摘要开启时仍显示 AI 摘要按钮', async () => {
     enqueueArticleAiSummaryMock.mockResolvedValue({
       enqueued: false,

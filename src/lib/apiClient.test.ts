@@ -302,6 +302,28 @@ it('enqueueArticleAiTranslate POSTs /api/articles/:id/ai-translate', async () =>
   );
 });
 
+it('enqueueArticleFulltext sends force in request body when provided', async () => {
+  const fetchMock = vi.fn(async () => {
+    return new Response(JSON.stringify({ ok: true, data: { enqueued: true, jobId: 'job-1' } }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+
+  const { enqueueArticleFulltext } = await import('./apiClient');
+  await enqueueArticleFulltext('00000000-0000-0000-0000-000000000000', { force: true });
+
+  expect(fetchMock).toHaveBeenCalledWith(
+    expect.stringContaining('/api/articles/00000000-0000-0000-0000-000000000000/fulltext'),
+    expect.objectContaining({
+      method: 'POST',
+      headers: expect.objectContaining({ 'content-type': 'application/json' }),
+      body: JSON.stringify({ force: true }),
+    }),
+  );
+});
+
 it('enqueueArticleAiSummary sends force in request body when provided', async () => {
   const fetchMock = vi.fn(async () => {
     return new Response(JSON.stringify({ ok: true, data: { enqueued: true, jobId: 'job-1' } }), {
