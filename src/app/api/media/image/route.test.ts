@@ -52,6 +52,37 @@ describe('/api/media/image', () => {
     expect(fetchMock).toHaveBeenCalled();
   });
 
+  it('sends a same-origin referer to upstream image hosts', async () => {
+    lookupMock.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
+    fetchMock.mockResolvedValue(
+      new Response(Uint8Array.from([1, 2, 3]), {
+        status: 200,
+        headers: {
+          'content-type': 'image/jpeg',
+          'cache-control': 'public, max-age=600',
+        },
+      }),
+    );
+
+    const proxied = buildImageProxyUrl({
+      sourceUrl: 'https://cdnfile.sspai.com/2026/02/25/cover.jpg',
+      secret: 'test-image-proxy-secret',
+    });
+
+    const mod = await import('./route');
+    const res = await mod.GET(new Request(`http://localhost${proxied}`));
+
+    expect(res.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://cdnfile.sspai.com/2026/02/25/cover.jpg',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          referer: 'https://cdnfile.sspai.com/',
+        }),
+      }),
+    );
+  });
+
   it('rejects an invalid signature', async () => {
     const mod = await import('./route');
     const res = await mod.GET(

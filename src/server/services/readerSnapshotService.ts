@@ -127,17 +127,57 @@ export interface ReaderSnapshot {
 const ARTICLE_LIST_PREVIEW_IMAGE_WIDTH = 192;
 const ARTICLE_LIST_PREVIEW_IMAGE_HEIGHT = 208;
 const ARTICLE_LIST_PREVIEW_IMAGE_QUALITY = 55;
+const HTML_ENTITY_MAP: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: '\u00A0',
+};
 
 type ArticleKeywordFilter = ReturnType<typeof normalizePersistedSettings>['rss']['articleKeywordFilter'];
+
+function decodeHtmlEntities(value: string): string {
+  return value.replace(/&(?:#(\d+)|#x([\da-f]+)|([a-z]+));/gi, (match, decimal, hex, named) => {
+    if (decimal) {
+      return String.fromCodePoint(Number.parseInt(decimal, 10));
+    }
+
+    if (hex) {
+      return String.fromCodePoint(Number.parseInt(hex, 16));
+    }
+
+    return HTML_ENTITY_MAP[named.toLowerCase()] ?? match;
+  });
+}
+
+function isExpiredPreviewImageUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    const expiresAt = url.searchParams.get('x-expires');
+    if (!expiresAt || !/^\d+$/.test(expiresAt)) {
+      return false;
+    }
+
+    return Number.parseInt(expiresAt, 10) * 1000 <= Date.now();
+  } catch {
+    return false;
+  }
+}
 
 function rewritePreviewImage(previewImage: string | null): string | null {
   if (!previewImage) return null;
 
+  const normalizedPreviewImage = decodeHtmlEntities(previewImage).trim();
+  if (!normalizedPreviewImage) return null;
+  if (isExpiredPreviewImageUrl(normalizedPreviewImage)) return null;
+
   const secret = getOptionalImageProxySecret(getServerEnv().IMAGE_PROXY_SECRET);
-  if (!secret) return previewImage;
+  if (!secret) return normalizedPreviewImage;
 
   return buildImageProxyUrl({
-    sourceUrl: previewImage,
+    sourceUrl: normalizedPreviewImage,
     secret,
     width: ARTICLE_LIST_PREVIEW_IMAGE_WIDTH,
     height: ARTICLE_LIST_PREVIEW_IMAGE_HEIGHT,

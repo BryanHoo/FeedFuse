@@ -83,11 +83,13 @@ async function fetchImage(
     return new Response('Forbidden', { status: 403 });
   }
 
+  const sourceUrl = new URL(url);
   const upstream = await fetch(url, {
     redirect: 'manual',
     headers: {
       'user-agent': 'FeedFuse Image Proxy/1.0',
       accept: 'image/*,*/*;q=0.8',
+      referer: `${sourceUrl.origin}/`,
     },
   }).catch(() => new Response('Bad gateway', { status: 502 }));
 
