@@ -5,8 +5,10 @@ import { vi } from 'vitest';
 vi.mock('../articles/ArticleView', () => ({
   default: function MockArticleView({
     onTitleVisibilityChange,
+    reserveTopSpace = true,
   }: {
     onTitleVisibilityChange?: (isVisible: boolean) => void;
+    reserveTopSpace?: boolean;
   }) {
     useEffect(() => {
       onTitleVisibilityChange?.(true);
@@ -15,6 +17,7 @@ vi.mock('../articles/ArticleView', () => ({
     return (
       <div
         data-testid="article-scroll-container"
+        data-reserve-top-space={reserveTopSpace ? 'true' : 'false'}
         onScroll={(event) => {
           onTitleVisibilityChange?.(event.currentTarget.scrollTop <= 96);
         }}
@@ -241,6 +244,111 @@ describe('ReaderLayout', () => {
 
     expect(screen.queryByTestId('reader-resize-handle-left')).not.toBeInTheDocument();
     expect(screen.queryByTestId('reader-resize-handle-middle')).not.toBeInTheDocument();
+  });
+
+  it('uses a feed drawer instead of an inline feed pane on mobile', () => {
+    resetSettingsStore();
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+
+    renderWithNotifications();
+
+    expect(screen.getByTestId('reader-non-desktop-topbar')).toBeInTheDocument();
+    expect(screen.queryByTestId('reader-feed-pane')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('open-feeds')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('open-feeds'));
+
+    expect(screen.getByTestId('reader-feed-drawer')).toBeInTheDocument();
+    expect(screen.getByTestId('feed-list-header')).toHaveClass('pr-16');
+    expect(screen.getByLabelText('add-feed')).toBeInTheDocument();
+  });
+
+  it('shows a back action from article detail to article list on mobile', () => {
+    resetSettingsStore();
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+
+    useAppStore.setState({
+      feeds: [
+        {
+          id: 'feed-1',
+          title: 'Example Feed',
+          url: 'https://example.com/rss.xml',
+          unreadCount: 1,
+          enabled: true,
+          fullTextOnOpenEnabled: false,
+          aiSummaryOnOpenEnabled: false,
+          categoryId: 'cat-uncategorized',
+          category: '未分类',
+        },
+      ],
+      articles: [
+        {
+          id: 'article-1',
+          feedId: 'feed-1',
+          title: 'Selected Article',
+          content: '<p>content</p>',
+          summary: 'summary',
+          publishedAt: new Date().toISOString(),
+          link: 'https://example.com/article-1',
+          isRead: false,
+          isStarred: false,
+        },
+      ],
+      selectedView: 'all',
+      selectedArticleId: 'article-1',
+    });
+
+    renderWithNotifications();
+
+    expect(screen.getByLabelText('back-to-articles')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('back-to-articles'));
+
+    expect(useAppStore.getState().selectedArticleId).toBeNull();
+  });
+
+  it('removes the old article top spacer on non-desktop layouts', () => {
+    resetSettingsStore();
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 820 });
+
+    useAppStore.setState({
+      feeds: [
+        {
+          id: 'feed-1',
+          title: 'Example Feed',
+          url: 'https://example.com/rss.xml',
+          unreadCount: 1,
+          enabled: true,
+          fullTextOnOpenEnabled: false,
+          aiSummaryOnOpenEnabled: false,
+          categoryId: 'cat-uncategorized',
+          category: '未分类',
+        },
+      ],
+      articles: [
+        {
+          id: 'article-1',
+          feedId: 'feed-1',
+          title: 'Selected Article',
+          content: '<p>content</p>',
+          summary: 'summary',
+          publishedAt: new Date().toISOString(),
+          link: 'https://example.com/article-1',
+          isRead: false,
+          isStarred: false,
+        },
+      ],
+      selectedView: 'all',
+      selectedArticleId: 'article-1',
+    });
+
+    renderWithNotifications();
+
+    expect(screen.getByTestId('reader-non-desktop-topbar')).toBeInTheDocument();
+    expect(screen.getByTestId('article-scroll-container')).toHaveAttribute(
+      'data-reserve-top-space',
+      'false',
+    );
   });
 
 

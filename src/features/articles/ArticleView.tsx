@@ -21,9 +21,13 @@ const FLOATING_TITLE_SCROLL_THRESHOLD_PX = 96;
 
 interface ArticleViewProps {
   onTitleVisibilityChange?: (isVisible: boolean) => void;
+  reserveTopSpace?: boolean;
 }
 
-export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProps = {}) {
+export default function ArticleView({
+  onTitleVisibilityChange,
+  reserveTopSpace = true,
+}: ArticleViewProps = {}) {
   const article = useAppStore(
     (state) => state.articles.find((item) => item.id === state.selectedArticleId) ?? null,
   );
@@ -430,7 +434,7 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
   if (!article) {
     return (
       <div className="flex h-full flex-col bg-background text-foreground">
-        <div className="h-12 shrink-0" />
+        {reserveTopSpace ? <div className="h-12 shrink-0" /> : null}
         <div className="flex flex-1 items-center justify-center">
           <p className="text-muted-foreground">从列表中选择一篇文章开始阅读</p>
         </div>
@@ -479,7 +483,7 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
 
   return (
     <div className="flex h-full flex-col bg-background text-foreground">
-      <div className="h-12 shrink-0" />
+      {reserveTopSpace ? <div className="h-12 shrink-0" /> : null}
       <div className="relative flex-1 overflow-hidden" data-testid="article-viewport">
         <div
           ref={scrollContainerRef}

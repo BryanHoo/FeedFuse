@@ -41,7 +41,11 @@ const uncategorizedName = '未分类';
 const uncategorizedId = 'cat-uncategorized';
 
 
-export default function FeedList() {
+interface FeedListProps {
+  reserveCloseButtonSpace?: boolean;
+}
+
+export default function FeedList({ reserveCloseButtonSpace = false }: FeedListProps) {
   const appCategories = useAppStore((state) => state.categories);
   const feeds = useAppStore((state) => state.feeds);
   const loadSnapshot = useAppStore((state) => state.loadSnapshot);
@@ -243,7 +247,10 @@ export default function FeedList() {
   return (
     <>
       <div className="flex h-full flex-col">
-        <div className="flex h-12 items-center justify-between px-4">
+        <div
+          data-testid="feed-list-header"
+          className={cn('flex h-12 items-center justify-between px-4', reserveCloseButtonSpace && 'pr-16')}
+        >
           <h1 className="flex items-center gap-2">
             <img
               src="/feedfuse-logo.svg"

@@ -1,4 +1,4 @@
-import { Settings as SettingsIcon } from 'lucide-react';
+import { ChevronLeft, PanelLeft, Settings as SettingsIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import ArticleList from '../articles/ArticleList';
 import ArticleView from '../articles/ArticleView';
@@ -8,6 +8,7 @@ import SettingsCenterModal from '../settings/SettingsCenterModal';
 import { useAppStore } from '../../store/appStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { Button } from '@/components/ui/button';
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 import {
   normalizeReaderPaneWidth,
@@ -19,6 +20,8 @@ import {
   READER_RIGHT_PANE_MIN_WIDTH,
 } from './readerLayoutSizing';
 
+const TABLET_LAYOUT_MIN_WIDTH = 768;
+
 type ResizeTarget = 'left' | 'middle';
 
 const MemoizedFeedList = memo(FeedList);
@@ -29,6 +32,7 @@ export default function ReaderLayout() {
   const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
   const selectedView = useAppStore((state) => state.selectedView);
   const selectedArticleId = useAppStore((state) => state.selectedArticleId);
+  const setSelectedArticle = useAppStore((state) => state.setSelectedArticle);
   const general = useSettingsStore((state) => state.persistedSettings.general);
   const updateReaderLayoutSettings = useSettingsStore((state) => state.updateReaderLayoutSettings);
   const selectedArticleTitle = useAppStore(
@@ -38,11 +42,16 @@ export default function ReaderLayout() {
     (state) => state.articles.find((article) => article.id === state.selectedArticleId)?.link ?? '',
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const selectionKey = `${selectedView}:${selectedArticleId ?? ''}`;
+  const [feedSheetState, setFeedSheetState] = useState(() => ({
+    open: false,
+    selectionKey,
+  }));
   const [articleTitleVisible, setArticleTitleVisible] = useState(true);
   const [liveLeftPaneWidth, setLiveLeftPaneWidth] = useState<number | null>(null);
   const [liveMiddlePaneWidth, setLiveMiddlePaneWidth] = useState<number | null>(null);
-  const [isDesktop, setIsDesktop] = useState(
-    () => typeof window !== 'undefined' && window.innerWidth >= READER_RESIZE_DESKTOP_MIN_WIDTH,
+  const [viewportWidth, setViewportWidth] = useState(
+    () => typeof window !== 'undefined' ? window.innerWidth : READER_RESIZE_DESKTOP_MIN_WIDTH,
   );
   const [visibleResizeTarget, setVisibleResizeTarget] = useState<ResizeTarget | null>(null);
   const [draggingTarget, setDraggingTarget] = useState<ResizeTarget | null>(null);
@@ -59,6 +68,11 @@ export default function ReaderLayout() {
     | null
   >(null);
 
+  const isDesktop = viewportWidth >= READER_RESIZE_DESKTOP_MIN_WIDTH;
+  const isTablet =
+    viewportWidth >= TABLET_LAYOUT_MIN_WIDTH && viewportWidth < READER_RESIZE_DESKTOP_MIN_WIDTH;
+  const isMobile = viewportWidth < TABLET_LAYOUT_MIN_WIDTH;
+  const feedSheetOpen = !isDesktop && feedSheetState.open && feedSheetState.selectionKey === selectionKey;
   const resolvedLeftPaneWidth = liveLeftPaneWidth ?? general.leftPaneWidth;
   const resolvedMiddlePaneWidth = liveMiddlePaneWidth ?? general.middlePaneWidth;
 
@@ -132,9 +146,19 @@ export default function ReaderLayout() {
 
   useEffect(() => {
     const handleResize = () => {
-      setIsDesktop(window.innerWidth >= READER_RESIZE_DESKTOP_MIN_WIDTH);
+      const nextWidth = window.innerWidth;
+      setViewportWidth((currentWidth) => (currentWidth === nextWidth ? currentWidth : nextWidth));
+
+      if (nextWidth < READER_RESIZE_DESKTOP_MIN_WIDTH) {
+        window.removeEventListener('pointermove', handlePointerMove);
+        window.removeEventListener('pointerup', handlePointerUp);
+        setLiveLeftPaneWidth(null);
+        setLiveMiddlePaneWidth(null);
+        clearDraggingState();
+      }
     };
 
+    handleResize();
     window.addEventListener('resize', handleResize);
     return () => {
       window.removeEventListener('resize', handleResize);
@@ -143,7 +167,7 @@ export default function ReaderLayout() {
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     };
-  }, [handlePointerMove, handlePointerUp]);
+  }, [clearDraggingState, handlePointerMove, handlePointerUp]);
 
   const isResizeTargetActive = (target: ResizeTarget) => visibleResizeTarget === target;
 
@@ -200,11 +224,15 @@ export default function ReaderLayout() {
   };
 
   const showFloatingArticleTitle = Boolean(
-    selectedArticleId && selectedArticleTitle && !articleTitleVisible,
+    !isMobile && selectedArticleId && selectedArticleTitle && !articleTitleVisible,
   );
 
-  const floatingTitleBaseClassName =
-    'absolute left-6 top-6 z-40 max-w-[calc(100%-8rem)] -translate-y-1/2 truncate rounded-md bg-background/90 px-3 py-1 text-lg font-semibold tracking-tight text-foreground/95 backdrop-blur-sm';
+  const floatingTitleBaseClassName = cn(
+    'absolute z-40 truncate rounded-md bg-background/90 px-3 py-1 font-semibold tracking-tight text-foreground/95 backdrop-blur-sm',
+    isDesktop
+      ? 'left-6 top-6 max-w-[calc(100%-8rem)] -translate-y-1/2 text-lg'
+      : 'left-16 right-16 top-3 text-base',
+  );
 
   let floatingTitle: ReactNode = null;
   if (showFloatingArticleTitle) {
@@ -237,67 +265,180 @@ export default function ReaderLayout() {
     <div
       ref={layoutRef}
       data-testid="reader-layout-root"
-      className="relative flex h-screen overflow-hidden bg-background text-foreground"
+      className={cn(
+        'relative flex h-screen overflow-hidden bg-background text-foreground',
+        !isDesktop && 'flex-col',
+      )}
     >
-      <div
-        data-testid="reader-feed-pane"
-        className={cn(
-          'shrink-0 overflow-hidden border-r bg-muted/45',
-          isResizeTargetActive('left') ? 'border-primary/60' : 'border-border',
-          draggingTarget === 'left' ? 'transition-none' : 'transition-[width] duration-300',
-        )}
-        style={{ width: `${leftPaneWidth}px` }}
-      >
-        <MemoizedFeedList />
-      </div>
+      {isDesktop ? (
+        <>
+          <div
+            data-testid="reader-feed-pane"
+            className={cn(
+              'shrink-0 overflow-hidden border-r bg-muted/45',
+              isResizeTargetActive('left') ? 'border-primary/60' : 'border-border',
+              draggingTarget === 'left' ? 'transition-none' : 'transition-[width] duration-300',
+            )}
+            style={{ width: `${leftPaneWidth}px` }}
+          >
+            <MemoizedFeedList />
+          </div>
+
+          <ResizeHandle
+            testId="reader-resize-handle-left"
+            active={isResizeTargetActive('left')}
+            onPointerDown={startLeftResize}
+            onPointerEnter={() => handleResizeHandleEnter('left')}
+            onPointerLeave={() => handleResizeHandleLeave('left')}
+          />
+
+          <div
+            data-testid="reader-article-pane"
+            className={cn(
+              'shrink-0 border-r bg-muted/5',
+              isResizeTargetActive('middle') ? 'border-primary/60' : 'border-border',
+            )}
+            style={{ width: `${middlePaneWidth}px` }}
+          >
+            <MemoizedArticleList key={selectedView} />
+          </div>
+
+          <ResizeHandle
+            testId="reader-resize-handle-middle"
+            active={isResizeTargetActive('middle')}
+            onPointerDown={startMiddleResize}
+            onPointerEnter={() => handleResizeHandleEnter('middle')}
+            onPointerLeave={() => handleResizeHandleLeave('middle')}
+          />
+
+          <div className="relative flex-1 overflow-hidden bg-background">
+            <MemoizedArticleView onTitleVisibilityChange={setArticleTitleVisible} />
+
+            {floatingTitle}
+          </div>
+        </>
+      ) : (
+        <>
+          <div
+            data-testid="reader-non-desktop-topbar"
+            className="flex h-14 shrink-0 items-center justify-between border-b border-border/80 bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/85"
+          >
+            <div className="flex min-w-0 items-center gap-2">
+              {isMobile && selectedArticleId ? (
+                <Button
+                  onClick={() => setSelectedArticle(null)}
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="back-to-articles"
+                >
+                  <ChevronLeft />
+                </Button>
+              ) : null}
+
+              <Button
+                onClick={() =>
+                  setFeedSheetState({
+                    open: true,
+                    selectionKey,
+                  })
+                }
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label="open-feeds"
+              >
+                <PanelLeft />
+              </Button>
+            </div>
+
+            <div className="min-w-0 flex-1 px-3 text-center text-sm font-medium text-muted-foreground">
+              <span className="block truncate">{selectedArticleId ? selectedArticleTitle || '阅读文章' : 'FeedFuse'}</span>
+            </div>
+
+            <Button
+              onClick={() => setSettingsOpen(true)}
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label="open-settings"
+            >
+              <SettingsIcon />
+            </Button>
+          </div>
+
+          {isTablet ? (
+            <div className="flex min-h-0 flex-1">
+              <div
+                data-testid="reader-tablet-article-pane"
+                className="w-[min(380px,42vw)] min-w-[320px] shrink-0 border-r border-border bg-muted/5"
+              >
+                <MemoizedArticleList key={selectedView} />
+              </div>
+
+              <div className="relative min-w-0 flex-1 overflow-hidden bg-background">
+                <MemoizedArticleView
+                  onTitleVisibilityChange={setArticleTitleVisible}
+                  reserveTopSpace={false}
+                />
+
+                {floatingTitle}
+              </div>
+            </div>
+          ) : (
+            <div
+              data-testid="reader-mobile-layout"
+              className="relative min-h-0 flex-1 overflow-hidden bg-background"
+            >
+              {selectedArticleId ? (
+                <MemoizedArticleView
+                  onTitleVisibilityChange={setArticleTitleVisible}
+                  reserveTopSpace={false}
+                />
+              ) : (
+                <MemoizedArticleList key={selectedView} />
+              )}
+            </div>
+          )}
+        </>
+      )}
 
       {isDesktop ? (
-        <ResizeHandle
-          testId="reader-resize-handle-left"
-          active={isResizeTargetActive('left')}
-          onPointerDown={startLeftResize}
-          onPointerEnter={() => handleResizeHandleEnter('left')}
-          onPointerLeave={() => handleResizeHandleLeave('left')}
-        />
+        <Button
+          onClick={() => setSettingsOpen(true)}
+          type="button"
+          variant="outline"
+          size="icon"
+          className="absolute right-4 top-6 z-40 -translate-y-1/2 bg-background/90 backdrop-blur-sm"
+          aria-label="open-settings"
+        >
+          <SettingsIcon />
+        </Button>
       ) : null}
 
-      <div
-        data-testid="reader-article-pane"
-        className={cn(
-          'shrink-0 border-r bg-muted/5',
-          isResizeTargetActive('middle') ? 'border-primary/60' : 'border-border',
-        )}
-        style={{ width: `${middlePaneWidth}px` }}
-      >
-        <MemoizedArticleList key={selectedView} />
-      </div>
-
-      {isDesktop ? (
-        <ResizeHandle
-          testId="reader-resize-handle-middle"
-          active={isResizeTargetActive('middle')}
-          onPointerDown={startMiddleResize}
-          onPointerEnter={() => handleResizeHandleEnter('middle')}
-          onPointerLeave={() => handleResizeHandleLeave('middle')}
-        />
+      {!isDesktop ? (
+        <Sheet
+          open={feedSheetOpen}
+          onOpenChange={(open) =>
+            setFeedSheetState((currentState) => ({
+              ...currentState,
+              open,
+            }))
+          }
+        >
+          <SheetContent
+            side="left"
+            className="w-[min(88vw,360px)] max-w-none p-0"
+            data-testid="reader-feed-drawer"
+            closeLabel="close-feeds"
+            overlayProps={{ 'data-testid': 'reader-feed-drawer-overlay' }}
+          >
+            <SheetTitle className="sr-only">导航与 RSS 源</SheetTitle>
+            <SheetDescription className="sr-only">切换视图、分类和 RSS 源</SheetDescription>
+            <MemoizedFeedList reserveCloseButtonSpace />
+          </SheetContent>
+        </Sheet>
       ) : null}
-
-      <div className="relative flex-1 overflow-hidden bg-background">
-        <MemoizedArticleView onTitleVisibilityChange={setArticleTitleVisible} />
-
-        {floatingTitle}
-      </div>
-
-      <Button
-        onClick={() => setSettingsOpen(true)}
-        type="button"
-        variant="outline"
-        size="icon"
-        className="absolute right-4 top-6 z-40 -translate-y-1/2 bg-background/90 backdrop-blur-sm"
-        aria-label="open-settings"
-      >
-        <SettingsIcon />
-      </Button>
 
       {settingsOpen && <SettingsCenterModal onClose={() => setSettingsOpen(false)} />}
     </div>
