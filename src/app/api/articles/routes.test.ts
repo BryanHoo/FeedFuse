@@ -179,6 +179,7 @@ const feedId = '22222222-2222-2222-8222-222222222222';
 
 describe('/api/articles', () => {
   beforeEach(() => {
+    vi.unstubAllEnvs();
     getArticleByIdMock.mockReset();
     setArticleReadMock.mockReset();
     setArticleStarredMock.mockReset();
@@ -254,6 +255,67 @@ describe('/api/articles', () => {
     const json = await res.json();
     expect(json.ok).toBe(true);
     expect(json.data.id).toBe(articleId);
+  });
+
+  it('GET rewrites article html images through proxy', async () => {
+    vi.stubEnv('DATABASE_URL', 'postgres://example');
+    vi.stubEnv('IMAGE_PROXY_SECRET', 'test-image-proxy-secret');
+
+    getArticleByIdMock.mockResolvedValue({
+      id: articleId,
+      feedId,
+      dedupeKey: 'guid:1',
+      title: 'Hello',
+      titleOriginal: 'Hello',
+      titleZh: null,
+      link: 'https://example.com/article',
+      author: null,
+      publishedAt: null,
+      contentHtml:
+        '<article><p>A</p><img src="https://img.example.com/a.jpg" srcset="https://img.example.com/a.jpg 1x, https://img.example.com/a@2x.jpg 2x" /></article>',
+      contentFullHtml: '<article><img src="https://img.example.com/full.jpg" /></article>',
+      aiTranslationBilingualHtml:
+        '<article><img src="https://img.example.com/bilingual.jpg" /></article>',
+      aiTranslationZhHtml: '<article><img src="https://img.example.com/zh.jpg" /></article>',
+      summary: null,
+      sourceLanguage: 'en',
+      isRead: false,
+      readAt: null,
+      isStarred: false,
+      starredAt: null,
+      aiSummary: null,
+      aiSummaryModel: null,
+      aiSummaryError: null,
+      aiSummaryAttempts: 0,
+      aiSummaryUpdatedAt: null,
+      contentFullFetchedAt: null,
+      contentFullError: null,
+      contentFullSourceUrl: null,
+      aiTranslationModel: null,
+      aiTranslationAttempts: 0,
+      aiTranslationError: null,
+      aiTranslationUpdatedAt: null,
+      titleTranslationModel: null,
+      titleTranslationAttempts: 0,
+      titleTranslationError: null,
+      titleTranslatedAt: null,
+      aiSummarizedAt: null,
+      aiTranslatedAt: null,
+      previewImageUrl: null,
+    });
+
+    const mod = await import('./[id]/route');
+    const res = await mod.GET(new Request(`http://localhost/api/articles/${articleId}`), {
+      params: Promise.resolve({ id: articleId }),
+    });
+    const json = await res.json();
+
+    expect(json.ok).toBe(true);
+    expect(json.data.contentHtml).toContain('/api/media/image?');
+    expect(json.data.contentHtml).toContain('srcset="/api/media/image?');
+    expect(json.data.contentFullHtml).toContain('/api/media/image?');
+    expect(json.data.aiTranslationBilingualHtml).toContain('/api/media/image?');
+    expect(json.data.aiTranslationZhHtml).toContain('/api/media/image?');
   });
 
   it('GET /:id returns body translation eligibility', async () => {

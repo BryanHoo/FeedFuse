@@ -1,13 +1,20 @@
 import { z } from 'zod';
 import { evaluateArticleBodyTranslationEligibility } from '../../../../server/ai/articleTranslationEligibility';
 import { getPool } from '../../../../server/db/pool';
+import { getServerEnv } from '../../../../server/env';
 import { ok, fail } from '../../../../server/http/apiResponse';
 import { NotFoundError, ValidationError } from '../../../../server/http/errors';
 import {
   getArticleById,
   setArticleRead,
   setArticleStarred,
+  type ArticleRow,
 } from '../../../../server/repositories/articlesRepo';
+import {
+  buildImageProxyUrl,
+  getImageProxySecret,
+} from '../../../../server/media/imageProxyUrl';
+import { rewriteHtmlImages } from '../../../../server/media/rewriteHtmlImages';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -35,6 +42,42 @@ function zodIssuesToFields(error: z.ZodError): Record<string, string> {
   return fields;
 }
 
+function htmlContainsImage(html: string | null | undefined): html is string {
+  return typeof html === 'string' && /<img\b/i.test(html);
+}
+
+function rewriteArticleHtmlFields(article: ArticleRow): ArticleRow {
+  const hasImages = [
+    article.contentHtml,
+    article.contentFullHtml,
+    article.aiTranslationBilingualHtml,
+    article.aiTranslationZhHtml,
+  ].some(htmlContainsImage);
+
+  if (!hasImages) {
+    return article;
+  }
+
+  const secret = getImageProxySecret(getServerEnv().IMAGE_PROXY_SECRET);
+  const rewriteUrl = (sourceUrl: string) => buildImageProxyUrl({ sourceUrl, secret });
+
+  return {
+    ...article,
+    contentHtml: htmlContainsImage(article.contentHtml)
+      ? rewriteHtmlImages(article.contentHtml, rewriteUrl)
+      : article.contentHtml,
+    contentFullHtml: htmlContainsImage(article.contentFullHtml)
+      ? rewriteHtmlImages(article.contentFullHtml, rewriteUrl)
+      : article.contentFullHtml,
+    aiTranslationBilingualHtml: htmlContainsImage(article.aiTranslationBilingualHtml)
+      ? rewriteHtmlImages(article.aiTranslationBilingualHtml, rewriteUrl)
+      : article.aiTranslationBilingualHtml,
+    aiTranslationZhHtml: htmlContainsImage(article.aiTranslationZhHtml)
+      ? rewriteHtmlImages(article.aiTranslationZhHtml, rewriteUrl)
+      : article.aiTranslationZhHtml,
+  };
+}
+
 export async function GET(
   _request: Request,
   context: { params: Promise<{ id: string }> },
@@ -52,6 +95,7 @@ export async function GET(
     const article = await getArticleById(pool, paramsParsed.data.id);
     if (!article) return fail(new NotFoundError('Article not found'));
 
+    const proxiedArticle = rewriteArticleHtmlFields(article);
     const eligibility = evaluateArticleBodyTranslationEligibility({
       sourceLanguage: article.sourceLanguage,
       contentHtml: article.contentHtml,
@@ -60,7 +104,7 @@ export async function GET(
     });
 
     return ok({
-      ...article,
+      ...proxiedArticle,
       bodyTranslationEligible: eligibility.bodyTranslationEligible,
       bodyTranslationBlockedReason: eligibility.bodyTranslationBlockedReason,
     });

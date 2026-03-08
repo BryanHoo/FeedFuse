@@ -1,5 +1,7 @@
 import type { Pool } from 'pg';
 import { normalizePersistedSettings } from '../../features/settings/settingsSchema';
+import { getServerEnv } from '../env';
+import { buildImageProxyUrl, getImageProxySecret } from '../media/imageProxyUrl';
 import { evaluateArticleBodyTranslationEligibility } from '../ai/articleTranslationEligibility';
 import { listCategories } from '../repositories/categoriesRepo';
 import { listFeeds } from '../repositories/feedsRepo';
@@ -123,6 +125,13 @@ export interface ReaderSnapshot {
 }
 
 type ArticleKeywordFilter = ReturnType<typeof normalizePersistedSettings>['rss']['articleKeywordFilter'];
+
+function rewritePreviewImage(previewImage: string | null): string | null {
+  if (!previewImage) return null;
+
+  const secret = getImageProxySecret(getServerEnv().IMAGE_PROXY_SECRET);
+  return buildImageProxyUrl({ sourceUrl: previewImage, secret });
+}
 
 type ArticleQueryRow = ReaderSnapshotArticleItem & {
   sortPublishedAt: unknown;
@@ -288,6 +297,7 @@ export async function getReaderSnapshot(
         void sortPublishedAt;
         return {
           ...rest,
+          previewImage: rewritePreviewImage(rest.previewImage),
           bodyTranslationEligible: eligibility.bodyTranslationEligible,
           bodyTranslationBlockedReason: eligibility.bodyTranslationBlockedReason,
         };

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Pool } from 'pg';
 
 const listCategoriesMock = vi.fn();
@@ -13,12 +13,18 @@ vi.mock('../repositories/feedsRepo', () => ({
   listFeeds: (...args: unknown[]) => listFeedsMock(...args),
 }));
 
-
 vi.mock('../repositories/settingsRepo', () => ({
   getUiSettings: (...args: unknown[]) => getUiSettingsMock(...args),
 }));
 
 describe('readerSnapshotService (preview image)', () => {
+  beforeEach(() => {
+    vi.unstubAllEnvs();
+    listCategoriesMock.mockReset();
+    listFeedsMock.mockReset();
+    getUiSettingsMock.mockReset();
+  });
+
   it('selects preview_image_url as previewImage', async () => {
     listCategoriesMock.mockResolvedValue([]);
     listFeedsMock.mockResolvedValue([]);
@@ -36,5 +42,47 @@ describe('readerSnapshotService (preview image)', () => {
 
     expect(sql).toContain('preview_image_url');
   });
-});
 
+  it('rewrites previewImage to a signed proxy url', async () => {
+    vi.stubEnv('DATABASE_URL', 'postgres://example');
+    vi.stubEnv('IMAGE_PROXY_SECRET', 'test-image-proxy-secret');
+    listCategoriesMock.mockResolvedValue([]);
+    listFeedsMock.mockResolvedValue([]);
+    getUiSettingsMock.mockResolvedValue({});
+
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'a1',
+            feedId: 'f1',
+            title: 'Hello',
+            titleOriginal: 'Hello',
+            titleZh: null,
+            summary: 'Summary',
+            previewImage: 'https://img.example.com/card.jpg',
+            author: null,
+            publishedAt: '2026-03-08T00:00:00.000Z',
+            link: 'https://example.com/article',
+            sourceLanguage: 'en',
+            contentHtml: '<p>Hello</p>',
+            contentFullHtml: null,
+            isRead: false,
+            isStarred: false,
+            sortPublishedAt: '2026-03-08T00:00:00.000Z',
+          },
+        ],
+      });
+
+    const pool = { query } as unknown as Pool;
+    const mod = (await import('./readerSnapshotService')) as typeof import('./readerSnapshotService');
+    const snapshot = await mod.getReaderSnapshot(pool, { view: 'all', limit: 1 });
+
+    expect(snapshot.articles.items[0].previewImage).toContain('/api/media/image?');
+    expect(snapshot.articles.items[0].previewImage).toContain(
+      'url=https%3A%2F%2Fimg.example.com%2Fcard.jpg',
+    );
+  });
+});
