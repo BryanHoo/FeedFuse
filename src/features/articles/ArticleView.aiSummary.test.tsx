@@ -230,7 +230,7 @@ describe('ArticleView ai summary', () => {
 
     render(<ArticleView />);
 
-    const aiSummaryButton = await screen.findByRole('button', { name: 'AI摘要' });
+    const aiSummaryButton = await screen.findByRole('button', { name: '生成摘要' });
     await waitFor(() => {
       expect(aiSummaryButton).toBeDisabled();
     });
@@ -321,7 +321,7 @@ describe('ArticleView ai summary', () => {
 
     render(<ArticleView />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'AI摘要' }));
+    fireEvent.click(await screen.findByRole('button', { name: '生成摘要' }));
     await waitFor(() => {
       expect(enqueueArticleAiSummaryMock).toHaveBeenCalledWith('article-1', { force: true });
     });
@@ -367,7 +367,7 @@ describe('ArticleView ai summary', () => {
 
     render(<ArticleView />);
 
-    expect(await screen.findByRole('button', { name: 'AI摘要' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '生成摘要' })).toBeInTheDocument();
   });
 
   it('三个操作按钮都不显示 hover tip', async () => {
@@ -411,7 +411,7 @@ describe('ArticleView ai summary', () => {
     render(<ArticleView />);
 
     const translateButton = screen.getByRole('button', { name: '翻译' });
-    const aiSummaryButton = screen.getByRole('button', { name: 'AI摘要' });
+    const aiSummaryButton = screen.getByRole('button', { name: '生成摘要' });
 
     fireEvent.focus(translateButton);
     fireEvent.focus(aiSummaryButton);
@@ -457,11 +457,11 @@ describe('ArticleView ai summary', () => {
 
     render(<ArticleView />);
 
-    await screen.findByRole('button', { name: 'AI摘要' });
+    await screen.findByRole('button', { name: '生成摘要' });
 
     const starButton = screen.getByRole('button', { name: '收藏' });
     const translateButton = screen.getByRole('button', { name: '翻译' });
-    const aiSummaryButton = screen.getByRole('button', { name: 'AI摘要' });
+    const aiSummaryButton = screen.getByRole('button', { name: '生成摘要' });
 
     expect(starButton).toHaveClass('cursor-pointer');
     expect(translateButton).toHaveClass('cursor-pointer');
@@ -561,7 +561,7 @@ describe('ArticleView ai summary', () => {
 
     render(<ArticleView />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'AI摘要' }));
+    fireEvent.click(await screen.findByRole('button', { name: '生成摘要' }));
     expect(await screen.findByText('请求超时')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '重试' }));

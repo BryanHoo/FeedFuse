@@ -46,11 +46,15 @@ export async function validateRssUrl(url: string): Promise<RssValidationResult> 
   try {
     parsed = new URL(url);
   } catch {
-    return { ok: false, errorCode: 'invalid_url', message: '链接格式不正确' };
+    return {
+      ok: false,
+      errorCode: 'invalid_url',
+      message: '请输入完整链接，例如 https://example.com/feed.xml',
+    };
   }
 
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    return { ok: false, errorCode: 'invalid_url', message: '链接必须使用 http 或 https' };
+    return { ok: false, errorCode: 'invalid_url', message: '链接必须以 http:// 或 https:// 开头' };
   }
 
   const controller = new AbortController();
@@ -68,7 +72,7 @@ export async function validateRssUrl(url: string): Promise<RssValidationResult> 
 
     const json: unknown = await res.json().catch(() => null);
     if (typeof json !== 'object' || json === null || !('ok' in json)) {
-      return { ok: false, errorCode: 'network_error', message: '校验失败，请稍后重试' };
+      return { ok: false, errorCode: 'network_error', message: '暂时无法验证链接，请稍后重试' };
     }
 
     const envelope = json as RssValidationEnvelope;
@@ -97,9 +101,9 @@ export async function validateRssUrl(url: string): Promise<RssValidationResult> 
     };
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
-      return { ok: false, errorCode: 'timeout', message: '校验超时，请稍后重试' };
+      return { ok: false, errorCode: 'timeout', message: '验证超时，请稍后重试' };
     }
-    return { ok: false, errorCode: 'network_error', message: '校验失败，请稍后重试' };
+    return { ok: false, errorCode: 'network_error', message: '暂时无法验证链接，请稍后重试' };
   } finally {
     clearTimeout(timeout);
   }

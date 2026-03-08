@@ -9,6 +9,6 @@ describe('mapApiErrorToUserMessage', () => {
   });
 
   it('falls back to generic message for unknown error', () => {
-    expect(mapApiErrorToUserMessage(new Error('boom'))).toBe('操作失败，请稍后重试。');
+    expect(mapApiErrorToUserMessage(new Error('boom'))).toBe('暂时无法完成操作，请稍后重试。');
   });
 });

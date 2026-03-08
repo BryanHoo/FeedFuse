@@ -55,9 +55,9 @@ describe('FeedKeywordFilterDialog', () => {
       />,
     );
 
-    expect(await screen.findByLabelText('订阅源文章关键词隐藏')).toHaveValue('Sponsored');
+    expect(await screen.findByLabelText('文章关键词过滤规则')).toHaveValue('Sponsored');
 
-    fireEvent.change(screen.getByLabelText('订阅源文章关键词隐藏'), {
+    fireEvent.change(screen.getByLabelText('文章关键词过滤规则'), {
       target: { value: 'Sponsored\nAds' },
     });
     fireEvent.click(screen.getByRole('button', { name: '保存' }));

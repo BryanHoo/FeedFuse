@@ -8,7 +8,7 @@ describe('errors', () => {
   });
 
   it('provides Chinese defaults for common AppError subclasses', () => {
-    expect(new NotFoundError().message).toBe('目标不存在');
-    expect(new ConflictError().message).toBe('操作冲突，请稍后重试');
+    expect(new NotFoundError().message).toBe('未找到对应内容');
+    expect(new ConflictError().message).toBe('当前操作暂时无法完成，请稍后重试');
   });
 });

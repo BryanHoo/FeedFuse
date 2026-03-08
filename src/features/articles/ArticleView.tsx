@@ -402,7 +402,7 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
       <div className="flex h-full flex-col bg-background text-foreground">
         <div className="h-12 shrink-0" />
         <div className="flex flex-1 items-center justify-center">
-          <p className="text-muted-foreground">选择一篇文章开始阅读</p>
+          <p className="text-muted-foreground">从列表中选择一篇文章开始阅读</p>
         </div>
       </div>
     );
@@ -552,7 +552,7 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
                 disabled={aiSummaryButtonDisabled}
               >
                 <Sparkles />
-                <span>AI摘要</span>
+                <span>生成摘要</span>
               </Button>
             </div>
           </div>
@@ -568,7 +568,7 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
                   className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-muted-foreground/20 border-t-muted-foreground/70"
                   aria-hidden="true"
                 />
-                <span>正在抓取全文，稍后会自动更新</span>
+                <span>正在抓取全文，完成后会自动更新</span>
               </div>
             </div>
           ) : null}
@@ -586,7 +586,7 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
                     <span>AI 摘要</span>
                   </span>
                   <span className="text-[11px] text-muted-foreground">
-                    可能包含误差，请以原文为准
+                    摘要可能有误，请以原文为准
                   </span>
                 </div>
 
@@ -647,20 +647,20 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
                   className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-muted-foreground/20 border-t-muted-foreground/70"
                   aria-hidden="true"
                 />
-                <span>正在生成摘要…</span>
+                <span>正在生成摘要，请稍候…</span>
               </div>
             </div>
           ) : null}
 
           {!article.aiSummary && aiSummaryMissingApiKey ? (
             <div className="mb-4 rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-              请先在设置中配置 AI API Key
+              请先在设置中配置 AI API 密钥，才能生成摘要
             </div>
           ) : null}
 
           {!article.aiSummary && aiSummaryTimedOut ? (
             <div className="mb-4 rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-              仍在处理中，可稍后重试/刷新
+              摘要还在处理中。请稍后重试，或刷新查看结果。
             </div>
           ) : null}
 
@@ -671,7 +671,7 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
           tasks?.ai_summary.status === 'failed' ? (
             <div className="mb-4 rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span>{tasks.ai_summary.errorMessage || '摘要生成失败'}</span>
+                <span>{tasks.ai_summary.errorMessage || '暂时无法生成摘要'}</span>
                 <Button type="button" variant="secondary" size="sm" onClick={onAiSummaryButtonClick}>
                   重试
                 </Button>
@@ -690,26 +690,26 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
                   className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-muted-foreground/20 border-t-muted-foreground/70"
                   aria-hidden="true"
                 />
-                <span>正在翻译…</span>
+                <span>正在翻译文章，请稍候…</span>
               </div>
             </div>
           ) : null}
 
           {!hasAiTranslationContent && aiTranslationMissingApiKey ? (
             <div className="mb-4 rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-              请先在设置中配置 AI API Key
+              请先在设置中配置 AI API 密钥，才能翻译文章
             </div>
           ) : null}
 
           {!hasAiTranslationContent && aiTranslationTimedOut ? (
             <div className="mb-4 rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-              仍在处理中，可稍后重试/刷新
+              翻译还在处理中。请稍后重试，或刷新查看结果。
             </div>
           ) : null}
 
           {!hasAiTranslationContent && aiTranslationWaitingFulltext ? (
             <div className="mb-4 rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-              请先等待全文抓取完成，再尝试翻译
+              请先等待全文抓取完成，再开始翻译
             </div>
           ) : null}
 
@@ -721,7 +721,7 @@ export default function ArticleView({ onTitleVisibilityChange }: ArticleViewProp
           tasks?.ai_translate.status === 'failed' ? (
             <div className="mb-4 rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span>{tasks.ai_translate.errorMessage || '翻译失败'}</span>
+                <span>{tasks.ai_translate.errorMessage || '暂时无法完成翻译'}</span>
                 <Button
                   type="button"
                   variant="secondary"

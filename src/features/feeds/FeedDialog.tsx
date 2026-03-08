@@ -92,8 +92,8 @@ const MODE_META: Record<FeedDialogProps['mode'], ModeMeta> = {
   add: {
     closeLabel: 'close-add-feed',
     dialogTitle: '添加 RSS 源',
-    dialogDescription: '填写链接与名称，并选择分类。',
-    sectionLabel: '新订阅源',
+    dialogDescription: '输入 RSS 地址后，我们会自动验证链接，并尽量补全订阅名称。',
+    sectionLabel: '订阅信息',
     submitLabel: '添加',
     submittingLabel: '添加中…',
     successMessage: '已添加订阅源',
@@ -101,11 +101,11 @@ const MODE_META: Record<FeedDialogProps['mode'], ModeMeta> = {
   edit: {
     closeLabel: 'close-edit-feed',
     dialogTitle: '编辑 RSS 源',
-    dialogDescription: '填写链接与名称，并选择分类。',
-    sectionLabel: '订阅源配置',
+    dialogDescription: '修改订阅地址、名称或分类。保存后不会影响已有文章。',
+    sectionLabel: '订阅信息',
     submitLabel: '保存',
     submittingLabel: '保存中…',
-    successMessage: '保存成功',
+    successMessage: '订阅源已更新',
   },
 };
 
@@ -266,7 +266,7 @@ export default function FeedDialog({
       setValidationState('verified');
       setLastVerifiedUrl(urlToValidate);
       setValidatedSiteUrl(typeof result.siteUrl === 'string' ? result.siteUrl : null);
-      setValidationMessage('链接验证成功。');
+      setValidationMessage('链接可用，已识别为 RSS 源。');
 
       const suggestedTitle = typeof result.title === 'string' ? result.title.trim() : '';
       if (suggestedTitle) {
@@ -278,7 +278,7 @@ export default function FeedDialog({
     setValidationState('failed');
     setLastVerifiedUrl(null);
     setValidatedSiteUrl(null);
-    setValidationMessage(result.message ?? '链接验证失败。');
+    setValidationMessage(result.message ?? '暂时无法验证该链接，请检查后重试。');
   };
 
   return (

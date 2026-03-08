@@ -56,14 +56,14 @@ export default function RssSettingsPanel({ draft, onChange }: RssSettingsPanelPr
 
           <div className="px-4 py-3.5">
             <Label htmlFor="rss-global-article-keyword-filter" className="mb-2 block">
-              全局文章关键词隐藏
+              全局关键词过滤
             </Label>
             <p className="mb-2 text-xs text-muted-foreground">
-              每行一个关键词。标题或摘要命中后，文章不会显示在列表中。
+              每行输入一个关键词。只要标题或摘要包含该关键词，这篇文章就不会显示在列表中。
             </p>
             <textarea
               id="rss-global-article-keyword-filter"
-              aria-label="全局文章关键词隐藏"
+              aria-label="全局关键词过滤"
               value={globalKeywordsText}
               onChange={(event) => {
                 const value = event.target.value;

@@ -240,7 +240,7 @@ describe('SettingsCenterModal', () => {
     fireEvent.click(screen.getByLabelText('open-settings'));
     fireEvent.click(await screen.findByTestId('settings-section-tab-ai'));
 
-    const apiBaseUrlInput = await screen.findByLabelText('API Base URL');
+    const apiBaseUrlInput = await screen.findByLabelText('API 地址');
     fireEvent.change(apiBaseUrlInput, { target: { value: 'not-a-valid-url' } });
 
     fireEvent.click(screen.getByLabelText('close-settings'));
@@ -298,9 +298,9 @@ describe('SettingsCenterModal', () => {
     fireEvent.click(screen.getByTestId('settings-section-tab-ai'));
 
     await waitFor(() => {
-      expect(screen.getByLabelText('API Key')).toBeInTheDocument();
+      expect(screen.getByLabelText('API 密钥')).toBeInTheDocument();
     });
-    fireEvent.change(screen.getByLabelText('API Key'), { target: { value: 'sk-test' } });
+    fireEvent.change(screen.getByLabelText('API 密钥'), { target: { value: 'sk-test' } });
 
     await waitFor(() => {
       expect(screen.getByText('已保存')).toBeInTheDocument();
@@ -345,7 +345,7 @@ describe('SettingsCenterModal', () => {
     await waitFor(() => expect(screen.getByTestId('settings-center-modal')).toBeInTheDocument());
 
     fireEvent.click(screen.getByTestId('settings-section-tab-rss'));
-    const textarea = await screen.findByLabelText('全局文章关键词隐藏');
+    const textarea = await screen.findByLabelText('全局关键词过滤');
     fireEvent.change(textarea, { target: { value: 'Sponsored\n招聘' } });
 
     await waitFor(() => {

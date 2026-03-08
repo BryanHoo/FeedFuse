@@ -82,17 +82,17 @@ export default function FeedKeywordFilterDialog({
           <DialogTitle>配置关键词过滤</DialogTitle>
           <DialogDescription>
             {feed
-              ? `为「${feed.title}」配置文章关键词过滤。`
-              : "为订阅源配置文章关键词过滤。"}
+              ? `为「${feed.title}」设置文章过滤规则。`
+              : '为订阅源设置文章过滤规则。'}
             <br />
-            每行一个关键词。标题或摘要命中后，文章不会显示在列表中。
+            每行输入一个关键词。只要标题或摘要包含该关键词，这篇文章就不会显示在列表中。
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-2">
           <textarea
             id="feed-keyword-filter"
-            aria-label="订阅源文章关键词隐藏"
+            aria-label="文章关键词过滤规则"
             value={value}
             onChange={(event) => setValue(event.target.value)}
             placeholder={"广告\n招聘\nSponsored"}

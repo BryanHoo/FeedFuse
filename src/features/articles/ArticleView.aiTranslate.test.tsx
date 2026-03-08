@@ -396,7 +396,7 @@ describe('ArticleView ai translate', () => {
     const { default: ArticleView } = await import('./ArticleView');
     render(<ArticleView />);
 
-    await screen.findByText('正在抓取全文，稍后会自动更新');
+    await screen.findByText('正在抓取全文，完成后会自动更新');
 
     const translateButton = screen.getByRole('button', { name: '翻译' });
     expect(translateButton).not.toBeDisabled();
@@ -409,7 +409,7 @@ describe('ArticleView ai translate', () => {
       });
     });
 
-    expect(screen.getByText('请先等待全文抓取完成，再尝试翻译')).toBeInTheDocument();
+    expect(screen.getByText('请先等待全文抓取完成，再开始翻译')).toBeInTheDocument();
   });
 
   it('triggers retry API from delegated retry button inside rendered html', async () => {
@@ -454,6 +454,6 @@ describe('ArticleView ai translate', () => {
       });
     });
 
-    expect(await screen.findAllByText('翻译中…')).not.toHaveLength(0);
+    expect(await screen.findAllByText('正在翻译这段…')).not.toHaveLength(0);
   });
 });

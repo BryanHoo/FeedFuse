@@ -6,7 +6,7 @@ describe('feedFetchErrorMapping', () => {
 
     expect(mod.mapFeedFetchError(new Error('timeout'))).toEqual({
       errorCode: 'fetch_timeout',
-      errorMessage: '更新失败：请求超时',
+      errorMessage: '更新失败：请求超时，请稍后重试',
     });
   });
 
@@ -24,7 +24,7 @@ describe('feedFetchErrorMapping', () => {
 
     expect(mod.mapFeedFetchError('Unsafe URL')).toEqual({
       errorCode: 'ssrf_blocked',
-      errorMessage: '更新失败：地址不安全',
+      errorMessage: '更新失败：订阅地址不安全',
     });
   });
 });

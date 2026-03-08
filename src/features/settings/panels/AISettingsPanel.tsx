@@ -48,7 +48,7 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
         <div className="flex flex-col divide-y divide-border">
           <div className="px-4 py-3.5">
             <Label htmlFor="ai-model" className="mb-2 block">
-              Model
+              AI 模型
             </Label>
             <Input
               id="ai-model"
@@ -67,7 +67,7 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
 
           <div className="px-4 py-3.5">
             <Label htmlFor="ai-api-base-url" className="mb-2 block">
-              API Base URL
+              API 地址
             </Label>
             <Input
               id="ai-api-base-url"
@@ -91,7 +91,7 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
 
           <div className="px-4 py-3.5">
             <div className="mb-2 flex items-center justify-between gap-3">
-              <Label htmlFor="ai-api-key">API Key</Label>
+              <Label htmlFor="ai-api-key">API 密钥</Label>
               <Badge variant={apiKeyStatus.variant}>{apiKeyStatus.label}</Badge>
             </div>
             <Input
@@ -117,7 +117,9 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
             />
             <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs text-muted-foreground">
-                {hasApiKey ? '留空表示保持不变。如需清除已保存密钥，可使用右侧按钮。' : '留空表示保持不变。'}
+                {hasApiKey
+                  ? '不修改可留空；如需删除已保存的密钥，请点右侧按钮。'
+                  : '如果暂时不设置，可以先留空。'}
               </p>
               {hasApiKey ? (
                 <Button
@@ -146,7 +148,7 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
               <div>
                 <p className="text-sm font-medium text-foreground">翻译配置</p>
                 <p className="text-xs text-muted-foreground">
-                  默认开启“使用 AI 同配置”，会复用上方 `baseurl / model / key`。
+                  开启后，翻译会复用上方的 AI 模型、API 地址和 API 密钥。
                 </p>
               </div>
               <div className="flex gap-1">
@@ -167,7 +169,7 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
                   size="sm"
                   className="h-8 rounded-lg px-3"
                 >
-                  开启
+                  复用主配置
                 </Button>
                 <Button
                   type="button"
@@ -181,12 +183,12 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
                   size="sm"
                   className="h-8 rounded-lg px-3"
                 >
-                  关闭
+                  单独配置
                 </Button>
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              {translation.useSharedAi ? '当前：翻译使用主 AI 配置。' : '当前：翻译使用下方独立配置。'}
+              {translation.useSharedAi ? '当前：翻译复用上方主 AI 配置。' : '当前：翻译使用下方单独配置。'}
             </p>
           </div>
 
@@ -194,7 +196,7 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
             <>
               <div className="px-4 py-3.5">
                 <Label htmlFor="ai-translation-model" className="mb-2 block">
-                  Translation Model
+                  翻译模型
                 </Label>
                 <Input
                   id="ai-translation-model"
@@ -213,7 +215,7 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
 
               <div className="px-4 py-3.5">
                 <Label htmlFor="ai-translation-api-base-url" className="mb-2 block">
-                  Translation API Base URL
+                  翻译 API 地址
                 </Label>
                 <Input
                   id="ai-translation-api-base-url"
@@ -237,7 +239,7 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
 
               <div className="px-4 py-3.5">
                 <div className="mb-2 flex items-center justify-between gap-3">
-                  <Label htmlFor="ai-translation-api-key">Translation API Key</Label>
+                  <Label htmlFor="ai-translation-api-key">翻译 API 密钥</Label>
                   <Badge variant={translationApiKeyStatus.variant}>{translationApiKeyStatus.label}</Badge>
                 </div>
                 <Input
@@ -264,8 +266,8 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
                 <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-xs text-muted-foreground">
                     {hasTranslationApiKey
-                      ? '留空表示保持不变。如需清除已保存翻译密钥，可使用右侧按钮。'
-                      : '留空表示保持不变。'}
+                      ? '不修改可留空；如需删除已保存的翻译密钥，请点右侧按钮。'
+                      : '如果暂时不设置，可以先留空。'}
                   </p>
                   {hasTranslationApiKey ? (
                     <Button

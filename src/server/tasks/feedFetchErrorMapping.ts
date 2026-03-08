@@ -4,18 +4,18 @@ function toSafeMessage(value: string): string {
 
 function getErrorText(err: unknown): string {
   if (typeof err === 'string') return err;
-  if (err instanceof Error) return err.message || err.name || 'Unknown error';
-  return 'Unknown error';
+  if (err instanceof Error) return err.message || err.name || '';
+  return '';
 }
 
 export function mapFeedFetchError(err: unknown): { errorCode: string; errorMessage: string } {
   const safe = toSafeMessage(getErrorText(err));
 
   if (safe === 'Unsafe URL') {
-    return { errorCode: 'ssrf_blocked', errorMessage: '更新失败：地址不安全' };
+    return { errorCode: 'ssrf_blocked', errorMessage: '更新失败：订阅地址不安全' };
   }
   if (/timeout/i.test(safe)) {
-    return { errorCode: 'fetch_timeout', errorMessage: '更新失败：请求超时' };
+    return { errorCode: 'fetch_timeout', errorMessage: '更新失败：请求超时，请稍后重试' };
   }
   if (/^HTTP\s+403$/.test(safe)) {
     return {
@@ -26,12 +26,12 @@ export function mapFeedFetchError(err: unknown): { errorCode: string; errorMessa
   if (/^HTTP\s+\d+$/.test(safe)) {
     return {
       errorCode: 'fetch_http_error',
-      errorMessage: `更新失败：请求异常（${safe}）`,
+      errorMessage: `更新失败：服务器返回 ${safe}`,
     };
   }
   if (/parse/i.test(safe) || /xml/i.test(safe) || /rss/i.test(safe)) {
-    return { errorCode: 'parse_failed', errorMessage: '更新失败：RSS 解析失败' };
+    return { errorCode: 'parse_failed', errorMessage: '更新失败：无法解析 RSS 内容' };
   }
 
-  return { errorCode: 'unknown_error', errorMessage: '更新失败：发生未知错误' };
+  return { errorCode: 'unknown_error', errorMessage: '更新失败：暂时无法获取订阅内容' };
 }

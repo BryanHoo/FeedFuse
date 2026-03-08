@@ -214,12 +214,14 @@ export default function CreatableCategoryField({
               );
             })
           ) : (
-            <div className="px-2 py-1.5 text-sm text-muted-foreground">没有匹配分类，继续输入可创建新分类</div>
+            <div className="px-2 py-1.5 text-sm text-muted-foreground">
+              没有找到匹配的分类。继续输入并保存后会创建新分类。
+            </div>
           )}
         </div>
         {showCreateHint ? (
           <div className="border-t border-border px-2 pb-1 pt-2 text-xs text-muted-foreground">
-            未命中已有分类，保存后将创建“{normalizedInput}”。
+            保存后会创建新分类“{normalizedInput}”。
           </div>
         ) : null}
       </PopoverContent>

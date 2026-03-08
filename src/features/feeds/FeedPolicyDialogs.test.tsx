@@ -39,8 +39,8 @@ describe('FeedPolicyDialogs', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('switch', { name: '获取文章后自动获取摘要' }));
-    fireEvent.click(screen.getByRole('switch', { name: '打开文章自动获取摘要' }));
+    fireEvent.click(screen.getByRole('switch', { name: '收到新文章时自动生成摘要' }));
+    fireEvent.click(screen.getByRole('switch', { name: '打开文章时自动生成摘要' }));
     fireEvent.click(screen.getByRole('button', { name: '保存配置' }));
 
     await waitFor(() => {
@@ -63,9 +63,9 @@ describe('FeedPolicyDialogs', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('switch', { name: '列表标题自动翻译' }));
-    fireEvent.click(screen.getByRole('switch', { name: '获取文章后自动翻译正文' }));
-    fireEvent.click(screen.getByRole('switch', { name: '打开文章自动翻译正文' }));
+    fireEvent.click(screen.getByRole('switch', { name: '收到新文章时自动翻译标题' }));
+    fireEvent.click(screen.getByRole('switch', { name: '收到新文章时自动翻译正文' }));
+    fireEvent.click(screen.getByRole('switch', { name: '打开文章时自动翻译正文' }));
     fireEvent.click(screen.getByRole('button', { name: '保存配置' }));
 
     await waitFor(() => {
@@ -90,7 +90,7 @@ describe('FeedPolicyDialogs', () => {
       />,
     );
 
-    expect(screen.getByRole('switch', { name: '打开文章自动翻译正文' })).toHaveAttribute(
+    expect(screen.getByRole('switch', { name: '打开文章时自动翻译正文' })).toHaveAttribute(
       'data-state',
       'checked',
     );

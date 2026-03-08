@@ -460,7 +460,7 @@ describe('FeedList manage', () => {
       expect(useAppStore.getState().feeds[0]?.title).toBe('My Feed Updated');
     });
 
-    expect(screen.getByText('保存成功')).toBeInTheDocument();
+    expect(screen.getByText('订阅源已更新')).toBeInTheDocument();
   });
 
   it('uses same form fields as add flow and pre-fills existing values in edit flow', async () => {
@@ -779,7 +779,7 @@ describe('FeedList manage', () => {
 
     expect(screen.getByRole('dialog', { name: 'AI 摘要配置' })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('switch', { name: '获取文章后自动获取摘要' }));
+    fireEvent.click(screen.getByRole('switch', { name: '收到新文章时自动生成摘要' }));
     fireEvent.click(screen.getByRole('button', { name: '保存配置' }));
 
     await waitFor(() => {
@@ -797,7 +797,7 @@ describe('FeedList manage', () => {
     fireEvent.contextMenu(screen.getByRole('button', { name: /My Feed.*2/ }));
     fireEvent.click(await screen.findByRole('menuitem', { name: '配置关键词过滤' }));
 
-    const textarea = await screen.findByLabelText('订阅源文章关键词隐藏');
+    const textarea = await screen.findByLabelText('文章关键词过滤规则');
     fireEvent.change(textarea, { target: { value: 'Sponsored' } });
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
 
@@ -816,9 +816,9 @@ describe('FeedList manage', () => {
 
     expect(screen.getByRole('dialog', { name: '翻译配置' })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('switch', { name: '列表标题自动翻译' }));
-    fireEvent.click(screen.getByRole('switch', { name: '获取文章后自动翻译正文' }));
-    fireEvent.click(screen.getByRole('switch', { name: '打开文章自动翻译正文' }));
+    fireEvent.click(screen.getByRole('switch', { name: '收到新文章时自动翻译标题' }));
+    fireEvent.click(screen.getByRole('switch', { name: '收到新文章时自动翻译正文' }));
+    fireEvent.click(screen.getByRole('switch', { name: '打开文章时自动翻译正文' }));
     fireEvent.click(screen.getByRole('button', { name: '保存配置' }));
 
     await waitFor(() => {

@@ -52,20 +52,20 @@ async function requestApi<T>(path: string, init?: RequestInit, options?: Request
 
   const json: unknown = await res.json().catch(() => null);
   if (!isRecord(json) || typeof json.ok !== 'boolean') {
-    throw new Error('Invalid API response');
+    throw new Error('服务返回了无效数据，请稍后重试');
   }
 
   const envelope = json as ApiEnvelope<T>;
   if (envelope.ok) return envelope.data;
 
   const payload = envelope.error;
-  const message = options?.notifyMessage ?? payload?.message ?? '请求失败';
+  const message = options?.notifyMessage ?? payload?.message ?? '暂时无法完成请求，请稍后重试';
   if (options?.notifyOnError !== false) {
     notifyApiError(message);
   }
 
   throw new ApiError(
-    payload?.message ?? 'Request failed',
+    payload?.message ?? '暂时无法完成请求，请稍后重试',
     payload?.code ?? 'unknown_error',
     payload?.fields,
   );

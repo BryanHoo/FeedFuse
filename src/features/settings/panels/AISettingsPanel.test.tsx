@@ -42,13 +42,13 @@ describe('AISettingsPanel', () => {
     render(<Harness />);
 
     expect(screen.getByText('翻译配置')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '开启' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.queryByLabelText('Translation API Key')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '复用主配置' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByLabelText('翻译 API 密钥')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '关闭' }));
+    fireEvent.click(screen.getByRole('button', { name: '单独配置' }));
 
-    expect(screen.getByLabelText('Translation Model')).toBeInTheDocument();
-    expect(screen.getByLabelText('Translation API Base URL')).toBeInTheDocument();
-    expect(screen.getByLabelText('Translation API Key')).toBeInTheDocument();
+    expect(screen.getByLabelText('翻译模型')).toBeInTheDocument();
+    expect(screen.getByLabelText('翻译 API 地址')).toBeInTheDocument();
+    expect(screen.getByLabelText('翻译 API 密钥')).toBeInTheDocument();
   });
 });

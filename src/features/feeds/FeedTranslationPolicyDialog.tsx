@@ -71,18 +71,18 @@ export default function FeedTranslationPolicyDialog({
       <DialogContent closeLabel="close-translation-policy" className="max-w-[34rem]">
         <DialogHeader>
           <DialogTitle>翻译配置</DialogTitle>
-          <DialogDescription>仅保存自动触发策略，不会立即执行。</DialogDescription>
+          <DialogDescription>仅保存自动触发规则，现在不会立即开始翻译。</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2.5">
             <div className="space-y-1">
-              <Label htmlFor="translation-title">列表标题自动翻译</Label>
+              <Label htmlFor="translation-title">收到新文章时自动翻译标题</Label>
               <p className="text-xs text-muted-foreground">新文章入库后自动翻译标题。</p>
             </div>
             <Switch
               id="translation-title"
-              aria-label="列表标题自动翻译"
+              aria-label="收到新文章时自动翻译标题"
               checked={titleTranslateEnabled}
               onCheckedChange={setTitleTranslateEnabled}
             />
@@ -90,12 +90,12 @@ export default function FeedTranslationPolicyDialog({
 
           <div className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2.5">
             <div className="space-y-1">
-              <Label htmlFor="translation-body-fetch">获取文章后自动翻译正文</Label>
-              <p className="text-xs text-muted-foreground">新文章入库后自动触发正文翻译。</p>
+              <Label htmlFor="translation-body-fetch">收到新文章时自动翻译正文</Label>
+              <p className="text-xs text-muted-foreground">新文章入库后会自动加入正文翻译队列。</p>
             </div>
             <Switch
               id="translation-body-fetch"
-              aria-label="获取文章后自动翻译正文"
+              aria-label="收到新文章时自动翻译正文"
               checked={bodyTranslateOnFetchEnabled}
               onCheckedChange={setBodyTranslateOnFetchEnabled}
             />
@@ -103,12 +103,12 @@ export default function FeedTranslationPolicyDialog({
 
           <div className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2.5">
             <div className="space-y-1">
-              <Label htmlFor="translation-body-open">打开文章自动翻译正文</Label>
-              <p className="text-xs text-muted-foreground">打开文章时自动触发正文翻译。</p>
+              <Label htmlFor="translation-body-open">打开文章时自动翻译正文</Label>
+              <p className="text-xs text-muted-foreground">打开文章后会自动加入正文翻译队列。</p>
             </div>
             <Switch
               id="translation-body-open"
-              aria-label="打开文章自动翻译正文"
+              aria-label="打开文章时自动翻译正文"
               checked={bodyTranslateOnOpenEnabled}
               onCheckedChange={setBodyTranslateOnOpenEnabled}
             />

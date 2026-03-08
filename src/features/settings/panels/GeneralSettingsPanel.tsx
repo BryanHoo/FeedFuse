@@ -101,8 +101,8 @@ export default function GeneralSettingsPanel({ draft, onChange }: GeneralSetting
 
           <div className="flex items-center justify-between gap-4 px-4 py-3.5">
             <div>
-              <p className="text-sm font-medium text-foreground">字体系列</p>
-              <p className="text-xs text-muted-foreground">选择文章字体风格</p>
+              <p className="text-sm font-medium text-foreground">字体风格</p>
+              <p className="text-xs text-muted-foreground">选择文章字体样式</p>
             </div>
             <div className="flex gap-1">
               {fontFamilyOptions.map(({ value, label }) => (
@@ -154,7 +154,7 @@ export default function GeneralSettingsPanel({ draft, onChange }: GeneralSetting
           <div className="flex items-center justify-between gap-4 px-4 py-3.5">
             <div>
               <p className="text-sm font-medium text-foreground">自动标记已读</p>
-              <p className="text-xs text-muted-foreground">打开文章后自动标记为已读</p>
+              <p className="text-xs text-muted-foreground">打开文章后，按设定时间自动标记为已读</p>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
               <div className="flex gap-1">
@@ -168,9 +168,9 @@ export default function GeneralSettingsPanel({ draft, onChange }: GeneralSetting
                   aria-pressed={!general.autoMarkReadEnabled}
                   variant={!general.autoMarkReadEnabled ? 'default' : 'outline'}
                   size="sm"
-                  className="h-8 w-14 rounded-lg px-0"
+                  className="h-8 w-[88px] rounded-lg px-0"
                 >
-                  关闭
+                  手动标记
                 </Button>
                 <Button
                   type="button"
@@ -182,9 +182,9 @@ export default function GeneralSettingsPanel({ draft, onChange }: GeneralSetting
                   aria-pressed={general.autoMarkReadEnabled}
                   variant={general.autoMarkReadEnabled ? 'default' : 'outline'}
                   size="sm"
-                  className="h-8 w-14 rounded-lg px-0"
+                  className="h-8 w-[88px] rounded-lg px-0"
                 >
-                  开启
+                  自动标记
                 </Button>
               </div>
 
@@ -200,7 +200,7 @@ export default function GeneralSettingsPanel({ draft, onChange }: GeneralSetting
                 disabled={!general.autoMarkReadEnabled}
               >
                 <SelectTrigger className="h-8 w-[110px] rounded-lg">
-                  <SelectValue placeholder="延迟" />
+                  <SelectValue placeholder="标记时间" />
                 </SelectTrigger>
                 <SelectContent>
                   {autoMarkReadDelayOptions.map(({ value, label }) => (
@@ -216,7 +216,7 @@ export default function GeneralSettingsPanel({ draft, onChange }: GeneralSetting
           <div className="flex items-center justify-between gap-4 px-4 py-3.5">
             <div>
               <p className="text-sm font-medium text-foreground">默认仅未读</p>
-              <p className="text-xs text-muted-foreground">进入全部文章或任意 RSS 源时默认只显示未读文章</p>
+              <p className="text-xs text-muted-foreground">进入全部文章或任意 RSS 源时，默认只显示未读文章</p>
             </div>
             <div className="flex gap-1">
               <Button
@@ -229,9 +229,9 @@ export default function GeneralSettingsPanel({ draft, onChange }: GeneralSetting
                 aria-pressed={!general.defaultUnreadOnlyInAll}
                 variant={!general.defaultUnreadOnlyInAll ? 'default' : 'outline'}
                 size="sm"
-                className="h-8 w-14 rounded-lg px-0"
+                className="h-8 w-[88px] rounded-lg px-0"
               >
-                关闭
+                全部文章
               </Button>
               <Button
                 type="button"
@@ -243,9 +243,9 @@ export default function GeneralSettingsPanel({ draft, onChange }: GeneralSetting
                 aria-pressed={general.defaultUnreadOnlyInAll}
                 variant={general.defaultUnreadOnlyInAll ? 'default' : 'outline'}
                 size="sm"
-                className="h-8 w-14 rounded-lg px-0"
+                className="h-8 w-[88px] rounded-lg px-0"
               >
-                开启
+                仅看未读
               </Button>
             </div>
           </div>

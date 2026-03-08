@@ -6,8 +6,8 @@ function toSafeMessage(value: string): string {
 
 function getErrorText(err: unknown): string {
   if (typeof err === 'string') return err;
-  if (err instanceof Error) return err.message || err.name || 'Unknown error';
-  return 'Unknown error';
+  if (err instanceof Error) return err.message || err.name || '';
+  return '';
 }
 
 export function mapTaskError(input: {
@@ -19,20 +19,22 @@ export function mapTaskError(input: {
 
   // Shared / cross-task
   if (safe === 'Fulltext pending') {
-    return { errorCode: 'fulltext_pending', errorMessage: '全文未就绪，请稍后重试' };
+    return { errorCode: 'fulltext_pending', errorMessage: '全文还没准备好，请稍后再试' };
   }
 
   if (input.type === 'fulltext') {
-    if (safe === 'timeout') return { errorCode: 'fetch_timeout', errorMessage: '抓取超时' };
-    if (/^HTTP\s+\d+/.test(safe)) return { errorCode: 'fetch_http_error', errorMessage: safe };
+    if (safe === 'timeout') return { errorCode: 'fetch_timeout', errorMessage: '抓取超时，请稍后重试' };
+    if (/^HTTP\s+\d+/.test(safe)) {
+      return { errorCode: 'fetch_http_error', errorMessage: `请求失败（${safe}）` };
+    }
     if (safe === 'Non-HTML response') {
-      return { errorCode: 'fetch_non_html', errorMessage: '响应不是 HTML' };
+      return { errorCode: 'fetch_non_html', errorMessage: '返回内容不是可阅读的网页' };
     }
-    if (safe === 'Unsafe URL') return { errorCode: 'ssrf_blocked', errorMessage: 'URL 不安全' };
+    if (safe === 'Unsafe URL') return { errorCode: 'ssrf_blocked', errorMessage: '链接地址不安全' };
     if (safe === 'Readability parse failed') {
-      return { errorCode: 'parse_failed', errorMessage: '正文解析失败' };
+      return { errorCode: 'parse_failed', errorMessage: '暂时无法解析正文' };
     }
-    return { errorCode: 'unknown_error', errorMessage: safe || 'Unknown error' };
+    return { errorCode: 'unknown_error', errorMessage: '暂时无法完成处理，请稍后重试' };
   }
 
   // AI summarize / translate
@@ -41,19 +43,19 @@ export function mapTaskError(input: {
       typeof (input.err as { name?: unknown }).name === 'string'
         ? (input.err as { name: string }).name
         : '';
-    if (name === 'AbortError') return { errorCode: 'ai_timeout', errorMessage: '请求超时' };
+    if (name === 'AbortError') return { errorCode: 'ai_timeout', errorMessage: '处理超时，请稍后重试' };
   }
 
   if (/429|rate limit/i.test(safe)) {
-    return { errorCode: 'ai_rate_limited', errorMessage: '请求过于频繁，请稍后重试' };
+    return { errorCode: 'ai_rate_limited', errorMessage: '请求太频繁了，请稍后重试' };
   }
   if (/401|unauthorized|api key/i.test(safe)) {
-    return { errorCode: 'ai_invalid_config', errorMessage: 'AI 配置无效，请检查 API Key' };
+    return { errorCode: 'ai_invalid_config', errorMessage: 'AI 配置无效，请检查 API 密钥' };
   }
   if (/Invalid .*response/i.test(safe)) {
-    return { errorCode: 'ai_bad_response', errorMessage: 'AI 响应异常，请稍后重试' };
+    return { errorCode: 'ai_bad_response', errorMessage: 'AI 返回结果异常，请稍后重试' };
   }
 
-  return { errorCode: 'unknown_error', errorMessage: safe || 'Unknown error' };
+  return { errorCode: 'unknown_error', errorMessage: '暂时无法完成处理，请稍后重试' };
 }
 

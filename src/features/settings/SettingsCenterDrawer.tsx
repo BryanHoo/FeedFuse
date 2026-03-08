@@ -34,9 +34,9 @@ interface SettingsSectionItem {
 }
 
 const sectionItems: SettingsSectionItem[] = [
-  { key: 'general', label: '通用', hint: '主题与行为', icon: Palette },
-  { key: 'rss', label: 'RSS', hint: '抓取间隔', icon: Rss },
-  { key: 'ai', label: 'AI', hint: '模型与密钥', icon: Bot },
+  { key: 'general', label: '通用', hint: '外观与阅读', icon: Palette },
+  { key: 'rss', label: 'RSS', hint: '抓取与过滤', icon: Rss },
+  { key: 'ai', label: 'AI', hint: '模型与接口', icon: Bot },
 ];
 
 const autosaveStatusMeta = {

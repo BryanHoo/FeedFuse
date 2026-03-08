@@ -63,18 +63,18 @@ export default function FeedSummaryPolicyDialog({
       <DialogContent closeLabel="close-summary-policy" className="max-w-[34rem]">
         <DialogHeader>
           <DialogTitle>AI 摘要配置</DialogTitle>
-          <DialogDescription>仅保存自动触发策略，不会立即执行。</DialogDescription>
+          <DialogDescription>仅保存自动触发规则，现在不会立即生成摘要。</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2.5">
             <div className="space-y-1">
-              <Label htmlFor="summary-on-fetch">获取文章后自动获取摘要</Label>
-              <p className="text-xs text-muted-foreground">新文章入库后自动排队生成摘要。</p>
+              <Label htmlFor="summary-on-fetch">收到新文章时自动生成摘要</Label>
+              <p className="text-xs text-muted-foreground">新文章入库后会自动加入摘要队列。</p>
             </div>
             <Switch
               id="summary-on-fetch"
-              aria-label="获取文章后自动获取摘要"
+              aria-label="收到新文章时自动生成摘要"
               checked={aiSummaryOnFetchEnabled}
               onCheckedChange={setAiSummaryOnFetchEnabled}
             />
@@ -82,12 +82,12 @@ export default function FeedSummaryPolicyDialog({
 
           <div className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2.5">
             <div className="space-y-1">
-              <Label htmlFor="summary-on-open">打开文章自动获取摘要</Label>
-              <p className="text-xs text-muted-foreground">打开文章时自动排队生成摘要。</p>
+              <Label htmlFor="summary-on-open">打开文章时自动生成摘要</Label>
+              <p className="text-xs text-muted-foreground">打开文章后会自动加入摘要队列。</p>
             </div>
             <Switch
               id="summary-on-open"
-              aria-label="打开文章自动获取摘要"
+              aria-label="打开文章时自动生成摘要"
               checked={aiSummaryOnOpenEnabled}
               onCheckedChange={setAiSummaryOnOpenEnabled}
             />

@@ -5,5 +5,5 @@ export function mapApiErrorToUserMessage(err: unknown): string {
     return err.message;
   }
 
-  return '操作失败，请稍后重试。';
+  return '暂时无法完成操作，请稍后重试。';
 }

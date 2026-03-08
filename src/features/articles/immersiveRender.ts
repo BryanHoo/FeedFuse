@@ -59,7 +59,7 @@ export function buildImmersiveHtml(baseHtml: string, segments: Segment[]): strin
     if (segment.status === 'running' || segment.status === 'pending') {
       const pending = doc.createElement('p');
       pending.className = 'ff-translation ff-translation-pending';
-      pending.textContent = '翻译中…';
+      pending.textContent = '正在翻译这段…';
       target.insertAdjacentElement('afterend', pending);
       continue;
     }
@@ -70,14 +70,14 @@ export function buildImmersiveHtml(baseHtml: string, segments: Segment[]): strin
       failed.setAttribute('data-segment-index', String(segmentIndex));
 
       const message = doc.createElement('p');
-      message.textContent = segment.errorMessage || '该段翻译失败';
+      message.textContent = segment.errorMessage || '这段内容暂时翻译失败';
       failed.appendChild(message);
 
       const retryButton = doc.createElement('button');
       retryButton.setAttribute('type', 'button');
       retryButton.setAttribute('data-action', 'retry-segment');
       retryButton.setAttribute('data-segment-index', String(segmentIndex));
-      retryButton.textContent = '重试该段';
+      retryButton.textContent = '重试这段';
       failed.appendChild(retryButton);
 
       target.insertAdjacentElement('afterend', failed);
