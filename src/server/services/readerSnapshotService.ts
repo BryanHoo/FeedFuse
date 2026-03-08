@@ -124,6 +124,10 @@ export interface ReaderSnapshot {
   };
 }
 
+const ARTICLE_LIST_PREVIEW_IMAGE_WIDTH = 192;
+const ARTICLE_LIST_PREVIEW_IMAGE_HEIGHT = 208;
+const ARTICLE_LIST_PREVIEW_IMAGE_QUALITY = 55;
+
 type ArticleKeywordFilter = ReturnType<typeof normalizePersistedSettings>['rss']['articleKeywordFilter'];
 
 function rewritePreviewImage(previewImage: string | null): string | null {
@@ -132,7 +136,13 @@ function rewritePreviewImage(previewImage: string | null): string | null {
   const secret = getOptionalImageProxySecret(getServerEnv().IMAGE_PROXY_SECRET);
   if (!secret) return previewImage;
 
-  return buildImageProxyUrl({ sourceUrl: previewImage, secret });
+  return buildImageProxyUrl({
+    sourceUrl: previewImage,
+    secret,
+    width: ARTICLE_LIST_PREVIEW_IMAGE_WIDTH,
+    height: ARTICLE_LIST_PREVIEW_IMAGE_HEIGHT,
+    quality: ARTICLE_LIST_PREVIEW_IMAGE_QUALITY,
+  });
 }
 
 type ArticleQueryRow = ReaderSnapshotArticleItem & {

@@ -123,5 +123,8 @@ describe('readerSnapshotService (preview image)', () => {
     expect(snapshot.articles.items[0].previewImage).toContain(
       'url=https%3A%2F%2Fimg.example.com%2Fcard.jpg',
     );
+    expect(snapshot.articles.items[0].previewImage).toContain('w=192');
+    expect(snapshot.articles.items[0].previewImage).toContain('h=208');
+    expect(snapshot.articles.items[0].previewImage).toContain('q=55');
   });
 });

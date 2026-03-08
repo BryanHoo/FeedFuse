@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import sharp from 'sharp';
 import { buildImageProxyUrl } from '../../../../server/media/imageProxyUrl';
 
 const fetchMock = vi.fn();
@@ -100,5 +101,49 @@ describe('/api/media/image', () => {
     const res = await mod.GET(new Request(`http://localhost${proxied}`));
 
     expect(res.status).toBe(403);
+  });
+
+  it('resizes and compresses signed preview image requests', async () => {
+    const sourceImage = await sharp({
+      create: {
+        width: 800,
+        height: 600,
+        channels: 3,
+        background: { r: 120, g: 140, b: 160 },
+      },
+    })
+      .jpeg({ quality: 92 })
+      .toBuffer();
+
+    lookupMock.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
+    fetchMock.mockResolvedValue(
+      new Response(sourceImage, {
+        status: 200,
+        headers: {
+          'content-type': 'image/jpeg',
+          'cache-control': 'public, max-age=600',
+        },
+      }),
+    );
+
+    const proxied = buildImageProxyUrl({
+      sourceUrl: 'https://img.example.com/a.jpg',
+      secret: 'test-image-proxy-secret',
+      width: 192,
+      height: 208,
+      quality: 55,
+    });
+
+    const mod = await import('./route');
+    const res = await mod.GET(new Request(`http://localhost${proxied}`));
+    const transformedBytes = Buffer.from(await res.arrayBuffer());
+    const metadata = await sharp(transformedBytes).metadata();
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('image/webp');
+    expect(metadata.format).toBe('webp');
+    expect(metadata.width).toBe(192);
+    expect(metadata.height).toBe(208);
+    expect(transformedBytes.byteLength).toBeLessThan(sourceImage.byteLength);
   });
 });
