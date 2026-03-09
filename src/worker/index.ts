@@ -27,7 +27,6 @@ import { sanitizeContent } from '../server/rss/sanitizeContent';
 import { isSafeExternalUrl } from '../server/rss/ssrfGuard';
 import { fetchFulltextAndStore } from '../server/fulltext/fetchFulltextAndStore';
 import { translateSegmentsInBatches } from '../server/ai/bilingualHtmlTranslator';
-import { summarizeText } from '../server/ai/summarizeText';
 import { translateTitle } from '../server/ai/translateTitle';
 import { resolveTranslationConfig } from '../server/ai/translationConfig';
 import { startBoss } from '../server/queue/boss';
@@ -50,14 +49,12 @@ import { isFeedDue } from './rssScheduler';
 import { runArticleTaskWithStatus } from './articleTaskStatus';
 import { runImmersiveTranslateSession } from './immersiveTranslateWorker';
 import { enqueueAutoAiTriggersOnFetch } from './autoAiTriggers';
+import { runAiSummaryStreamWorker } from './aiSummaryStreamWorker';
 
-const DEFAULT_SUMMARY_MODEL = 'gpt-4o-mini';
-const DEFAULT_SUMMARY_API_BASE_URL = 'https://api.openai.com/v1';
 const DEFAULT_TRANSLATION_MODEL = 'gpt-4o-mini';
 const DEFAULT_TRANSLATION_API_BASE_URL = 'https://api.openai.com/v1';
 const DEFAULT_TITLE_TRANSLATION_MODEL = 'gpt-4o-mini';
 const DEFAULT_TITLE_TRANSLATION_API_BASE_URL = 'https://api.openai.com/v1';
-const MAX_SUMMARY_SOURCE_LENGTH = 16_000;
 
 function sha256(value: string): string {
   return crypto.createHash('sha256').update(value).digest('hex');
@@ -76,35 +73,6 @@ function buildDedupeKey(input: {
   if (link) return `link:${link}`;
 
   return `hash:${sha256(`${input.title}|${input.publishedAt.toISOString()}|${input.link ?? ''}`)}`;
-}
-
-function normalizeWhitespace(value: string): string {
-  return value.replace(/\s+/g, ' ').trim();
-}
-
-function htmlToPlainText(value: string): string {
-  return normalizeWhitespace(
-    value
-      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-      .replace(/&nbsp;|&#160;/gi, ' ')
-      .replace(/<[^>]+>/g, ' '),
-  );
-}
-
-function pickSummarySourceText(input: {
-  contentFullHtml: string | null;
-  contentHtml: string | null;
-  summary: string | null;
-}): string | null {
-  const source = input.contentFullHtml ?? input.contentHtml ?? input.summary;
-  if (!source) return null;
-
-  const plain = htmlToPlainText(source);
-  if (!plain) return null;
-
-  if (plain.length <= MAX_SUMMARY_SOURCE_LENGTH) return plain;
-  return plain.slice(0, MAX_SUMMARY_SOURCE_LENGTH);
 }
 
 async function enqueueRefreshAll(boss: PgBoss, input?: { force?: boolean }) {
@@ -329,6 +297,14 @@ async function main() {
 
       if (!articleId) throw new Error('Missing articleId');
 
+      const sessionId =
+        typeof data === 'object' &&
+        data !== null &&
+        'sessionId' in data &&
+        typeof (data as { sessionId?: unknown }).sessionId === 'string'
+          ? (data as { sessionId: string }).sessionId
+          : null;
+
       const jobId =
         typeof job === 'object' &&
         job !== null &&
@@ -338,49 +314,11 @@ async function main() {
           ? String((job as { id: string | number }).id)
           : null;
 
-      await runArticleTaskWithStatus({
+      await runAiSummaryStreamWorker({
         pool,
         articleId,
-        type: 'ai_summary',
+        sessionId,
         jobId,
-        fn: async () => {
-          const article = await getArticleById(pool, articleId);
-          if (!article) return;
-          if (article.aiSummary?.trim()) return;
-
-          const aiApiKey = await getAiApiKey(pool);
-          if (!aiApiKey.trim()) throw new Error('Missing AI API key');
-
-          const fullTextOnOpenEnabled = await getFeedFullTextOnOpenEnabled(pool, article.feedId);
-          if (
-            fullTextOnOpenEnabled === true &&
-            !article.contentFullHtml &&
-            !article.contentFullError
-          ) {
-            throw new Error('Fulltext pending');
-          }
-
-          const sourceText = pickSummarySourceText({
-            contentFullHtml: article.contentFullHtml,
-            contentHtml: article.contentHtml,
-            summary: article.summary,
-          });
-          if (!sourceText) throw new Error('Missing article content');
-
-          const uiSettings = await getUiSettings(pool);
-          const normalizedSettings = normalizePersistedSettings(uiSettings);
-          const model = normalizedSettings.ai.model.trim() || DEFAULT_SUMMARY_MODEL;
-          const apiBaseUrl = normalizedSettings.ai.apiBaseUrl.trim() || DEFAULT_SUMMARY_API_BASE_URL;
-
-          const aiSummary = await summarizeText({
-            apiBaseUrl,
-            apiKey: aiApiKey,
-            model,
-            text: sourceText,
-          });
-
-          await setArticleAiSummary(pool, articleId, { aiSummary, aiSummaryModel: model });
-        },
       });
     }
   };
