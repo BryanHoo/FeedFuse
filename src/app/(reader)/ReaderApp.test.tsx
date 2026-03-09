@@ -6,6 +6,17 @@ import { useAppStore } from '../../store/appStore';
 import { defaultPersistedSettings } from '../../features/settings/settingsSchema';
 import { useSettingsStore } from '../../store/settingsStore';
 
+let documentVisibilityState: DocumentVisibilityState = 'visible';
+let snapshotRequests = 0;
+let refreshRequests = 0;
+
+function installVisibilityStateGetter() {
+  Object.defineProperty(document, 'visibilityState', {
+    configurable: true,
+    get: () => documentVisibilityState,
+  });
+}
+
 function jsonResponse(payload: unknown) {
   return new Response(JSON.stringify(payload), {
     status: 200,
@@ -15,10 +26,15 @@ function jsonResponse(payload: unknown) {
 
 describe('ReaderApp', () => {
   beforeEach(() => {
+    documentVisibilityState = 'visible';
+    snapshotRequests = 0;
+    refreshRequests = 0;
+    installVisibilityStateGetter();
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (input: RequestInfo | URL) => {
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
+        const method = init?.method ?? 'GET';
         if (url.includes('/api/settings/ai/api-key')) {
           return jsonResponse({ ok: true, data: { hasApiKey: false } });
         }
@@ -28,7 +44,8 @@ describe('ReaderApp', () => {
         if (url.includes('/api/settings')) {
           return jsonResponse({ ok: true, data: structuredClone(defaultPersistedSettings) });
         }
-        if (url.includes('/api/reader/snapshot')) {
+        if (url.includes('/api/reader/snapshot') && method === 'GET') {
+          snapshotRequests += 1;
           return jsonResponse({
             ok: true,
             data: {
@@ -38,12 +55,17 @@ describe('ReaderApp', () => {
             },
           });
         }
+        if (url.includes('/api/feeds/refresh') || url.includes('/refresh')) {
+          refreshRequests += 1;
+          return jsonResponse({ ok: true });
+        }
         throw new Error(`Unexpected fetch: ${url}`);
       }),
     );
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -76,6 +98,26 @@ describe('ReaderApp', () => {
     });
 
     expect(screen.getByTestId('notification-viewport')).toBeInTheDocument();
+  });
+
+  it('reloads reader snapshot when the page becomes visible again', async () => {
+    await act(async () => {
+      render(<ReaderApp />);
+    });
+
+    expect(snapshotRequests).toBe(1);
+    expect(refreshRequests).toBe(0);
+
+    documentVisibilityState = 'hidden';
+    fireEvent(document, new Event('visibilitychange'));
+
+    documentVisibilityState = 'visible';
+    fireEvent(document, new Event('visibilitychange'));
+
+    await waitFor(() => {
+      expect(snapshotRequests).toBe(2);
+    });
+    expect(refreshRequests).toBe(0);
   });
 
   it('registers notification bridge for api client failures', async () => {

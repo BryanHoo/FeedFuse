@@ -20,6 +20,22 @@ export default function ReaderApp() {
   }, [loadSnapshot, selectedView]);
 
   useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
+
+      const { selectedView: currentView, loadSnapshot: reloadSnapshot } = useAppStore.getState();
+      void reloadSnapshot({ view: currentView });
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
+  useEffect(() => {
     void hydratePersistedSettings();
   }, [hydratePersistedSettings]);
 
