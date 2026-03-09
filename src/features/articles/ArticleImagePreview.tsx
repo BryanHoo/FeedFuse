@@ -18,7 +18,8 @@ export default function ArticleImagePreview({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         closeLabel="关闭图片预览"
-        className="max-w-5xl p-3 sm:p-4"
+        showCloseButton={false}
+        className="max-w-5xl border-none bg-transparent p-3 shadow-none sm:p-4"
         aria-describedby={undefined}
       >
         <DialogTitle className="sr-only">图片预览</DialogTitle>

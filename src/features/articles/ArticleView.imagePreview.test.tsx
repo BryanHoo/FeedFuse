@@ -177,6 +177,32 @@ describe('ArticleView image preview', () => {
     );
   });
 
+  it('renders the preview dialog without a close button', async () => {
+    const { container } = await renderArticleViewWithContent(
+      '<img src="https://example.com/cover.jpg" alt="封面图" />',
+    );
+
+    fireEvent.click(
+      container.querySelector('[data-testid="article-html-content"] img') as HTMLImageElement,
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: '图片预览' });
+    expect(within(dialog).queryByRole('button', { name: '关闭图片预览' })).not.toBeInTheDocument();
+  });
+
+  it('renders the preview dialog without a border', async () => {
+    const { container } = await renderArticleViewWithContent(
+      '<img src="https://example.com/cover.jpg" alt="封面图" />',
+    );
+
+    fireEvent.click(
+      container.querySelector('[data-testid="article-html-content"] img') as HTMLImageElement,
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: '图片预览' });
+    expect(dialog).toHaveClass('border-none');
+  });
+
   it('does not open the preview when clicking non-image content', async () => {
     const { container } = await renderArticleViewWithContent(
       '<p>Paragraph</p><img src="https://example.com/cover.jpg" alt="封面图" />',
