@@ -1,49 +1,31 @@
-import { useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, Loader2, type LucideIcon } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { ApiError } from '@/lib/apiClient';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import type { Category } from '../../types';
-import { mapApiErrorToUserMessage } from '../notifications/mapApiErrorToUserMessage';
-import { useNotify } from '../notifications/useNotify';
-import { validateRssUrl } from './services/rssValidationService';
-import CreatableCategoryField from './CreatableCategoryField';
+import FeedDialogForm from './FeedDialogForm';
+import type {
+  FeedDialogInitialValues,
+  FeedDialogMode,
+  FeedDialogSubmitPayload,
+  ValidationState,
+} from './feedDialog.types';
+import { useFeedDialogForm } from './useFeedDialogForm';
 
-export interface FeedDialogSubmitPayload {
-  title: string;
-  url: string;
-  siteUrl: string | null;
-  categoryId?: string | null;
-  categoryName?: string | null;
-}
-
-interface FeedDialogInitialValues {
-  title: string;
-  url: string;
-  siteUrl: string | null;
-  categoryId: string | null;
-}
+export type { FeedDialogSubmitPayload } from './feedDialog.types';
 
 interface FeedDialogProps {
-  mode: 'add' | 'edit';
+  mode: FeedDialogMode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   categories: Category[];
   initialValues?: Partial<FeedDialogInitialValues>;
   onSubmit: (payload: FeedDialogSubmitPayload) => Promise<void>;
 }
-
-type ValidationState = 'idle' | 'validating' | 'verified' | 'failed';
 
 interface ValidationStateMeta {
   badgeVariant: 'default' | 'secondary' | 'destructive' | 'outline';
@@ -90,7 +72,7 @@ const VALIDATION_STATE_META: Record<ValidationState, ValidationStateMeta> = {
   },
 };
 
-const MODE_META: Record<FeedDialogProps['mode'], ModeMeta> = {
+const MODE_META: Record<FeedDialogMode, ModeMeta> = {
   add: {
     closeLabel: 'close-add-feed',
     dialogTitle: '添加 RSS 源',
@@ -111,55 +93,6 @@ const MODE_META: Record<FeedDialogProps['mode'], ModeMeta> = {
   },
 };
 
-const uncategorizedCategory: Category = {
-  id: 'cat-uncategorized',
-  name: '未分类',
-  expanded: true,
-};
-
-function normalizeCategoryText(value: string | null | undefined): string {
-  return value?.trim() ?? '';
-}
-
-function normalizeCategoryKey(value: string | null | undefined): string {
-  return normalizeCategoryText(value).toLowerCase();
-}
-
-function ensureCategoryOptions(categories: Category[]): Category[] {
-  if (categories.some((item) => item.name === uncategorizedCategory.name)) {
-    return categories;
-  }
-
-  return [uncategorizedCategory, ...categories];
-}
-
-function resolveInitialCategoryInput(
-  categoryId: string | null | undefined,
-  categories: Category[],
-  fallbackCategoryId: string | null,
-) {
-  const nextCategoryId = typeof categoryId === 'undefined' ? fallbackCategoryId : categoryId;
-  if (!nextCategoryId) return uncategorizedCategory.name;
-
-  return categories.find((item) => item.id === nextCategoryId)?.name ?? uncategorizedCategory.name;
-}
-
-function findMatchingCategory(categories: Category[], input: string): Category | undefined {
-  const normalizedInput = normalizeCategoryText(input);
-  if (!normalizedInput) return undefined;
-
-  const normalizedKey = normalizedInput.toLowerCase();
-  return categories.find(
-    (item) => item.id === normalizedInput || normalizeCategoryKey(item.name) === normalizedKey,
-  );
-}
-
-function isUncategorizedInput(value: string): boolean {
-  return (
-    !normalizeCategoryText(value) ||
-    normalizeCategoryKey(value) === normalizeCategoryKey(uncategorizedCategory.name)
-  );
-}
 
 export default function FeedDialog({
   mode,
@@ -169,204 +102,17 @@ export default function FeedDialog({
   initialValues,
   onSubmit,
 }: FeedDialogProps) {
-  const urlInputRef = useRef<HTMLInputElement | null>(null);
-  const titleInputRef = useRef<HTMLInputElement | null>(null);
-  const categoryOptions = ensureCategoryOptions(categories);
-  const selectableCategories = categoryOptions.filter(
-    (item) => item.name !== uncategorizedCategory.name,
-  );
-  const initialCategoryId =
-    typeof initialValues?.categoryId === 'undefined'
-      ? selectableCategories[0]?.id
-      : initialValues.categoryId;
-  const defaultCategoryInput = resolveInitialCategoryInput(
-    initialCategoryId,
-    categoryOptions,
-    selectableCategories[0]?.id ?? null,
-  );
-  const initialUrl = initialValues?.url ?? '';
-  const initialTrimmedUrl = initialUrl.trim();
-  const [title, setTitle] = useState(initialValues?.title ?? '');
-  const [url, setUrl] = useState(initialUrl);
-  const [categoryInput, setCategoryInput] = useState(defaultCategoryInput);
-  const [validationState, setValidationState] = useState<ValidationState>(
-    initialTrimmedUrl ? 'verified' : 'idle',
-  );
-  const [lastVerifiedUrl, setLastVerifiedUrl] = useState<string | null>(initialTrimmedUrl || null);
-  const [validatedSiteUrl, setValidatedSiteUrl] = useState<string | null>(initialValues?.siteUrl ?? null);
-  const [validationMessage, setValidationMessage] = useState<string | null>(null);
-  const [titleTouched, setTitleTouched] = useState(false);
-  const [urlTouched, setUrlTouched] = useState(false);
-  const [submitAttempted, setSubmitAttempted] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [serverFieldErrors, setServerFieldErrors] = useState<{
-    title?: string;
-    url?: string;
-  }>({});
-  const [submitting, setSubmitting] = useState(false);
-  const validationRequestIdRef = useRef(0);
   const modeMeta = MODE_META[mode];
-  const notify = useNotify();
-
-  const trimmedTitle = title.trim();
-  const trimmedUrl = url.trim();
-  const canSave =
-    Boolean(trimmedTitle) &&
-    Boolean(trimmedUrl) &&
-    validationState === 'verified' &&
-    lastVerifiedUrl === trimmedUrl &&
-    !submitting;
-  const validationMeta = VALIDATION_STATE_META[validationState];
+  const form = useFeedDialogForm({
+    categories,
+    initialValues,
+    onSubmit,
+    onOpenChange,
+    successMessage: modeMeta.successMessage,
+  });
+  const validationMeta = VALIDATION_STATE_META[form.validationState];
   const ValidationIcon = validationMeta.icon;
   const fieldIdPrefix = mode === 'add' ? 'add-feed' : 'edit-feed';
-  const urlMessageId = `${fieldIdPrefix}-url-message`;
-  const titleMessageId = `${fieldIdPrefix}-title-message`;
-  const submitErrorId = `${fieldIdPrefix}-submit-error`;
-
-  const titleFieldError =
-    serverFieldErrors.title ?? ((titleTouched || submitAttempted) && !trimmedTitle ? '请输入订阅名称。' : null);
-
-  const urlFieldError = serverFieldErrors.url ?? (() => {
-    if (!urlTouched && !submitAttempted) {
-      return null;
-    }
-
-    if (!trimmedUrl) {
-      return '请输入 RSS 地址。';
-    }
-
-    if (validationState === 'failed') {
-      return validationMessage ?? '暂时无法验证该链接，请检查后重试。';
-    }
-
-    if (validationState !== 'verified' || lastVerifiedUrl !== trimmedUrl) {
-      return '请先验证可用的 RSS 地址。';
-    }
-
-    return null;
-  })();
-
-  const resetValidationState = () => {
-    setValidationState('idle');
-    setLastVerifiedUrl(null);
-    setValidatedSiteUrl(null);
-    setValidationMessage(null);
-  };
-
-  const focusFirstInvalidField = (errors: { url?: string | null; title?: string | null }) => {
-    if (errors.url) {
-      urlInputRef.current?.focus();
-      return;
-    }
-
-    if (errors.title) {
-      titleInputRef.current?.focus();
-    }
-  };
-
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    setSubmitAttempted(true);
-    setTitleTouched(true);
-    setUrlTouched(true);
-    setSubmitError(null);
-
-    const nextTitleError = !trimmedTitle ? '请输入订阅名称。' : null;
-    const nextUrlError = !trimmedUrl
-      ? '请输入 RSS 地址。'
-      : validationState === 'failed'
-        ? validationMessage ?? '暂时无法验证该链接，请检查后重试。'
-        : validationState !== 'verified' || lastVerifiedUrl !== trimmedUrl
-          ? '请先验证可用的 RSS 地址。'
-          : null;
-
-    if (nextTitleError || nextUrlError) {
-      focusFirstInvalidField({ url: nextUrlError, title: nextTitleError });
-      return;
-    }
-
-    void (async () => {
-      setSubmitting(true);
-      setServerFieldErrors({});
-
-      try {
-        const matchedCategory = findMatchingCategory(categoryOptions, categoryInput);
-        const categoryPayload = isUncategorizedInput(categoryInput)
-          ? { categoryId: null }
-          : matchedCategory && matchedCategory.name !== uncategorizedCategory.name
-            ? { categoryId: matchedCategory.id }
-            : { categoryName: normalizeCategoryText(categoryInput) };
-
-        await onSubmit({
-          title: trimmedTitle,
-          url: trimmedUrl,
-          siteUrl: validatedSiteUrl,
-          ...categoryPayload,
-        });
-        notify.success(modeMeta.successMessage);
-        onOpenChange(false);
-      } catch (error) {
-        if (error instanceof ApiError) {
-          setServerFieldErrors({
-            title: error.fields?.title,
-            url: error.fields?.url,
-          });
-          focusFirstInvalidField({ url: error.fields?.url, title: error.fields?.title });
-        }
-
-        setSubmitError(mapApiErrorToUserMessage(error));
-      } finally {
-        setSubmitting(false);
-      }
-    })();
-  };
-
-  const handleValidate = async (urlToValidate: string) => {
-    if (!urlToValidate) {
-      resetValidationState();
-      return;
-    }
-
-    const requestId = validationRequestIdRef.current + 1;
-    validationRequestIdRef.current = requestId;
-    setValidationState('validating');
-    setValidationMessage('正在验证链接…');
-
-    try {
-      const result = await validateRssUrl(urlToValidate);
-      if (requestId !== validationRequestIdRef.current) {
-        return;
-      }
-
-      if (result.ok) {
-        setValidationState('verified');
-        setLastVerifiedUrl(urlToValidate);
-        setValidatedSiteUrl(typeof result.siteUrl === 'string' ? result.siteUrl : null);
-        setValidationMessage('链接可用，已识别为 RSS 源。');
-
-        const suggestedTitle = typeof result.title === 'string' ? result.title.trim() : '';
-        if (suggestedTitle) {
-          setTitle(suggestedTitle);
-        }
-        return;
-      }
-
-      setValidationState('failed');
-      setLastVerifiedUrl(null);
-      setValidatedSiteUrl(null);
-      setValidationMessage(result.message ?? '暂时无法验证该链接，请检查后重试。');
-    } catch {
-      if (requestId !== validationRequestIdRef.current) {
-        return;
-      }
-
-      setValidationState('failed');
-      setLastVerifiedUrl(null);
-      setValidatedSiteUrl(null);
-      setValidationMessage('暂时无法验证该链接，请检查后重试。');
-    }
-  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -375,134 +121,43 @@ export default function FeedDialog({
         className="max-w-[34rem]"
         onOpenAutoFocus={(event) => {
           event.preventDefault();
-          urlInputRef.current?.focus();
+          form.urlInputRef.current?.focus();
         }}
       >
         <DialogHeader>
           <DialogTitle>{modeMeta.dialogTitle}</DialogTitle>
           <DialogDescription>{modeMeta.dialogDescription}</DialogDescription>
         </DialogHeader>
-
-        <form onSubmit={handleSubmit} className="space-y-4" aria-busy={submitting} noValidate>
-          <div className="space-y-4 border-b border-border pb-4">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2.5">
-              <div>
-                <p className="text-[11px] font-semibold tracking-[0.12em] text-primary">{modeMeta.sectionLabel}</p>
-              </div>
-              <Badge variant={validationMeta.badgeVariant} className="h-7 rounded-full px-2.5 text-xs font-medium">
-                {validationMeta.badgeText}
-              </Badge>
-            </div>
-
-            <div className="grid gap-4">
-              <div className="grid gap-1.5">
-                <Label htmlFor={`${fieldIdPrefix}-url`} className="text-xs">
-                  URL
-                </Label>
-                <Input
-                  ref={urlInputRef}
-                  id={`${fieldIdPrefix}-url`}
-                  name="url"
-                  type="url"
-                  inputMode="url"
-                  autoComplete="off"
-                  spellCheck={false}
-                  value={url}
-                  onChange={(event) => {
-                    validationRequestIdRef.current += 1;
-                    setUrl(event.target.value);
-                    setSubmitError(null);
-                    setServerFieldErrors((current) => ({ ...current, url: undefined }));
-                    resetValidationState();
-                  }}
-                  onBlur={(event) => {
-                    setUrlTouched(true);
-                    const blurValue = event.currentTarget.value.trim();
-                    if (validationState === 'verified' && lastVerifiedUrl === blurValue) {
-                      return;
-                    }
-                    void handleValidate(blurValue);
-                  }}
-                  placeholder="https://example.com/feed.xml"
-                  aria-invalid={urlFieldError ? 'true' : 'false'}
-                  aria-describedby={urlMessageId}
-                  aria-errormessage={urlFieldError ? urlMessageId : undefined}
-                />
-                <p
-                  id={urlMessageId}
-                  role={urlFieldError ? 'alert' : 'status'}
-                  aria-live={urlFieldError ? 'assertive' : 'polite'}
-                  className={`mt-1 break-all text-xs ${urlFieldError ? 'text-destructive' : validationMeta.messageTone}`}
-                >
-                  {urlFieldError || validationMessage ? (
-                    <span className="inline-flex items-center gap-1">
-                      {!urlFieldError && ValidationIcon ? (
-                        <ValidationIcon size={13} className={validationMeta.iconClassName} />
-                      ) : null}
-                      {urlFieldError ?? validationMessage}
-                    </span>
-                  ) : null}
-                </p>
-              </div>
-
-              <div className="grid gap-1.5">
-                <Label htmlFor={`${fieldIdPrefix}-title`} className="text-xs">
-                  名称
-                </Label>
-                <Input
-                  ref={titleInputRef}
-                  id={`${fieldIdPrefix}-title`}
-                  name="title"
-                  type="text"
-                  autoComplete="off"
-                  value={title}
-                  onChange={(event) => {
-                    setTitle(event.target.value);
-                    setSubmitError(null);
-                    setServerFieldErrors((current) => ({ ...current, title: undefined }));
-                  }}
-                  onBlur={() => setTitleTouched(true)}
-                  placeholder="例如：The Verge"
-                  aria-invalid={titleFieldError ? 'true' : 'false'}
-                  aria-describedby={titleFieldError ? titleMessageId : undefined}
-                  aria-errormessage={titleFieldError ? titleMessageId : undefined}
-                />
-                {titleFieldError ? (
-                  <p id={titleMessageId} role="alert" className="text-xs text-destructive">
-                    {titleFieldError}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="grid gap-1.5">
-                <Label htmlFor={`${fieldIdPrefix}-category`} className="text-xs">
-                  分类
-                </Label>
-                <CreatableCategoryField
-                  inputId={`${fieldIdPrefix}-category`}
-                  value={categoryInput}
-                  options={categoryOptions}
-                  onChange={setCategoryInput}
-                />
-              </div>
-            </div>
-          </div>
-
-          {submitError ? (
-            <p id={submitErrorId} role="alert" className="text-sm text-destructive">
-              {submitError}
-            </p>
-          ) : null}
-
-          <DialogFooter className="pt-1">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
-              取消
-            </Button>
-            <Button type="submit" disabled={!canSave} aria-describedby={submitError ? submitErrorId : undefined}>
-              {submitting ? modeMeta.submittingLabel : modeMeta.submitLabel}
-            </Button>
-          </DialogFooter>
-        </form>
+        <FeedDialogForm
+          badgeText={validationMeta.badgeText}
+          badgeVariant={validationMeta.badgeVariant}
+          canSave={form.canSave}
+          categoryInput={form.categoryInput}
+          categoryOptions={form.categoryOptions}
+          fieldIdPrefix={fieldIdPrefix}
+          messageTone={validationMeta.messageTone}
+          onCancel={() => onOpenChange(false)}
+          onCategoryChange={form.setCategoryInput}
+          onSubmit={form.handleSubmit}
+          onTitleBlur={form.handleTitleBlur}
+          onTitleChange={form.handleTitleChange}
+          onUrlBlur={form.handleUrlBlur}
+          onUrlChange={form.handleUrlChange}
+          sectionLabel={modeMeta.sectionLabel}
+          submitError={form.submitError}
+          submitLabel={modeMeta.submitLabel}
+          submitting={form.submitting}
+          submittingLabel={modeMeta.submittingLabel}
+          title={form.title}
+          titleFieldError={form.titleFieldError}
+          titleInputRef={form.titleInputRef}
+          url={form.url}
+          urlFieldError={form.urlFieldError}
+          urlInputRef={form.urlInputRef}
+          validationIcon={ValidationIcon}
+          validationIconClassName={validationMeta.iconClassName}
+          validationMessage={form.validationMessage}
+        />
       </DialogContent>
     </Dialog>
   );
