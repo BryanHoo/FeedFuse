@@ -411,7 +411,7 @@ export async function enqueueArticleFulltext(
 export async function enqueueArticleAiSummary(
   articleId: string,
   input?: { force?: boolean },
-): Promise<{ enqueued: boolean; jobId?: string; reason?: string }> {
+): Promise<{ enqueued: boolean; jobId?: string; reason?: string; sessionId?: string }> {
   return requestApi(`/api/articles/${encodeURIComponent(articleId)}/ai-summary`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -444,6 +444,10 @@ export interface ArticleAiSummarySessionSnapshotDto {
   startedAt: string;
   finishedAt: string | null;
   updatedAt: string;
+}
+
+export interface ArticleAiSummarySnapshotDto {
+  session: ArticleAiSummarySessionSnapshotDto | null;
 }
 
 export interface ArticleAiTranslateSessionSnapshotDto {
@@ -481,6 +485,12 @@ export async function getArticleAiTranslateSnapshot(
   return requestApi(`/api/articles/${encodeURIComponent(articleId)}/ai-translate`);
 }
 
+export async function getArticleAiSummarySnapshot(
+  articleId: string,
+): Promise<ArticleAiSummarySnapshotDto> {
+  return requestApi(`/api/articles/${encodeURIComponent(articleId)}/ai-summary`);
+}
+
 export async function retryArticleAiTranslateSegment(
   articleId: string,
   segmentIndex: number,
@@ -495,6 +505,11 @@ export async function retryArticleAiTranslateSegment(
 
 export function createArticleAiTranslateEventSource(articleId: string): EventSource {
   const path = `/api/articles/${encodeURIComponent(articleId)}/ai-translate/stream`;
+  return new EventSource(toAbsoluteUrl(path));
+}
+
+export function createArticleAiSummaryEventSource(articleId: string): EventSource {
+  const path = `/api/articles/${encodeURIComponent(articleId)}/ai-summary/stream`;
   return new EventSource(toAbsoluteUrl(path));
 }
 

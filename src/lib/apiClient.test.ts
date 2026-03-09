@@ -477,6 +477,49 @@ it('createArticleAiTranslateEventSource uses stream endpoint', async () => {
   );
 });
 
+it('getArticleAiSummarySnapshot GETs /api/articles/:id/ai-summary', async () => {
+  const fetchMock = vi.fn(async () => {
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        data: {
+          session: null,
+        },
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+  });
+  vi.stubGlobal('fetch', fetchMock);
+
+  const { getArticleAiSummarySnapshot } = await import('./apiClient');
+  await getArticleAiSummarySnapshot('00000000-0000-0000-0000-000000000000');
+
+  expect(fetchMock).toHaveBeenCalledWith(
+    expect.stringContaining('/api/articles/00000000-0000-0000-0000-000000000000/ai-summary'),
+    expect.objectContaining({}),
+  );
+});
+
+it('createArticleAiSummaryEventSource uses stream endpoint', async () => {
+  class MockEventSource {
+    constructor(
+      public url: string,
+      public options?: EventSourceInit,
+    ) {}
+  }
+
+  vi.stubGlobal('EventSource', MockEventSource as unknown as typeof EventSource);
+
+  const { createArticleAiSummaryEventSource } = await import('./apiClient');
+  const eventSource = createArticleAiSummaryEventSource(
+    '00000000-0000-0000-0000-000000000000',
+  ) as unknown as MockEventSource;
+
+  expect(eventSource.url).toContain(
+    '/api/articles/00000000-0000-0000-0000-000000000000/ai-summary/stream',
+  );
+});
+
 it('getArticleTasks GETs /api/articles/:id/tasks', async () => {
   const fetchMock = vi.fn(async () => {
     return new Response(
