@@ -209,6 +209,50 @@ it('mapArticleDto maps bilingual translation and title fields', () => {
   expect(mapped.aiTranslationBilingualHtml).toContain('ff-bilingual-block');
 });
 
+it('mapArticleDto maps aiSummarySession snapshot', () => {
+  const mapped = mapArticleDto({
+    id: 'a',
+    feedId: 'f',
+    dedupeKey: 'k',
+    title: 't',
+    titleOriginal: 't',
+    titleZh: null,
+    link: 'https://example.com',
+    author: null,
+    publishedAt: null,
+    contentHtml: '<p>rss</p>',
+    contentFullHtml: null,
+    contentFullFetchedAt: null,
+    contentFullError: null,
+    contentFullSourceUrl: null,
+    aiSummary: null,
+    aiSummaryModel: null,
+    aiSummarizedAt: null,
+    aiSummarySession: {
+      id: 'session-1',
+      status: 'running',
+      draftText: 'TL;DR',
+      finalText: null,
+      errorCode: null,
+      errorMessage: null,
+      startedAt: '2026-03-09T00:00:00.000Z',
+      finishedAt: null,
+      updatedAt: '2026-03-09T00:00:10.000Z',
+    },
+    aiTranslationBilingualHtml: null,
+    aiTranslationZhHtml: null,
+    aiTranslationModel: null,
+    aiTranslatedAt: null,
+    summary: null,
+    isRead: false,
+    readAt: null,
+    isStarred: false,
+    starredAt: null,
+  });
+
+  expect(mapped.aiSummarySession?.draftText).toBe('TL;DR');
+});
+
 it('maps body translation eligibility from article dto and snapshot items', () => {
   expect(
     mapArticleDto({

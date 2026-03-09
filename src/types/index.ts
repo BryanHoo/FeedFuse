@@ -36,6 +36,7 @@ export interface Article {
   titleZh?: string;
   content: string;
   aiSummary?: string;
+  aiSummarySession?: ArticleAiSummarySession;
   aiTranslationZhHtml?: string;
   aiTranslationBilingualHtml?: string;
   previewImage?: string;
@@ -47,6 +48,18 @@ export interface Article {
   isStarred: boolean;
   bodyTranslationEligible?: boolean;
   bodyTranslationBlockedReason?: string | null;
+}
+
+export interface ArticleAiSummarySession {
+  id: string;
+  status: 'queued' | 'running' | 'succeeded' | 'failed';
+  draftText: string;
+  finalText?: string | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  startedAt: string;
+  finishedAt?: string | null;
+  updatedAt: string;
 }
 
 export interface UserSettings {

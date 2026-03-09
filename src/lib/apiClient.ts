@@ -351,6 +351,7 @@ export interface ArticleDto {
   aiSummary: string | null;
   aiSummaryModel: string | null;
   aiSummarizedAt: string | null;
+  aiSummarySession?: ArticleAiSummarySessionSnapshotDto | null;
   aiTranslationBilingualHtml: string | null;
   aiTranslationZhHtml: string | null;
   aiTranslationModel: string | null;
@@ -431,6 +432,19 @@ export async function enqueueArticleAiTranslate(
 
 export type TranslationSessionStatus = 'running' | 'succeeded' | 'partial_failed' | 'failed';
 export type TranslationSegmentStatus = 'pending' | 'running' | 'succeeded' | 'failed';
+export type AiSummarySessionStatus = 'queued' | 'running' | 'succeeded' | 'failed';
+
+export interface ArticleAiSummarySessionSnapshotDto {
+  id: string;
+  status: AiSummarySessionStatus;
+  draftText: string;
+  finalText: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+  updatedAt: string;
+}
 
 export interface ArticleAiTranslateSessionSnapshotDto {
   id: string;
@@ -601,6 +615,7 @@ export function mapArticleDto(dto: ArticleDto): Article {
     titleZh: dto.titleZh ?? undefined,
     content: dto.contentFullHtml ?? dto.contentHtml ?? '',
     aiSummary: dto.aiSummary ?? undefined,
+    aiSummarySession: dto.aiSummarySession ?? undefined,
     aiTranslationBilingualHtml: dto.aiTranslationBilingualHtml ?? undefined,
     aiTranslationZhHtml: dto.aiTranslationZhHtml ?? undefined,
     summary: dto.summary ?? '',

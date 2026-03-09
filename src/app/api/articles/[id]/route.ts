@@ -4,6 +4,7 @@ import { getPool } from '../../../../server/db/pool';
 import { getServerEnv } from '../../../../server/env';
 import { ok, fail } from '../../../../server/http/apiResponse';
 import { NotFoundError, ValidationError } from '../../../../server/http/errors';
+import { getActiveAiSummarySessionByArticleId } from '../../../../server/repositories/articleAiSummaryRepo';
 import {
   getArticleById,
   setArticleRead,
@@ -85,6 +86,24 @@ function rewriteArticleHtmlFields(article: ArticleRow): ArticleRow {
   };
 }
 
+function buildAiSummarySessionSnapshot(
+  session: Awaited<ReturnType<typeof getActiveAiSummarySessionByArticleId>>,
+) {
+  if (!session) return null;
+
+  return {
+    id: session.id,
+    status: session.status,
+    draftText: session.draftText,
+    finalText: session.finalText,
+    errorCode: session.errorCode,
+    errorMessage: session.errorMessage,
+    startedAt: session.startedAt,
+    finishedAt: session.finishedAt,
+    updatedAt: session.updatedAt,
+  };
+}
+
 export async function GET(
   _request: Request,
   context: { params: Promise<{ id: string }> },
@@ -103,6 +122,7 @@ export async function GET(
     if (!article) return fail(new NotFoundError('Article not found'));
 
     const proxiedArticle = rewriteArticleHtmlFields(article);
+    const aiSummarySession = await getActiveAiSummarySessionByArticleId(pool, article.id);
     const eligibility = evaluateArticleBodyTranslationEligibility({
       sourceLanguage: article.sourceLanguage,
       contentHtml: article.contentHtml,
@@ -112,6 +132,7 @@ export async function GET(
 
     return ok({
       ...proxiedArticle,
+      aiSummarySession: buildAiSummarySessionSnapshot(aiSummarySession),
       bodyTranslationEligible: eligibility.bodyTranslationEligible,
       bodyTranslationBlockedReason: eligibility.bodyTranslationBlockedReason,
     });

@@ -310,6 +310,79 @@ describe('/api/articles', () => {
     expect(json.data.id).toBe(articleId);
   });
 
+  it('GET returns article with aiSummarySession snapshot', async () => {
+    getArticleByIdMock.mockResolvedValue({
+      id: articleId,
+      feedId,
+      dedupeKey: 'guid:1',
+      title: 'Hello',
+      titleOriginal: 'Hello',
+      titleZh: null,
+      titleTranslationModel: null,
+      titleTranslationAttempts: 0,
+      titleTranslationError: null,
+      titleTranslatedAt: null,
+      link: null,
+      author: null,
+      publishedAt: null,
+      contentHtml: null,
+      contentFullHtml: null,
+      contentFullFetchedAt: null,
+      contentFullError: null,
+      contentFullSourceUrl: null,
+      previewImageUrl: null,
+      aiSummary: null,
+      aiSummaryModel: null,
+      aiSummarizedAt: null,
+      aiTranslationBilingualHtml: null,
+      aiTranslationZhHtml: null,
+      aiTranslationModel: null,
+      aiTranslatedAt: null,
+      summary: null,
+      sourceLanguage: 'en',
+      isRead: false,
+      readAt: null,
+      isStarred: false,
+      starredAt: null,
+    });
+    getActiveAiSummarySessionByArticleIdMock.mockResolvedValue({
+      id: 'session-1',
+      articleId,
+      sourceTextHash: 'hash-1',
+      status: 'running',
+      draftText: 'TL;DR',
+      finalText: null,
+      model: 'gpt-4o-mini',
+      jobId: 'job-1',
+      errorCode: null,
+      errorMessage: null,
+      supersededBySessionId: null,
+      startedAt: '2026-03-09T00:00:00.000Z',
+      finishedAt: null,
+      createdAt: '2026-03-09T00:00:00.000Z',
+      updatedAt: '2026-03-09T00:00:10.000Z',
+    });
+
+    const mod = await import('./[id]/route');
+    const res = await mod.GET(new Request(`http://localhost/api/articles/${articleId}`), {
+      params: Promise.resolve({ id: articleId }),
+    });
+    const json = await res.json();
+
+    expect(json.ok).toBe(true);
+    expect(json.data.aiSummarySession).toEqual({
+      id: 'session-1',
+      status: 'running',
+      draftText: 'TL;DR',
+      finalText: null,
+      errorCode: null,
+      errorMessage: null,
+      startedAt: '2026-03-09T00:00:00.000Z',
+      finishedAt: null,
+      updatedAt: '2026-03-09T00:00:10.000Z',
+    });
+  });
+
   it('GET rewrites article html images through proxy', async () => {
     vi.stubEnv('DATABASE_URL', 'postgres://example');
     vi.stubEnv('IMAGE_PROXY_SECRET', 'test-image-proxy-secret');

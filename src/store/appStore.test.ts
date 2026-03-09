@@ -1102,4 +1102,77 @@ describe('appStore api integration', () => {
       fetchMock.mock.calls.some(([input]) => String(input).includes('/api/articles/art-1')),
     ).toBe(true);
   });
+
+  it('refreshArticle keeps hasAiSummary semantics and stores aiSummarySession', async () => {
+    useAppStore.setState({
+      articles: [
+        {
+          id: 'article-1',
+          feedId: 'feed-1',
+          title: 'Hello',
+          content: '',
+          summary: '',
+          publishedAt: '2026-03-09T00:00:00.000Z',
+          link: 'https://example.com/a1',
+          isRead: false,
+          isStarred: false,
+        },
+      ],
+    });
+
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/articles/article-1')) {
+        return jsonResponse({
+          ok: true,
+          data: {
+            id: 'article-1',
+            feedId: 'feed-1',
+            dedupeKey: 'guid:1',
+            title: 'Hello',
+            titleOriginal: 'Hello',
+            titleZh: null,
+            link: 'https://example.com/a1',
+            author: null,
+            publishedAt: '2026-03-09T00:00:00.000Z',
+            contentHtml: '<p>rss</p>',
+            contentFullHtml: null,
+            contentFullFetchedAt: null,
+            contentFullError: null,
+            contentFullSourceUrl: null,
+            aiSummary: null,
+            aiSummaryModel: null,
+            aiSummarizedAt: null,
+            aiSummarySession: {
+              id: 'session-1',
+              status: 'running',
+              draftText: 'TL;DR',
+              finalText: null,
+              errorCode: null,
+              errorMessage: null,
+              startedAt: '2026-03-09T00:00:00.000Z',
+              finishedAt: null,
+              updatedAt: '2026-03-09T00:00:10.000Z',
+            },
+            aiTranslationBilingualHtml: null,
+            aiTranslationZhHtml: null,
+            aiTranslationModel: null,
+            aiTranslatedAt: null,
+            summary: null,
+            isRead: false,
+            readAt: null,
+            isStarred: false,
+            starredAt: null,
+          },
+        });
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const result = await useAppStore.getState().refreshArticle('article-1');
+
+    expect(result.hasAiSummary).toBe(false);
+    expect(useAppStore.getState().articles[0]?.aiSummarySession?.status).toBe('running');
+  });
 });
