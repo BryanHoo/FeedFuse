@@ -188,4 +188,31 @@ describe('ArticleView image preview', () => {
 
     expect(screen.queryByRole('dialog', { name: '图片预览' })).not.toBeInTheDocument();
   });
+
+  it('makes article images keyboard focusable and opens preview with Enter', async () => {
+    await renderArticleViewWithContent(
+      '<img src="https://example.com/cover.jpg" alt="封面图" />',
+    );
+
+    const imageTrigger = await screen.findByRole('button', { name: '查看大图：封面图' });
+    imageTrigger.focus();
+    fireEvent.keyDown(imageTrigger, { key: 'Enter' });
+
+    expect(await screen.findByRole('dialog', { name: '图片预览' })).toBeInTheDocument();
+  });
+
+  it('opens preview instead of following the wrapped image link', async () => {
+    const { container } = await renderArticleViewWithContent(
+      '<a href="https://example.com/original"><img src="https://example.com/cover.jpg" alt="封面图" /></a>',
+    );
+
+    const imageTrigger = await screen.findByRole('button', { name: '查看大图：封面图' });
+    fireEvent.click(imageTrigger);
+
+    expect(await screen.findByRole('dialog', { name: '图片预览' })).toBeInTheDocument();
+    expect(container.querySelector('[data-testid="article-html-content"] a')).toHaveAttribute(
+      'href',
+      'https://example.com/original',
+    );
+  });
 });

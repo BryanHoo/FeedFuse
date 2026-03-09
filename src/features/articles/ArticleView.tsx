@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type UIEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+  type UIEvent,
+} from 'react';
 import { FileText, Languages, Sparkles, Star } from 'lucide-react';
 import { useAppStore } from '../../store/appStore';
 import { useSettingsStore } from '../../store/settingsStore';
@@ -478,6 +487,22 @@ export default function ArticleView({
     [immersiveTranslation, openImagePreview],
   );
 
+  const onArticleContentKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+
+      const image = target.closest('img');
+      if (!(image instanceof HTMLImageElement)) return;
+
+      event.preventDefault();
+      openImagePreview(image);
+    },
+    [openImagePreview],
+  );
+
   const immersiveHtml = useMemo(
     () => buildImmersiveHtml(article?.content ?? '', immersiveTranslation.segments),
     [article?.content, immersiveTranslation.segments],
@@ -491,6 +516,52 @@ export default function ArticleView({
             article?.content ||
             '')
         : article?.content || '';
+
+  useEffect(() => {
+    const container = articleContentRef.current;
+    if (!container) return;
+
+    const cleanupHandlers: Array<() => void> = [];
+
+    for (const node of container.querySelectorAll('img')) {
+      if (!(node instanceof HTMLImageElement)) continue;
+
+      const alt = node.alt?.trim();
+      const label = alt ? `查看大图：${alt}` : '查看大图';
+      node.tabIndex = 0;
+      node.setAttribute('role', 'button');
+      node.setAttribute('aria-label', label);
+      node.classList.add('cursor-zoom-in');
+
+      const onImageClick = (event: Event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openImagePreview(node);
+      };
+
+      const onImageKeyDown = (event: globalThis.KeyboardEvent) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+
+        event.preventDefault();
+        event.stopPropagation();
+        openImagePreview(node);
+      };
+
+      node.addEventListener('click', onImageClick);
+      node.addEventListener('keydown', onImageKeyDown);
+
+      cleanupHandlers.push(() => {
+        node.removeEventListener('click', onImageClick);
+        node.removeEventListener('keydown', onImageKeyDown);
+      });
+    }
+
+    return () => {
+      for (const cleanup of cleanupHandlers) {
+        cleanup();
+      }
+    };
+  });
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -885,7 +956,8 @@ export default function ArticleView({
               fontFamilyClass,
             )}
             data-testid="article-html-content"
-            onClick={onArticleContentClick}
+            onClickCapture={onArticleContentClick}
+            onKeyDownCapture={onArticleContentKeyDown}
             dangerouslySetInnerHTML={{ __html: bodyHtml }}
           />
         </div>
