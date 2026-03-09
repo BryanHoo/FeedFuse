@@ -62,10 +62,15 @@ export function useStreamingAiSummary(
   );
 
   const articleIdRef = useRef<string | null>(input.articleId);
+  const onCompletedRef = useRef(input.onCompleted);
   const initializedRef = useRef(false);
   const requestTokenRef = useRef(0);
   const eventSourceRef = useRef<EventSource | null>(null);
   const streamCleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    onCompletedRef.current = input.onCompleted;
+  }, [input.onCompleted]);
 
   const closeStream = useCallback(() => {
     streamCleanupRef.current?.();
@@ -144,7 +149,7 @@ export function useStreamingAiSummary(
         });
         setLoadingState(false);
         closeStream();
-        void Promise.resolve(input.onCompleted?.(articleId)).catch((err) => {
+        void Promise.resolve(onCompletedRef.current?.(articleId)).catch((err) => {
           console.error(err);
         });
       };
@@ -184,7 +189,7 @@ export function useStreamingAiSummary(
         stream.removeEventListener('session.failed', onSessionFailed);
       };
     },
-    [api, closeStream, input.onCompleted, isCurrentRequest],
+    [api, closeStream, isCurrentRequest],
   );
 
   const loadSnapshot = useCallback(
@@ -265,7 +270,9 @@ export function useStreamingAiSummary(
       setLoadingState(true);
 
       try {
-        const enqueueResult = await api.enqueueArticleAiSummary(articleId, { force });
+        const enqueueResult = force
+          ? await api.enqueueArticleAiSummary(articleId, { force: true })
+          : await api.enqueueArticleAiSummary(articleId);
         if (!isCurrentRequest(articleId, token)) return;
 
         if (enqueueResult.reason === 'missing_api_key') {

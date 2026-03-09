@@ -12,7 +12,6 @@ import { FileText, Languages, Sparkles, Star } from 'lucide-react';
 import { useAppStore } from '../../store/appStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import {
-  enqueueArticleAiSummary,
   enqueueArticleFulltext,
   getArticleTasks,
   type ArticleTasksDto,
@@ -22,6 +21,7 @@ import { formatRelativeTime } from '../../utils/date';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useImmersiveTranslation } from './useImmersiveTranslation';
+import { useStreamingAiSummary } from './useStreamingAiSummary';
 import { buildImmersiveHtml } from './immersiveRender';
 import ArticleScrollAssist from './ArticleScrollAssist';
 import ArticleImagePreview from './ArticleImagePreview';
@@ -65,13 +65,6 @@ export default function ArticleView({
     (state) => state.persistedSettings.general.autoMarkReadDelayMs,
   );
   const [tasks, setTasks] = useState<ArticleTasksDto | null>(null);
-  const [aiSummaryLoadingArticleId, setAiSummaryLoadingArticleId] = useState<string | null>(null);
-  const [aiSummaryMissingApiKeyArticleId, setAiSummaryMissingApiKeyArticleId] = useState<
-    string | null
-  >(null);
-  const [aiSummaryTimedOutArticleId, setAiSummaryTimedOutArticleId] = useState<string | null>(
-    null,
-  );
   const [aiSummaryExpandedArticleId, setAiSummaryExpandedArticleId] = useState<string | null>(
     null,
   );
@@ -95,20 +88,22 @@ export default function ArticleView({
   const feedBodyTranslateOnOpenEnabled = feed?.bodyTranslateOnOpenEnabled ?? false;
   const currentArticleId = article?.id ?? null;
   const immersiveTranslation = useImmersiveTranslation({ articleId: currentArticleId });
+  const streamingAiSummary = useStreamingAiSummary({
+    articleId: currentArticleId,
+    initialSession: article?.aiSummarySession ?? null,
+    onCompleted: async (articleId) => {
+      await refreshArticle(articleId);
+    },
+  });
+  const requestStreamingAiSummary = streamingAiSummary.requestSummary;
   const fulltextStatus = tasks?.fulltext.status ?? 'idle';
   const fulltextPending = Boolean(
     currentArticleId && (fulltextStatus === 'queued' || fulltextStatus === 'running'),
   );
   const fulltextLoading = fulltextPending;
-  const aiSummaryLoading = Boolean(
-    currentArticleId && aiSummaryLoadingArticleId === currentArticleId,
-  );
-  const aiSummaryMissingApiKey = Boolean(
-    currentArticleId && aiSummaryMissingApiKeyArticleId === currentArticleId,
-  );
-  const aiSummaryTimedOut = Boolean(
-    currentArticleId && aiSummaryTimedOutArticleId === currentArticleId,
-  );
+  const aiSummaryLoading = streamingAiSummary.loading;
+  const aiSummaryMissingApiKey = streamingAiSummary.missingApiKey;
+  const aiSummaryWaitingFulltext = streamingAiSummary.waitingFulltext;
   const aiSummaryExpanded = Boolean(
     currentArticleId && aiSummaryExpandedArticleId === currentArticleId,
   );
@@ -315,106 +310,26 @@ export default function ArticleView({
     };
   }, [article?.id, article?.link, feedFullTextOnOpenEnabled, requestFulltext]);
 
-  const requestAiSummary = useCallback(
-    async (
-      articleId: string,
-      input?: {
-        signal?: AbortSignal;
-        force?: boolean;
-      },
-    ) => {
-      const signal = input?.signal;
-      const isCancelled = () => Boolean(signal?.aborted);
-      const force = Boolean(input?.force);
-
-      try {
-        const enqueueResult = force
-          ? await enqueueArticleAiSummary(articleId, { force: true })
-          : await enqueueArticleAiSummary(articleId);
-        if (isCancelled()) return;
-        setAiSummaryMissingApiKeyArticleId((current) => (current === articleId ? null : current));
-        setAiSummaryTimedOutArticleId((current) => (current === articleId ? null : current));
-
-        if (enqueueResult.reason === 'missing_api_key') {
-          setAiSummaryLoadingArticleId((current) => (current === articleId ? null : current));
-          setAiSummaryMissingApiKeyArticleId(articleId);
-          return;
-        }
-
-        if (!force && enqueueResult.reason === 'already_summarized') {
-          const refreshed = await refreshArticle(articleId);
-          if (isCancelled()) return;
-          if (refreshed.hasAiSummary) {
-            setAiSummaryLoadingArticleId((current) => (current === articleId ? null : current));
-            return;
-          }
-        }
-
-        if (
-          enqueueResult.enqueued ||
-          enqueueResult.reason === 'already_enqueued' ||
-          (!force && enqueueResult.reason === 'already_summarized')
-        ) {
-          setAiSummaryLoadingArticleId(articleId);
-
-          const polled = await pollWithBackoff({
-            fn: () => getArticleTasks(articleId),
-            stop: (value) => {
-              const status = value.ai_summary.status;
-              return status === 'succeeded' || status === 'failed';
-            },
-            onValue: (value) => {
-              if (!isCancelled()) setTasks(value);
-            },
-            signal,
-          });
-
-          if (isCancelled()) return;
-
-          setAiSummaryLoadingArticleId((current) => (current === articleId ? null : current));
-
-          if (polled.timedOut) {
-            setAiSummaryTimedOutArticleId(articleId);
-            return;
-          }
-
-          const status = polled.value?.ai_summary.status ?? 'idle';
-          if (status === 'succeeded') {
-            const refreshed = await refreshArticle(articleId);
-            if (isCancelled()) return;
-            if (refreshed.hasAiSummary) return;
-          }
-
-          return;
-        }
-
-        setAiSummaryLoadingArticleId((current) => (current === articleId ? null : current));
-      } catch (err) {
-        console.error(err);
-        if (!isCancelled()) {
-          setAiSummaryLoadingArticleId((current) => (current === articleId ? null : current));
-        }
-      }
-    },
-    [refreshArticle],
-  );
-
   useEffect(() => {
     const articleId = article?.id ?? null;
     if (!articleId) return;
     if (!feedAiSummaryOnOpenEnabled) return;
-    if (article?.aiSummary) return;
+    const hasFormalAiSummary = Boolean(article?.aiSummary?.trim());
+    const hasActiveSession =
+      article?.aiSummarySession?.status === 'queued' || article?.aiSummarySession?.status === 'running';
+    if (!hasActiveSession && hasFormalAiSummary) return;
 
-    const controller = new AbortController();
     queueMicrotask(() => {
-      void requestAiSummary(articleId, { signal: controller.signal });
+      void requestStreamingAiSummary();
     });
-
-    return () => {
-      controller.abort();
-      setAiSummaryLoadingArticleId((current) => (current === articleId ? null : current));
-    };
-  }, [article?.aiSummary, article?.id, feedAiSummaryOnOpenEnabled, requestAiSummary]);
+  }, [
+    article?.aiSummary,
+    article?.aiSummarySession?.id,
+    article?.aiSummarySession?.status,
+    article?.id,
+    feedAiSummaryOnOpenEnabled,
+    requestStreamingAiSummary,
+  ]);
 
   useEffect(() => {
     const articleId = article?.id ?? null;
@@ -443,7 +358,7 @@ export default function ArticleView({
 
   function onAiSummaryButtonClick() {
     if (!article?.id) return;
-    void requestAiSummary(article.id, { force: true });
+    void requestStreamingAiSummary({ force: true });
   }
 
   function onAiTranslationButtonClick() {
@@ -629,13 +544,26 @@ export default function ArticleView({
     normal: 'leading-relaxed',
     relaxed: 'leading-relaxed',
   }[general.lineHeight];
-  const aiSummaryText = article.aiSummary?.trim() ?? '';
+  const activeAiSummarySession = streamingAiSummary.session;
+  const showingStreamingSummary = Boolean(activeAiSummarySession);
+  const aiSummaryText = showingStreamingSummary
+    ? (activeAiSummarySession?.finalText?.trim() ||
+        activeAiSummarySession?.draftText?.trim() ||
+        '')
+    : (article.aiSummary?.trim() ?? '');
   const aiSummaryLines = aiSummaryText
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
   const aiSummaryTldrText = aiSummaryLines.slice(0, 2).join(' ');
   const aiSummaryContentId = `ai-summary-${article.id}`;
+  const aiSummaryErrorMessage =
+    activeAiSummarySession?.errorMessage ||
+    tasks?.ai_summary.errorMessage ||
+    '暂时无法生成摘要';
+  const aiSummarySessionFailed = activeAiSummarySession?.status === 'failed';
+  const aiSummarySessionRunning =
+    activeAiSummarySession?.status === 'queued' || activeAiSummarySession?.status === 'running';
   const titleOriginal = article.titleOriginal?.trim() || article.title;
   const titleZh = article.titleZh?.trim();
   const showBilingualTitle = aiTranslationViewing && Boolean(titleZh);
@@ -794,7 +722,7 @@ export default function ArticleView({
             </div>
           ) : null}
 
-          {article.aiSummary ? (
+          {aiSummaryText ? (
             <section
               className="relative mb-4 cursor-pointer rounded-xl border border-border/60 border-l-2 border-l-primary/30 bg-primary/5 px-4 py-3"
               aria-label="AI 摘要"
@@ -806,6 +734,9 @@ export default function ArticleView({
                     <Sparkles className="h-3.5 w-3.5" />
                     <span>AI 摘要</span>
                   </span>
+                  {aiSummarySessionRunning ? (
+                    <span className="text-[11px] text-muted-foreground">正在生成摘要</span>
+                  ) : null}
                   <span className="text-[11px] text-muted-foreground">
                     摘要可能有误，请以原文为准
                   </span>
@@ -857,7 +788,7 @@ export default function ArticleView({
             </section>
           ) : null}
 
-          {!article.aiSummary && aiSummaryLoading ? (
+          {!aiSummaryText && aiSummaryLoading ? (
             <div
               className="mb-4 rounded-xl border border-border/60 bg-muted/30 px-4 py-3"
               role="status"
@@ -873,28 +804,37 @@ export default function ArticleView({
             </div>
           ) : null}
 
-          {!article.aiSummary && aiSummaryMissingApiKey ? (
+          {!aiSummaryText && aiSummaryMissingApiKey ? (
             <div className="mb-4 rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
               请先在设置中配置 AI API 密钥，才能生成摘要
             </div>
           ) : null}
 
-          {!article.aiSummary && aiSummaryTimedOut ? (
+          {!aiSummaryText && aiSummaryWaitingFulltext ? (
             <div className="mb-4 rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-              摘要还在处理中。请稍后重试，或刷新查看结果。
+              请先等待全文抓取完成，再开始摘要
             </div>
           ) : null}
 
-          {!article.aiSummary &&
-          !aiSummaryLoading &&
-          !aiSummaryMissingApiKey &&
-          !aiSummaryTimedOut &&
-          tasks?.ai_summary.status === 'failed' ? (
+          {aiSummaryText && aiSummarySessionFailed ? (
             <div className="mb-4 rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
               <div className="flex flex-wrap items-start justify-between gap-2 sm:items-center">
-                <span className="min-w-0 flex-1 break-words">
-                  {tasks.ai_summary.errorMessage || '暂时无法生成摘要'}
-                </span>
+                <span className="min-w-0 flex-1 break-words">{aiSummaryErrorMessage}</span>
+                <Button type="button" variant="secondary" size="sm" onClick={onAiSummaryButtonClick}>
+                  重试
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
+          {!aiSummaryText &&
+          !aiSummaryLoading &&
+          !aiSummaryMissingApiKey &&
+          !aiSummaryWaitingFulltext &&
+          (aiSummarySessionFailed || tasks?.ai_summary.status === 'failed') ? (
+            <div className="mb-4 rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+              <div className="flex flex-wrap items-start justify-between gap-2 sm:items-center">
+                <span className="min-w-0 flex-1 break-words">{aiSummaryErrorMessage}</span>
                 <Button type="button" variant="secondary" size="sm" onClick={onAiSummaryButtonClick}>
                   重试
                 </Button>

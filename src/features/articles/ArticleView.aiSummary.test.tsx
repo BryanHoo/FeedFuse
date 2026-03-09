@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type ApiClientModule = typeof import('../../lib/apiClient');
@@ -43,15 +43,107 @@ const idleTasks = {
   },
 };
 
+class FakeEventSource {
+  private listeners = new Map<string, Set<(event: Event) => void>>();
+
+  close = vi.fn();
+
+  addEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+    const fn =
+      typeof listener === 'function'
+        ? (listener as (event: Event) => void)
+        : (event: Event) => listener.handleEvent(event);
+    const set = this.listeners.get(type) ?? new Set<(event: Event) => void>();
+    set.add(fn);
+    this.listeners.set(type, set);
+  }
+
+  removeEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+    const fn =
+      typeof listener === 'function'
+        ? (listener as (event: Event) => void)
+        : (event: Event) => listener.handleEvent(event);
+    const set = this.listeners.get(type);
+    if (!set) return;
+    set.delete(fn);
+    if (set.size === 0) {
+      this.listeners.delete(type);
+    }
+  }
+
+  emit(eventType: string, payload: Record<string, unknown>) {
+    const event = new MessageEvent(eventType, {
+      data: JSON.stringify(payload),
+      lastEventId: '1',
+    });
+    for (const listener of this.listeners.get(eventType) ?? []) {
+      listener(event);
+    }
+  }
+}
+
 vi.mock('../../lib/apiClient', async () => {
   const actual = await vi.importActual<ApiClientModule>('../../lib/apiClient');
   return {
     ...actual,
     enqueueArticleFulltext: vi.fn(),
     enqueueArticleAiSummary: vi.fn(),
+    getArticleAiSummarySnapshot: vi.fn(),
+    createArticleAiSummaryEventSource: vi.fn(),
     getArticleTasks: vi.fn(),
   };
 });
+
+function seedArticleViewState(input?: {
+  feed?: Record<string, unknown>;
+  article?: Record<string, unknown>;
+}) {
+  return import('../../store/appStore').then(({ useAppStore }) => {
+    useAppStore.setState({
+      feeds: [
+        {
+          id: 'feed-1',
+          title: 'Feed 1',
+          url: 'https://example.com/rss.xml',
+          unreadCount: 1,
+          enabled: true,
+          fullTextOnOpenEnabled: false,
+          aiSummaryOnOpenEnabled: false,
+          titleTranslateEnabled: true,
+          bodyTranslateEnabled: true,
+          bodyTranslateOnOpenEnabled: false,
+          articleListDisplayMode: 'card',
+          categoryId: null,
+          category: null,
+          ...input?.feed,
+        },
+      ],
+      categories: [{ id: 'cat-uncategorized', name: '未分类', expanded: true }],
+      articles: [
+        {
+          id: 'article-1',
+          feedId: 'feed-1',
+          title: 'Article 1',
+          content: '<p>Hello</p>',
+          summary: 'hello',
+          publishedAt: new Date('2026-02-28T00:00:00.000Z').toISOString(),
+          link: 'https://example.com/a1',
+          isRead: true,
+          isStarred: false,
+          ...input?.article,
+        },
+      ],
+      selectedView: 'all',
+      selectedArticleId: 'article-1',
+      refreshArticle: vi.fn().mockResolvedValue({
+        hasFulltext: false,
+        hasFulltextError: false,
+        hasAiSummary: false,
+        hasAiTranslation: false,
+      }),
+    });
+  });
+}
 
 describe('ArticleView ai summary', () => {
   let ArticleView: ArticleViewModule['default'];
@@ -59,24 +151,53 @@ describe('ArticleView ai summary', () => {
   let useSettingsStore: SettingsStoreModule['useSettingsStore'];
   let enqueueArticleFulltextMock: ReturnType<typeof vi.fn>;
   let enqueueArticleAiSummaryMock: ReturnType<typeof vi.fn>;
+  let getArticleAiSummarySnapshotMock: ReturnType<typeof vi.fn>;
+  let createArticleAiSummaryEventSourceMock: ReturnType<typeof vi.fn>;
   let getArticleTasksMock: ReturnType<typeof vi.fn>;
+  let fakeEventSource: FakeEventSource;
 
   beforeEach(async () => {
     vi.resetModules();
     vi.useRealTimers();
+    fakeEventSource = new FakeEventSource();
 
     const apiClient = await import('../../lib/apiClient');
     enqueueArticleFulltextMock = vi.mocked(apiClient.enqueueArticleFulltext);
     enqueueArticleAiSummaryMock = vi.mocked(apiClient.enqueueArticleAiSummary);
+    getArticleAiSummarySnapshotMock = vi.mocked(apiClient.getArticleAiSummarySnapshot);
+    createArticleAiSummaryEventSourceMock = vi.mocked(apiClient.createArticleAiSummaryEventSource);
     getArticleTasksMock = vi.mocked(apiClient.getArticleTasks);
     enqueueArticleFulltextMock.mockReset();
     enqueueArticleAiSummaryMock.mockReset();
+    getArticleAiSummarySnapshotMock.mockReset();
+    createArticleAiSummaryEventSourceMock.mockReset();
     getArticleTasksMock.mockReset();
 
     enqueueArticleFulltextMock.mockResolvedValue({
       enqueued: true,
       jobId: 'job-fulltext-1',
     });
+    enqueueArticleAiSummaryMock.mockResolvedValue({
+      enqueued: true,
+      jobId: 'job-summary-1',
+      sessionId: 'session-1',
+    });
+    getArticleAiSummarySnapshotMock.mockResolvedValue({
+      session: {
+        id: 'session-1',
+        status: 'running',
+        draftText: 'TL;DR',
+        finalText: null,
+        errorCode: null,
+        errorMessage: null,
+        startedAt: '2026-03-09T00:00:00.000Z',
+        finishedAt: null,
+        updatedAt: '2026-03-09T00:00:00.000Z',
+      },
+    });
+    createArticleAiSummaryEventSourceMock.mockImplementation(
+      () => fakeEventSource as unknown as EventSource,
+    );
     getArticleTasksMock.mockResolvedValue(idleTasks);
 
     ({ default: ArticleView } = await import('./ArticleView'));
@@ -159,6 +280,35 @@ describe('ArticleView ai summary', () => {
     await waitFor(() => {
       expect(enqueueArticleAiSummaryMock).toHaveBeenCalledWith('article-1');
     });
+  });
+
+  it('自动模式打开文章后会显示流式摘要草稿并接收 delta', async () => {
+    await seedArticleViewState({
+      feed: { aiSummaryOnOpenEnabled: true },
+    });
+
+    render(<ArticleView />);
+
+    await waitFor(() => {
+      expect(enqueueArticleAiSummaryMock).toHaveBeenCalledWith('article-1');
+    });
+    await waitFor(() => {
+      expect(getArticleAiSummarySnapshotMock).toHaveBeenCalledWith('article-1');
+    });
+    await waitFor(() => {
+      expect(createArticleAiSummaryEventSourceMock).toHaveBeenCalledWith('article-1');
+    });
+
+    await act(async () => {
+      fakeEventSource.emit('summary.snapshot', { draftText: 'TL;DR' });
+    });
+    expect(screen.getByText('TL;DR')).toBeInTheDocument();
+
+    await act(async () => {
+      fakeEventSource.emit('summary.delta', { deltaText: '\n- 第一条' });
+    });
+
+    expect(screen.getByText('TL;DR - 第一条')).toBeInTheDocument();
   });
 
   it('手动模式下全文 pending 时禁用按钮，失败后可点击触发摘要', async () => {
@@ -322,6 +472,90 @@ describe('ArticleView ai summary', () => {
     render(<ArticleView />);
 
     fireEvent.click(await screen.findByRole('button', { name: '生成摘要' }));
+    await waitFor(() => {
+      expect(enqueueArticleAiSummaryMock).toHaveBeenCalledWith('article-1', { force: true });
+    });
+  });
+
+  it('存在运行中的 aiSummarySession 时隐藏旧摘要并显示新草稿', async () => {
+    await seedArticleViewState({
+      article: {
+        aiSummary: '旧摘要',
+        aiSummarySession: {
+          id: 'session-2',
+          status: 'running',
+          draftText: 'TL;DR',
+          finalText: null,
+          errorCode: null,
+          errorMessage: null,
+          startedAt: '2026-03-09T00:00:00.000Z',
+          finishedAt: null,
+          updatedAt: '2026-03-09T00:00:10.000Z',
+        },
+      },
+    });
+
+    render(<ArticleView />);
+
+    expect(screen.queryByText('旧摘要')).not.toBeInTheDocument();
+    expect(screen.getByText('TL;DR')).toBeInTheDocument();
+    expect(screen.getByText('正在生成摘要')).toBeInTheDocument();
+  });
+
+  it('重新进入文章时会先显示运行中的摘要草稿并继续接收 SSE', async () => {
+    await seedArticleViewState({
+      article: {
+        aiSummarySession: {
+          id: 'session-2',
+          status: 'running',
+          draftText: 'TL;DR',
+          finalText: null,
+          errorCode: null,
+          errorMessage: null,
+          startedAt: '2026-03-09T00:00:00.000Z',
+          finishedAt: null,
+          updatedAt: '2026-03-09T00:00:10.000Z',
+        },
+      },
+    });
+
+    render(<ArticleView />);
+
+    expect(screen.getByText('TL;DR')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(createArticleAiSummaryEventSourceMock).toHaveBeenCalledWith('article-1');
+    });
+
+    await act(async () => {
+      fakeEventSource.emit('summary.delta', { deltaText: '\n- 第一条' });
+    });
+
+    expect(screen.getByText('TL;DR - 第一条')).toBeInTheDocument();
+  });
+
+  it('摘要失败时保留草稿并显示错误与重试', async () => {
+    await seedArticleViewState({
+      article: {
+        aiSummarySession: {
+          id: 'session-3',
+          status: 'failed',
+          draftText: 'TL;DR',
+          finalText: null,
+          errorCode: 'ai_timeout',
+          errorMessage: '请求超时',
+          startedAt: '2026-03-09T00:00:00.000Z',
+          finishedAt: '2026-03-09T00:00:30.000Z',
+          updatedAt: '2026-03-09T00:00:30.000Z',
+        },
+      },
+    });
+
+    render(<ArticleView />);
+
+    expect(screen.getByText('TL;DR')).toBeInTheDocument();
+    expect(screen.getByText('请求超时')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '重试' }));
     await waitFor(() => {
       expect(enqueueArticleAiSummaryMock).toHaveBeenCalledWith('article-1', { force: true });
     });
@@ -626,12 +860,15 @@ describe('ArticleView ai summary', () => {
 
     render(<ArticleView />);
 
-    fireEvent.click(await screen.findByRole('button', { name: '生成摘要' }));
     expect(await screen.findByText('请求超时')).toBeInTheDocument();
-
     fireEvent.click(screen.getByRole('button', { name: '重试' }));
     await waitFor(() => {
-      expect(enqueueArticleAiSummaryMock).toHaveBeenCalledTimes(2);
+      expect(enqueueArticleAiSummaryMock).toHaveBeenCalledWith('article-1', { force: true });
+    });
+    expect(await screen.findByText('TL;DR')).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.queryByText('请求超时')).not.toBeInTheDocument();
     });
   });
 
