@@ -311,6 +311,33 @@ describe('ArticleView ai summary', () => {
     expect(screen.getByText('TL;DR - 第一条')).toBeInTheDocument();
   });
 
+  it('生成流式摘要时不会额外轮询 article tasks', async () => {
+    await seedArticleViewState();
+
+    render(<ArticleView />);
+
+    await waitFor(() => {
+      expect(getArticleTasksMock).toHaveBeenCalledTimes(1);
+    });
+    const initialTaskRequestCount = getArticleTasksMock.mock.calls.length;
+
+    fireEvent.click(await screen.findByRole('button', { name: '生成摘要' }));
+
+    await waitFor(() => {
+      expect(getArticleAiSummarySnapshotMock).toHaveBeenCalledWith('article-1');
+    });
+    await waitFor(() => {
+      expect(createArticleAiSummaryEventSourceMock).toHaveBeenCalledWith('article-1');
+    });
+
+    await act(async () => {
+      fakeEventSource.emit('summary.delta', { deltaText: '\n- 第一条' });
+    });
+
+    expect(screen.getByText('TL;DR - 第一条')).toBeInTheDocument();
+    expect(getArticleTasksMock).toHaveBeenCalledTimes(initialTaskRequestCount);
+  });
+
   it('手动模式下全文 pending 时禁用按钮，失败后可点击触发摘要', async () => {
     enqueueArticleFulltextMock.mockResolvedValue({
       enqueued: true,
