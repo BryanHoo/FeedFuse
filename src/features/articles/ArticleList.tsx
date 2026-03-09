@@ -1,5 +1,5 @@
 import { CheckCheck, CircleDot, LayoutGrid, List, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppStore } from "../../store/appStore";
 import { formatRelativeTime, getArticleSectionHeading, getLocalDayKey } from "../../utils/date";
 import { patchFeed, refreshAllFeeds, refreshFeed } from "../../lib/apiClient";
@@ -381,6 +381,76 @@ export default function ArticleList() {
     return "这里还没有文章";
   })();
 
+  const getArticleButtonLabel = useCallback(
+    (article: (typeof filteredArticles)[number], displayTitle: string) => {
+      const labelParts = [displayTitle];
+      const feedTitle = feeds.find((feed) => feed.id === article.feedId)?.title ?? "";
+
+      if (feedTitle) {
+        labelParts.push(feedTitle);
+      }
+
+      labelParts.push(formatRelativeTime(article.publishedAt));
+      labelParts.push(article.isRead ? "已读" : "未读");
+
+      return labelParts.join("，");
+    },
+    [feeds],
+  );
+
+  const handleArticleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLButtonElement>, articleId: string) => {
+      if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+        return;
+      }
+
+      const container = scrollContainerRef.current;
+      if (!container) {
+        return;
+      }
+
+      const buttons = Array.from(
+        container.querySelectorAll<HTMLButtonElement>('button[data-article-nav="true"]'),
+      );
+
+      if (buttons.length === 0) {
+        return;
+      }
+
+      const currentIndex = buttons.findIndex((button) => button.dataset.articleId === articleId);
+      if (currentIndex < 0) {
+        return;
+      }
+
+      let nextIndex = currentIndex;
+
+      if (event.key === "ArrowDown") {
+        nextIndex = Math.min(currentIndex + 1, buttons.length - 1);
+      } else if (event.key === "ArrowUp") {
+        nextIndex = Math.max(currentIndex - 1, 0);
+      } else if (event.key === "Home") {
+        nextIndex = 0;
+      } else if (event.key === "End") {
+        nextIndex = buttons.length - 1;
+      }
+
+      if (nextIndex === currentIndex) {
+        return;
+      }
+
+      event.preventDefault();
+
+      const nextButton = buttons[nextIndex];
+      nextButton.focus();
+
+      const nextArticleId = nextButton.dataset.articleId;
+      if (nextArticleId) {
+        setSelectedArticle(nextArticleId);
+      }
+    },
+    [setSelectedArticle],
+  );
+
   const refreshButtonTitle = isAggregateView ? "刷新全部订阅源" : "刷新订阅源";
 
   const onRefreshClick = () => {
@@ -468,7 +538,7 @@ export default function ArticleList() {
   };
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col" aria-busy={refreshing || displayModeSaving}>
       <div className="flex h-12 min-w-0 items-center justify-between gap-3 px-4">
         <h2
           className="min-w-0 truncate text-[0.96rem] font-semibold tracking-[0.01em]"
@@ -496,13 +566,14 @@ export default function ArticleList() {
               variant="ghost"
               size="icon"
               disabled={displayModeSaving}
-              className={cn(
-                "h-6 w-6 text-muted-foreground",
-                effectiveDisplayMode === "list" && "bg-primary/10 text-primary hover:bg-primary/15",
-              )}
-              aria-label="toggle-display-mode"
-              title={effectiveDisplayMode === "card" ? "切换为列表" : "切换为卡片"}
-            >
+            className={cn(
+              "h-6 w-6 text-muted-foreground",
+              effectiveDisplayMode === "list" && "bg-primary/10 text-primary hover:bg-primary/15",
+            )}
+            aria-label="toggle-display-mode"
+            aria-pressed={effectiveDisplayMode === "list"}
+            title={effectiveDisplayMode === "card" ? "切换为列表" : "切换为卡片"}
+          >
               {effectiveDisplayMode === "card" ? (
                 <List className="h-3.5 w-3.5" />
               ) : (
@@ -522,6 +593,7 @@ export default function ArticleList() {
                   showUnreadOnly && "bg-primary/10 text-primary hover:bg-primary/15",
                 )}
                 aria-label="toggle-unread-only"
+                aria-pressed={showUnreadOnly}
                 title="仅显示未读"
               >
                 <CircleDot className="h-3.5 w-3.5" />
@@ -572,10 +644,15 @@ export default function ArticleList() {
                   return (
                     <button
                       key={article.id}
+                      data-article-nav="true"
+                      data-article-id={article.id}
                       type="button"
                       onClick={() => setSelectedArticle(article.id)}
+                      onKeyDown={(event) => handleArticleKeyDown(event, article.id)}
+                      aria-current={selectedArticleId === article.id ? "true" : undefined}
+                      aria-label={getArticleButtonLabel(article, displayTitle)}
                       className={cn(
-                        "w-full px-4 py-2.5 text-left transition-colors duration-150",
+                        "w-full px-4 py-2.5 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
                         selectedArticleId === article.id ? "bg-accent" : "hover:bg-accent",
                       )}
                     >
@@ -623,6 +700,7 @@ export default function ArticleList() {
                 return (
                   <button
                     key={article.id}
+                    data-article-nav="true"
                     data-article-id={article.id}
                     ref={(node) => {
                       if (node) {
@@ -634,8 +712,11 @@ export default function ArticleList() {
                     }}
                     type="button"
                     onClick={() => setSelectedArticle(article.id)}
+                    onKeyDown={(event) => handleArticleKeyDown(event, article.id)}
+                    aria-current={selectedArticleId === article.id ? "true" : undefined}
+                    aria-label={getArticleButtonLabel(article, displayTitle)}
                     className={cn(
-                      "h-[6.5rem] w-full px-4 py-2.5 text-left transition-colors duration-150",
+                      "h-[6.5rem] w-full px-4 py-2.5 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
                       selectedArticleId === article.id ? "bg-accent" : "hover:bg-accent",
                     )}
                   >

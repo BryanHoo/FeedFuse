@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, vi } from 'vitest';
 import ReaderLayout from '../reader/ReaderLayout';
 import { ApiNotificationBridge } from '../notifications/ApiNotificationBridge';
@@ -370,8 +370,51 @@ describe('AddFeedDialog', () => {
     await waitFor(() => {
       expect(screen.getByText('验证失败')).toBeInTheDocument();
       expect(screen.getByText('暂时无法验证该链接，请检查后重试。')).toBeInTheDocument();
+      expect(screen.getByLabelText('URL')).toHaveAttribute('aria-invalid', 'true');
       expect(screen.getByRole('button', { name: '添加' })).toBeDisabled();
     });
+  });
+
+  it('renders inline submit error when add feed request fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const method = init?.method ?? 'GET';
+
+        if (url.includes('/api/feeds') && method === 'POST') {
+          return jsonResponse({
+            ok: false,
+            error: {
+              code: 'conflict',
+              message: '订阅源已存在',
+            },
+          });
+        }
+
+        throw new Error(`Unexpected fetch: ${method} ${url}`);
+      }),
+    );
+
+    renderWithNotifications();
+    fireEvent.click(screen.getByLabelText('add-feed'));
+
+    fireEvent.change(screen.getByLabelText('名称'), { target: { value: 'Notify Feed' } });
+    const urlInput = screen.getByLabelText('URL');
+    fireEvent.change(urlInput, {
+      target: { value: 'https://example.com/success.xml' },
+    });
+    fireEvent.blur(urlInput);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '添加' })).toBeEnabled();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '添加' }));
+
+    const dialog = screen.getByRole('dialog', { name: '添加 RSS 源' });
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('订阅源已存在');
+    expect(dialog).toBeInTheDocument();
   });
 
   it('submits selected categoryId from category dropdown', async () => {
@@ -540,7 +583,7 @@ describe('AddFeedDialog', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '添加' }));
 
-    expect(await screen.findByText('订阅源已存在')).toBeInTheDocument();
+    expect(await within(screen.getByTestId('notification-viewport')).findByText('订阅源已存在')).toBeInTheDocument();
     expect(screen.queryByText('操作失败：数据已存在。')).not.toBeInTheDocument();
   });
 });

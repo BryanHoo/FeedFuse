@@ -1,5 +1,5 @@
 import { AlertCircle, ArrowDown, ArrowUp, ChevronDown, ChevronRight, CircleDot, FileText, FolderTree, Languages, Newspaper, PencilLine, Plus, Power, Sparkles, Star, Trash2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { type KeyboardEvent, useMemo, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import AddFeedDialog from './AddFeedDialog';
 import EditFeedDialog from './EditFeedDialog';
@@ -76,6 +76,23 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
 
   const openAddFeedModal = () => {
     setAddFeedOpen(true);
+  };
+
+  const handleCategoryKeyDown = (
+    event: KeyboardEvent<HTMLButtonElement>,
+    categoryId: string,
+    expanded: boolean,
+  ) => {
+    if (event.key === 'ArrowLeft' && expanded) {
+      event.preventDefault();
+      toggleCategory(categoryId);
+      return;
+    }
+
+    if (event.key === 'ArrowRight' && !expanded) {
+      event.preventDefault();
+      toggleCategory(categoryId);
+    }
   };
 
   const categoryMaster = useMemo(() => {
@@ -286,8 +303,9 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
               key={view.id}
               type="button"
               onClick={() => setSelectedView(view.id)}
+              aria-current={selectedView === view.id ? 'true' : undefined}
               className={cn(
-                'w-full rounded-md px-3 py-2 text-left text-sm font-medium transition-colors',
+                'w-full rounded-md px-3 py-2 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
                 selectedView === view.id
                   ? 'bg-primary/10 text-primary'
                   : 'text-foreground hover:bg-accent hover:text-accent-foreground',
@@ -308,7 +326,10 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
               <button
                 type="button"
                 onClick={() => toggleCategory(category.id)}
-                className="flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-semibold tracking-[0.04em] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                onKeyDown={(event) => handleCategoryKeyDown(event, category.id, expanded)}
+                aria-expanded={expanded}
+                aria-controls={`feed-category-panel-${category.id}`}
+                className="flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-semibold tracking-[0.04em] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               >
                 {expanded ? (
                   <ChevronDown size={16} aria-hidden="true" />
@@ -363,13 +384,16 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
                 )}
 
                 {expanded && (
-                  <div className="mt-0.5 space-y-0.5 pl-4">
+                  <div id={`feed-category-panel-${category.id}`} className="mt-0.5 space-y-0.5 pl-4">
                     {categoryFeeds.map((feed) => {
                       const isFeedErrored = Boolean(feed.fetchError);
+                      const errorDescriptionId = `feed-error-${feed.id}`;
                       const feedButton = (
                         <button
                           type="button"
                           onClick={() => setSelectedView(feed.id)}
+                          aria-current={selectedView === feed.id ? 'true' : undefined}
+                          aria-describedby={isFeedErrored ? errorDescriptionId : undefined}
                           onMouseEnter={() => {
                             if (isFeedErrored) {
                               setHoveredFeedErrorId(feed.id);
@@ -387,7 +411,7 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
                             setHoveredFeedErrorId((current) => (current === feed.id ? null : current));
                           }}
                           className={cn(
-                            'flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-[13px] font-medium transition-colors',
+                            'flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
                             selectedView === feed.id
                               ? 'bg-primary/10 text-primary'
                               : 'text-foreground hover:bg-accent hover:text-accent-foreground',
@@ -421,7 +445,6 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
                               ) : null}
                             </span>
                             <span className="truncate font-medium">{feed.title}</span>
-                            {isFeedErrored ? <span className="sr-only">该订阅源最近更新失败</span> : null}
                           </div>
                           <div className="flex items-center gap-1">
                             {isFeedErrored ? (
@@ -441,6 +464,7 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
 
                       return (
                       <ContextMenu key={feed.id}>
+                        {isFeedErrored ? <span id={errorDescriptionId} className="sr-only">最近更新失败：{feed.fetchError}</span> : null}
                         {isFeedErrored ? (
                           <ContextMenuTrigger asChild>
                             <span className="block">

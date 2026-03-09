@@ -368,6 +368,33 @@ describe('ArticleList', () => {
     expect(screen.getByText('0 篇')).toBeInTheDocument();
   });
 
+  it('supports arrow-key navigation across article items', () => {
+    useAppStore.setState({
+      selectedView: 'feed-1',
+      showUnreadOnly: false,
+      selectedArticleId: 'art-1',
+    });
+
+    renderWithNotifications();
+
+    const firstButton = screen.getByTestId('article-card-art-1-title').closest('button');
+    const secondButton = screen.getByTestId('article-card-art-2-title').closest('button');
+
+    expect(firstButton).not.toBeNull();
+    expect(secondButton).not.toBeNull();
+
+    firstButton?.focus();
+    fireEvent.keyDown(firstButton as HTMLButtonElement, { key: 'ArrowDown' });
+
+    expect(secondButton).toHaveFocus();
+    expect(useAppStore.getState().selectedArticleId).toBe('art-2');
+
+    fireEvent.keyDown(secondButton as HTMLButtonElement, { key: 'Home' });
+
+    expect(firstButton).toHaveFocus();
+    expect(useAppStore.getState().selectedArticleId).toBe('art-1');
+  });
+
   it('does not preload distant preview images before observer activation', () => {
     const preload = setupImagePreloadMock();
     const observer = setupIntersectionObserverMock();

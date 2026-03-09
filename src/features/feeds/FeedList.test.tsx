@@ -632,6 +632,28 @@ describe('FeedList manage', () => {
     expect(screen.queryByRole('button', { name: '管理分类' })).not.toBeInTheDocument();
   });
 
+  it('supports arrow keys on category headers and exposes expanded state', async () => {
+    renderWithNotifications();
+
+    const uncategorizedButton = screen.getByRole('button', { name: '未分类' });
+
+    expect(uncategorizedButton).toHaveAttribute('aria-expanded', 'true');
+
+    fireEvent.keyDown(uncategorizedButton, { key: 'ArrowLeft' });
+
+    await waitFor(() => {
+      expect(uncategorizedButton).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByRole('button', { name: /My Feed.*2/ })).not.toBeInTheDocument();
+    });
+
+    fireEvent.keyDown(uncategorizedButton, { key: 'ArrowRight' });
+
+    await waitFor(() => {
+      expect(uncategorizedButton).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getByRole('button', { name: /My Feed.*2/ })).toBeInTheDocument();
+    });
+  });
+
   it('opens rename dialog from category context menu', async () => {
     useAppStore.setState((state) => ({
       ...state,

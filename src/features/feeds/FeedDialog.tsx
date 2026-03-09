@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, Loader2, type LucideIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ApiError } from '@/lib/apiClient';
 import {
   Dialog,
   DialogContent,
@@ -13,6 +14,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { Category } from '../../types';
+import { mapApiErrorToUserMessage } from '../notifications/mapApiErrorToUserMessage';
 import { useNotify } from '../notifications/useNotify';
 import { validateRssUrl } from './services/rssValidationService';
 import CreatableCategoryField from './CreatableCategoryField';
@@ -168,6 +170,7 @@ export default function FeedDialog({
   onSubmit,
 }: FeedDialogProps) {
   const urlInputRef = useRef<HTMLInputElement | null>(null);
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
   const categoryOptions = ensureCategoryOptions(categories);
   const selectableCategories = categoryOptions.filter(
     (item) => item.name !== uncategorizedCategory.name,
@@ -192,6 +195,14 @@ export default function FeedDialog({
   const [lastVerifiedUrl, setLastVerifiedUrl] = useState<string | null>(initialTrimmedUrl || null);
   const [validatedSiteUrl, setValidatedSiteUrl] = useState<string | null>(initialValues?.siteUrl ?? null);
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
+  const [titleTouched, setTitleTouched] = useState(false);
+  const [urlTouched, setUrlTouched] = useState(false);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [serverFieldErrors, setServerFieldErrors] = useState<{
+    title?: string;
+    url?: string;
+  }>({});
   const [submitting, setSubmitting] = useState(false);
   const validationRequestIdRef = useRef(0);
   const modeMeta = MODE_META[mode];
@@ -208,6 +219,32 @@ export default function FeedDialog({
   const validationMeta = VALIDATION_STATE_META[validationState];
   const ValidationIcon = validationMeta.icon;
   const fieldIdPrefix = mode === 'add' ? 'add-feed' : 'edit-feed';
+  const urlMessageId = `${fieldIdPrefix}-url-message`;
+  const titleMessageId = `${fieldIdPrefix}-title-message`;
+  const submitErrorId = `${fieldIdPrefix}-submit-error`;
+
+  const titleFieldError =
+    serverFieldErrors.title ?? ((titleTouched || submitAttempted) && !trimmedTitle ? '请输入订阅名称。' : null);
+
+  const urlFieldError = serverFieldErrors.url ?? (() => {
+    if (!urlTouched && !submitAttempted) {
+      return null;
+    }
+
+    if (!trimmedUrl) {
+      return '请输入 RSS 地址。';
+    }
+
+    if (validationState === 'failed') {
+      return validationMessage ?? '暂时无法验证该链接，请检查后重试。';
+    }
+
+    if (validationState !== 'verified' || lastVerifiedUrl !== trimmedUrl) {
+      return '请先验证可用的 RSS 地址。';
+    }
+
+    return null;
+  })();
 
   const resetValidationState = () => {
     setValidationState('idle');
@@ -216,12 +253,43 @@ export default function FeedDialog({
     setValidationMessage(null);
   };
 
+  const focusFirstInvalidField = (errors: { url?: string | null; title?: string | null }) => {
+    if (errors.url) {
+      urlInputRef.current?.focus();
+      return;
+    }
+
+    if (errors.title) {
+      titleInputRef.current?.focus();
+    }
+  };
+
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!canSave) return;
+
+    setSubmitAttempted(true);
+    setTitleTouched(true);
+    setUrlTouched(true);
+    setSubmitError(null);
+
+    const nextTitleError = !trimmedTitle ? '请输入订阅名称。' : null;
+    const nextUrlError = !trimmedUrl
+      ? '请输入 RSS 地址。'
+      : validationState === 'failed'
+        ? validationMessage ?? '暂时无法验证该链接，请检查后重试。'
+        : validationState !== 'verified' || lastVerifiedUrl !== trimmedUrl
+          ? '请先验证可用的 RSS 地址。'
+          : null;
+
+    if (nextTitleError || nextUrlError) {
+      focusFirstInvalidField({ url: nextUrlError, title: nextTitleError });
+      return;
+    }
 
     void (async () => {
       setSubmitting(true);
+      setServerFieldErrors({});
+
       try {
         const matchedCategory = findMatchingCategory(categoryOptions, categoryInput);
         const categoryPayload = isUncategorizedInput(categoryInput)
@@ -238,8 +306,16 @@ export default function FeedDialog({
         });
         notify.success(modeMeta.successMessage);
         onOpenChange(false);
-      } catch {
-        // apiClient handles failure notifications globally
+      } catch (error) {
+        if (error instanceof ApiError) {
+          setServerFieldErrors({
+            title: error.fields?.title,
+            url: error.fields?.url,
+          });
+          focusFirstInvalidField({ url: error.fields?.url, title: error.fields?.title });
+        }
+
+        setSubmitError(mapApiErrorToUserMessage(error));
       } finally {
         setSubmitting(false);
       }
@@ -307,7 +383,7 @@ export default function FeedDialog({
           <DialogDescription>{modeMeta.dialogDescription}</DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" aria-busy={submitting} noValidate>
           <div className="space-y-4 border-b border-border pb-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2.5">
               <div>
@@ -335,9 +411,12 @@ export default function FeedDialog({
                   onChange={(event) => {
                     validationRequestIdRef.current += 1;
                     setUrl(event.target.value);
+                    setSubmitError(null);
+                    setServerFieldErrors((current) => ({ ...current, url: undefined }));
                     resetValidationState();
                   }}
                   onBlur={(event) => {
+                    setUrlTouched(true);
                     const blurValue = event.currentTarget.value.trim();
                     if (validationState === 'verified' && lastVerifiedUrl === blurValue) {
                       return;
@@ -345,16 +424,22 @@ export default function FeedDialog({
                     void handleValidate(blurValue);
                   }}
                   placeholder="https://example.com/feed.xml"
+                  aria-invalid={urlFieldError ? 'true' : 'false'}
+                  aria-describedby={urlMessageId}
+                  aria-errormessage={urlFieldError ? urlMessageId : undefined}
                 />
                 <p
-                  role="status"
-                  aria-live="polite"
-                  className={`mt-1 break-all text-xs ${validationMeta.messageTone}`}
+                  id={urlMessageId}
+                  role={urlFieldError ? 'alert' : 'status'}
+                  aria-live={urlFieldError ? 'assertive' : 'polite'}
+                  className={`mt-1 break-all text-xs ${urlFieldError ? 'text-destructive' : validationMeta.messageTone}`}
                 >
-                  {validationMessage ? (
+                  {urlFieldError || validationMessage ? (
                     <span className="inline-flex items-center gap-1">
-                      {ValidationIcon ? <ValidationIcon size={13} className={validationMeta.iconClassName} /> : null}
-                      {validationMessage}
+                      {!urlFieldError && ValidationIcon ? (
+                        <ValidationIcon size={13} className={validationMeta.iconClassName} />
+                      ) : null}
+                      {urlFieldError ?? validationMessage}
                     </span>
                   ) : null}
                 </p>
@@ -365,14 +450,28 @@ export default function FeedDialog({
                   名称
                 </Label>
                 <Input
+                  ref={titleInputRef}
                   id={`${fieldIdPrefix}-title`}
                   name="title"
                   type="text"
                   autoComplete="off"
                   value={title}
-                  onChange={(event) => setTitle(event.target.value)}
+                  onChange={(event) => {
+                    setTitle(event.target.value);
+                    setSubmitError(null);
+                    setServerFieldErrors((current) => ({ ...current, title: undefined }));
+                  }}
+                  onBlur={() => setTitleTouched(true)}
                   placeholder="例如：The Verge"
+                  aria-invalid={titleFieldError ? 'true' : 'false'}
+                  aria-describedby={titleFieldError ? titleMessageId : undefined}
+                  aria-errormessage={titleFieldError ? titleMessageId : undefined}
                 />
+                {titleFieldError ? (
+                  <p id={titleMessageId} role="alert" className="text-xs text-destructive">
+                    {titleFieldError}
+                  </p>
+                ) : null}
               </div>
 
               <div className="grid gap-1.5">
@@ -389,11 +488,17 @@ export default function FeedDialog({
             </div>
           </div>
 
+          {submitError ? (
+            <p id={submitErrorId} role="alert" className="text-sm text-destructive">
+              {submitError}
+            </p>
+          ) : null}
+
           <DialogFooter className="pt-1">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
               取消
             </Button>
-            <Button type="submit" disabled={!canSave}>
+            <Button type="submit" disabled={!canSave} aria-describedby={submitError ? submitErrorId : undefined}>
               {submitting ? modeMeta.submittingLabel : modeMeta.submitLabel}
             </Button>
           </DialogFooter>
