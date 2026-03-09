@@ -9,6 +9,12 @@ import { useAppStore } from '../../store/appStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
+import {
+  FLOATING_SURFACE_CLASS_NAME,
+  FROSTED_HEADER_CLASS_NAME,
+  READER_FEED_DRAWER_SHEET_CLASS_NAME,
+  READER_TABLET_ARTICLE_PANE_CLASS_NAME,
+} from '@/lib/designSystem';
 import { cn } from '@/lib/utils';
 import {
   normalizeReaderPaneWidth,
@@ -18,9 +24,8 @@ import {
   READER_MIDDLE_PANE_MIN_WIDTH,
   READER_RESIZE_DESKTOP_MIN_WIDTH,
   READER_RIGHT_PANE_MIN_WIDTH,
+  READER_TABLET_MIN_WIDTH,
 } from './readerLayoutSizing';
-
-const TABLET_LAYOUT_MIN_WIDTH = 768;
 
 type ResizeTarget = 'left' | 'middle';
 
@@ -74,8 +79,8 @@ export default function ReaderLayout() {
 
   const isDesktop = viewportWidth >= READER_RESIZE_DESKTOP_MIN_WIDTH;
   const isTablet =
-    viewportWidth >= TABLET_LAYOUT_MIN_WIDTH && viewportWidth < READER_RESIZE_DESKTOP_MIN_WIDTH;
-  const isMobile = viewportWidth < TABLET_LAYOUT_MIN_WIDTH;
+    viewportWidth >= READER_TABLET_MIN_WIDTH && viewportWidth < READER_RESIZE_DESKTOP_MIN_WIDTH;
+  const isMobile = viewportWidth < READER_TABLET_MIN_WIDTH;
   const feedSheetOpen = !isDesktop && feedSheetState.open && feedSheetState.selectionKey === selectionKey;
   const resolvedLeftPaneWidth = liveLeftPaneWidth ?? general.leftPaneWidth;
   const resolvedMiddlePaneWidth = liveMiddlePaneWidth ?? general.middlePaneWidth;
@@ -232,7 +237,8 @@ export default function ReaderLayout() {
   );
 
   const floatingTitleBaseClassName = cn(
-    'absolute z-40 truncate rounded-md bg-background/90 px-3 py-1 font-semibold tracking-tight text-foreground/95 backdrop-blur-sm',
+    'absolute z-40 truncate rounded-md px-3 py-1 font-semibold tracking-tight text-foreground/95',
+    FLOATING_SURFACE_CLASS_NAME,
     isDesktop
       ? 'left-6 top-6 max-w-[calc(100%-8rem)] -translate-y-1/2 text-lg'
       : 'left-16 right-16 top-3 text-base',
@@ -325,7 +331,7 @@ export default function ReaderLayout() {
         <>
           <div
             data-testid="reader-non-desktop-topbar"
-            className="flex h-14 shrink-0 items-center justify-between border-b border-border/80 bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/85"
+            className={cn('flex h-14 shrink-0 items-center justify-between px-3', FROSTED_HEADER_CLASS_NAME)}
           >
             <div className="flex min-w-0 items-center gap-2">
               {isMobile && selectedArticleId ? (
@@ -375,7 +381,7 @@ export default function ReaderLayout() {
             <div className="flex min-h-0 flex-1">
               <div
                 data-testid="reader-tablet-article-pane"
-                className="w-[min(380px,42vw)] min-w-[320px] shrink-0 border-r border-border bg-muted/5"
+                className={READER_TABLET_ARTICLE_PANE_CLASS_NAME}
               >
                 <MemoizedArticleList key={selectedView} />
               </div>
@@ -413,7 +419,7 @@ export default function ReaderLayout() {
           type="button"
           variant="outline"
           size="icon"
-          className="absolute right-4 top-6 z-40 -translate-y-1/2 bg-background/90 backdrop-blur-sm"
+          className={cn('absolute right-4 top-6 z-40 -translate-y-1/2', FLOATING_SURFACE_CLASS_NAME)}
           aria-label="open-settings"
         >
           <SettingsIcon />
@@ -432,7 +438,7 @@ export default function ReaderLayout() {
         >
           <SheetContent
             side="left"
-            className="w-[min(88vw,360px)] max-w-none p-0"
+            className={READER_FEED_DRAWER_SHEET_CLASS_NAME}
             data-testid="reader-feed-drawer"
             closeLabel="close-feeds"
             overlayProps={{ 'data-testid': 'reader-feed-drawer-overlay' }}

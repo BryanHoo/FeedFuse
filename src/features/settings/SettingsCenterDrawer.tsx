@@ -12,6 +12,11 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  FROSTED_HEADER_CLASS_NAME,
+  SETTINGS_CENTER_SHEET_CLASS_NAME,
+} from '@/lib/designSystem';
+import { cn } from '@/lib/utils';
 import { useAppStore } from '../../store/appStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import GeneralSettingsPanel from './panels/GeneralSettingsPanel';
@@ -58,43 +63,17 @@ const autosaveStatusMeta = {
   },
 } as const;
 
-function getSectionTabClass(selected: boolean): string {
-  const base =
-    'group relative min-w-[152px] justify-start rounded-2xl border px-3 py-2.5 text-left transition-colors md:min-w-0 md:w-full md:px-3 md:py-3 md:pl-7 md:before:absolute md:before:inset-y-3 md:before:left-2 md:before:w-[3px] md:before:rounded-full md:before:content-[\'\']';
+const settingsSectionTabClassName =
+  'group relative min-w-[152px] justify-start rounded-2xl border border-transparent bg-transparent px-3 py-2.5 text-left text-muted-foreground transition-colors hover:border-border/80 hover:bg-accent/60 hover:text-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm md:min-w-0 md:w-full md:px-3 md:py-3 md:pl-7 md:before:absolute md:before:inset-y-3 md:before:left-2 md:before:w-[3px] md:before:rounded-full md:before:content-[\'\'] md:data-[state=active]:before:bg-primary';
 
-  const active =
-    'data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm md:data-[state=active]:before:bg-primary';
+const settingsSectionIconClassName =
+  'mt-0.5 shrink-0 text-muted-foreground transition-colors group-data-[state=active]:text-primary group-hover:text-foreground';
 
-  if (selected) {
-    return `${base} ${active}`;
-  }
+const settingsSectionLabelClassName =
+  'text-sm font-medium text-foreground/90 transition-colors group-data-[state=active]:text-foreground group-hover:text-foreground';
 
-  return `${base} ${active} border-transparent bg-transparent text-muted-foreground hover:border-border/80 hover:bg-accent/60 hover:text-foreground`;
-}
-
-function getSectionIconClass(selected: boolean): string {
-  if (selected) {
-    return 'text-primary';
-  }
-
-  return 'text-muted-foreground transition-colors group-hover:text-foreground';
-}
-
-function getSectionLabelClass(selected: boolean): string {
-  if (selected) {
-    return 'text-foreground';
-  }
-
-  return 'text-foreground/90 transition-colors group-hover:text-foreground';
-}
-
-function getSectionHintClass(selected: boolean): string {
-  if (selected) {
-    return 'text-muted-foreground';
-  }
-
-  return 'text-muted-foreground transition-colors group-hover:text-foreground/80';
-}
+const settingsSectionHintClassName =
+  'text-xs text-muted-foreground transition-colors group-hover:text-foreground/80';
 
 export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerProps) {
   const [draftVersion, setDraftVersion] = useState(0);
@@ -221,13 +200,13 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
       >
         <SheetContent
           side="right"
-          className="w-full p-0 sm:max-w-[940px]"
+          className={SETTINGS_CENTER_SHEET_CLASS_NAME}
           data-testid="settings-center-modal"
           closeLabel="close-settings"
           overlayProps={{ 'data-testid': 'settings-center-overlay' }}
         >
           <div className="flex h-full flex-col">
-            <div className="flex items-center justify-between border-b border-border/80 bg-background/90 px-4 py-4 backdrop-blur md:px-6 supports-[backdrop-filter]:bg-background/80">
+            <div className={cn('flex items-center justify-between px-4 py-4 md:px-6', FROSTED_HEADER_CLASS_NAME)}>
               <div className="flex items-center gap-3">
                 <SheetTitle className="text-base font-semibold">
                   设置
@@ -235,7 +214,7 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
                 <span
                   role="status"
                   aria-live="polite"
-                  className={`text-xs ${currentStatusMeta.toneClass}`}
+                  className={cn('text-xs', currentStatusMeta.toneClass)}
                 >
                   {currentStatusMeta.label}
                 </span>
@@ -256,7 +235,6 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
                       className="flex h-auto w-full justify-start gap-2 overflow-x-auto rounded-none bg-transparent px-3 py-4 text-muted-foreground md:flex-col md:items-stretch md:gap-1.5 md:overflow-visible md:px-3 md:py-5"
                     >
                       {sectionItems.map(({ key, label, hint, icon: Icon }) => {
-                        const selected = activeSection === key;
                         const errorCount = sectionErrors[key];
 
                         return (
@@ -265,22 +243,18 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
                             value={key}
                             data-testid={`settings-section-tab-${key}`}
                             onClick={() => setActiveSection(key)}
-                            className={getSectionTabClass(selected)}
+                            className={settingsSectionTabClassName}
                           >
                             <div className="flex w-full items-start justify-between gap-2.5">
                               <div className="flex items-start gap-2.5">
                                 <Icon
                                   size={16}
                                   aria-hidden="true"
-                                  className={`mt-0.5 shrink-0 transition-colors ${getSectionIconClass(selected)}`}
+                                  className={settingsSectionIconClassName}
                                 />
                                 <div>
-                                  <p className={`text-sm font-medium ${getSectionLabelClass(selected)}`}>
-                                    {label}
-                                  </p>
-                                  <p className={`text-xs ${getSectionHintClass(selected)}`}>
-                                    {hint}
-                                  </p>
+                                  <p className={settingsSectionLabelClassName}>{label}</p>
+                                  <p className={settingsSectionHintClassName}>{hint}</p>
                                 </div>
                               </div>
                               {errorCount > 0 ? (

@@ -6,6 +6,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { DIALOG_FORM_CONTENT_CLASS_NAME } from '@/lib/designSystem';
 import type { Category } from '../../types';
 import FeedDialogForm from './FeedDialogForm';
 import type {
@@ -118,7 +119,7 @@ export default function FeedDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         closeLabel={modeMeta.closeLabel}
-        className="max-w-[34rem]"
+        className={DIALOG_FORM_CONTENT_CLASS_NAME}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           form.urlInputRef.current?.focus();

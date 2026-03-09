@@ -44,10 +44,25 @@
     --color-border: hsl(214.3 31.8% 91.4%);
     --color-input: hsl(214.3 31.8% 91.4%);
     --color-ring: hsl(221.2 83.2% 53.3%);
+    --color-overlay: hsl(222.2 47.4% 11.2% / 0.56);
+    --shadow-popover: 0 18px 38px -24px rgb(15 23 42 / 0.24), 0 10px 18px -16px rgb(15 23 42 / 0.18);
+
+    --breakpoint-sm: 40rem;
+    --breakpoint-md: 48rem;
+    --breakpoint-lg: 64rem;
   }
 }
 
 @layer base {
+  :root {
+    --layout-dialog-form-max-width: 34rem;
+    --layout-settings-drawer-max-width: 58.75rem;
+    --layout-notification-viewport-max-width: 26rem;
+    --layout-reader-feed-drawer-max-width: 22.5rem;
+    --layout-reader-tablet-list-max-width: 23.75rem;
+    --layout-reader-tablet-list-min-width: 20rem;
+  }
+
   html {
     color-scheme: light;
   }
@@ -93,6 +108,8 @@
     --color-border: hsl(217.2 32.6% 17.5%);
     --color-input: hsl(217.2 32.6% 17.5%);
     --color-ring: hsl(217.2 91.2% 59.8%);
+    --color-overlay: hsl(222.2 84% 4.9% / 0.72);
+    --shadow-popover: 0 20px 42px -26px rgb(2 6 23 / 0.72), 0 10px 20px -14px rgb(2 6 23 / 0.58);
   }
 
   * {

@@ -28,6 +28,10 @@ vi.mock('../articles/ArticleView', () => ({
 
 import ReaderLayout from './ReaderLayout';
 import { NotificationProvider } from '../notifications/NotificationProvider';
+import {
+  READER_RESIZE_DESKTOP_MIN_WIDTH,
+  READER_TABLET_MIN_WIDTH,
+} from './readerLayoutSizing';
 import { defaultPersistedSettings } from '../settings/settingsSchema';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useAppStore } from '../../store/appStore';
@@ -238,7 +242,10 @@ describe('ReaderLayout', () => {
 
   it('does not render resize handles below desktop breakpoint', () => {
     resetSettingsStore();
-    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 768 });
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: READER_TABLET_MIN_WIDTH,
+    });
 
     renderWithNotifications();
 
@@ -309,7 +316,10 @@ describe('ReaderLayout', () => {
 
   it('removes the old article top spacer on non-desktop layouts', () => {
     resetSettingsStore();
-    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 820 });
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: READER_RESIZE_DESKTOP_MIN_WIDTH - 204,
+    });
 
     useAppStore.setState({
       feeds: [

@@ -7,6 +7,9 @@ describe('theme token usage contract', () => {
     const notificationViewportSource = readFileSync('src/features/notifications/NotificationViewport.tsx', 'utf-8');
     const feedDialogSource = readFileSync('src/features/feeds/FeedDialog.tsx', 'utf-8');
     const contextMenuSource = readFileSync('src/components/ui/context-menu.tsx', 'utf-8');
+    const dialogSource = readFileSync('src/components/ui/dialog.tsx', 'utf-8');
+    const sheetSource = readFileSync('src/components/ui/sheet.tsx', 'utf-8');
+    const alertDialogSource = readFileSync('src/components/ui/alert-dialog.tsx', 'utf-8');
 
     expect(settingsDrawerSource).toContain('text-warning');
     expect(settingsDrawerSource).toContain('text-success');
@@ -27,6 +30,15 @@ describe('theme token usage contract', () => {
 
     expect(contextMenuSource).toContain('text-error');
     expect(contextMenuSource).toContain('bg-error/10');
+    expect(contextMenuSource).toContain('shadow-popover');
     expect(contextMenuSource).not.toContain('text-red');
+    expect(contextMenuSource).not.toContain('shadow-[');
+
+    expect(dialogSource).toContain('bg-overlay');
+    expect(sheetSource).toContain('bg-overlay');
+    expect(alertDialogSource).toContain('bg-overlay');
+    expect(dialogSource).not.toContain('bg-black/50');
+    expect(sheetSource).not.toContain('bg-black/50');
+    expect(alertDialogSource).not.toContain('bg-black/50');
   });
 });

@@ -1,6 +1,7 @@
 'use client';
 
 import { AlertCircle, CheckCircle2, Info, X } from 'lucide-react';
+import { NOTIFICATION_VIEWPORT_CLASS_NAME } from '@/lib/designSystem';
 import { useNotificationContext } from './NotificationProvider';
 import { cn } from '@/lib/utils';
 import type { NotificationType } from './types';
@@ -33,7 +34,7 @@ export default function NotificationViewport() {
       data-testid="notification-viewport"
       aria-live="polite"
       aria-atomic="false"
-      className="pointer-events-none fixed right-3 top-3 z-[100] flex w-[min(26rem,calc(100vw-1.5rem))] flex-col gap-2 sm:right-4 sm:top-4"
+      className={NOTIFICATION_VIEWPORT_CLASS_NAME}
     >
       {notifications.map((item) => (
         <div

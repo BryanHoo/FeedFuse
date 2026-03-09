@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -7,13 +7,14 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from '@/components/ui/dialog';
+import { DIALOG_FORM_CONTENT_CLASS_NAME } from '@/lib/designSystem';
 import {
   getFeedKeywordFilter,
   patchFeedKeywordFilter,
-} from "../../lib/apiClient";
-import { useAppStore } from "../../store/appStore";
-import type { Feed } from "../../types";
+} from '../../lib/apiClient';
+import { useAppStore } from '../../store/appStore';
+import type { Feed } from '../../types';
 
 interface FeedKeywordFilterDialogProps {
   open: boolean;
@@ -26,7 +27,7 @@ export default function FeedKeywordFilterDialog({
   feed,
   onOpenChange,
 }: FeedKeywordFilterDialogProps) {
-  const [value, setValue] = useState("");
+  const [value, setValue] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -76,7 +77,7 @@ export default function FeedKeywordFilterDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         closeLabel="close-keyword-filter"
-        className="max-w-[34rem]"
+        className={DIALOG_FORM_CONTENT_CLASS_NAME}
       >
         <DialogHeader>
           <DialogTitle>配置关键词过滤</DialogTitle>
