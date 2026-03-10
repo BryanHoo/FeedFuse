@@ -29,7 +29,7 @@ import {
 } from '@/components/ui/context-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { deleteCategory, patchCategory, reorderCategories } from '@/lib/apiClient';
-import { useNotify } from '../notifications/useNotify';
+import { toast } from '../toast/toast';
 import { cn } from '@/lib/utils';
 
 const uncategorizedName = '未分类';
@@ -82,7 +82,6 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
   const [renameCategoryId, setRenameCategoryId] = useState<string | null>(null);
   const [deleteCategoryId, setDeleteCategoryId] = useState<string | null>(null);
   const [hoveredFeedErrorId, setHoveredFeedErrorId] = useState<string | null>(null);
-  const notify = useNotify();
 
   const smartViews = [
     { id: 'all', name: '全部文章', Icon: Newspaper },
@@ -250,7 +249,7 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
     try {
       await reorderCategories(nextOrder.map((item, index) => ({ id: item.id, position: index })));
       await loadSnapshot({ view: selectedView });
-      notify.success('已更新分类顺序');
+      toast.success('已更新分类顺序');
     } catch {
       // apiClient handles failure notifications globally
     }
@@ -261,14 +260,14 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
 
     await patchCategory(activeRenameCategory.id, { name });
     await loadSnapshot({ view: selectedView });
-    notify.success('已更新分类');
+    toast.success('已更新分类');
   };
 
   const handleDeleteCategory = async (categoryId: string) => {
     try {
       await deleteCategory(categoryId);
       await loadSnapshot({ view: selectedView });
-      notify.success('已删除分类');
+      toast.success('已删除分类');
     } catch {
       // apiClient handles failure notifications globally
     }
@@ -277,7 +276,7 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
   const moveFeedToCategory = async (feedId: string, categoryId: string | null, categoryName: string) => {
     try {
       await updateFeed(feedId, { categoryId });
-      notify.success(`已移动到「${categoryName}」`);
+      toast.success(`已移动到「${categoryName}」`);
     } catch {
       // apiClient handles failure notifications globally
     }
@@ -618,7 +617,7 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
                               void (async () => {
                                 try {
                                   await updateFeed(feed.id, { enabled: !feed.enabled });
-                                  notify.success(feed.enabled ? '已停用订阅源' : '已启用订阅源');
+                                  toast.success(feed.enabled ? '已停用订阅源' : '已启用订阅源');
                                 } catch {
                                   // apiClient handles failure notifications globally
                                 }
@@ -763,7 +762,7 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
                   try {
                     await removeFeed(deleteFeedId);
                     setDeleteFeedId(null);
-                    notify.success('已删除订阅源');
+                    toast.success('已删除订阅源');
                   } catch {
                     // apiClient handles failure notifications globally
                   }
