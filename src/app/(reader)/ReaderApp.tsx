@@ -1,7 +1,6 @@
 'use client';
 
 import ReaderLayout from '../../features/reader/ReaderLayout';
-import { ApiNotificationBridge } from '../../features/notifications/ApiNotificationBridge';
 import { NotificationProvider } from '../../features/notifications/NotificationProvider';
 import { useTheme } from '../../hooks/useTheme';
 import { useEffect, useRef } from 'react';
@@ -59,7 +58,6 @@ export default function ReaderApp() {
 
   return (
     <NotificationProvider>
-      <ApiNotificationBridge />
       <ReaderLayout />
     </NotificationProvider>
   );
