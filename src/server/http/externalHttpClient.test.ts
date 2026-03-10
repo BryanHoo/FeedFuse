@@ -8,6 +8,17 @@ describe('externalHttpClient (test harness)', () => {
 
   beforeEach(async () => {
     const server = createServer((req, res) => {
+      if (req.url === '/rss.xml') {
+        res.statusCode = 200;
+        res.setHeader('content-type', 'application/rss+xml; charset=utf-8');
+        res.setHeader('etag', 'W/"1"');
+        res.setHeader('last-modified', 'Mon, 01 Jan 2024 00:00:00 GMT');
+        res.end(
+          '<?xml version="1.0"?><rss><channel><title>Feed</title></channel></rss>',
+        );
+        return;
+      }
+
       res.statusCode = 200;
       res.setHeader('content-type', 'text/plain; charset=utf-8');
       res.end('ok');
@@ -33,5 +44,23 @@ describe('externalHttpClient (test harness)', () => {
 
     // 暂时仅验证模块可被 import（不关心导出内容）
     await import('./externalHttpClient');
+  });
+
+  it('fetchRssXml returns status/xml/etag/lastModified', async () => {
+    const { fetchRssXml } = await import('./externalHttpClient');
+
+    const xmlUrl = `${baseUrl}/rss.xml`;
+
+    const res = await fetchRssXml(xmlUrl, {
+      timeoutMs: 1000,
+      userAgent: 'test-agent',
+      etag: null,
+      lastModified: null,
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.xml).toContain('<rss');
+    expect(res.etag).toBe('W/"1"');
+    expect(res.lastModified).toBe('Mon, 01 Jan 2024 00:00:00 GMT');
   });
 });
