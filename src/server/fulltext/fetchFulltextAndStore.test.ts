@@ -7,6 +7,7 @@ const getAppSettingsMock = vi.fn();
 const isSafeExternalUrlMock = vi.fn();
 const sanitizeContentMock = vi.fn();
 const extractFulltextMock = vi.fn();
+const fetchHtmlMock = vi.fn();
 
 vi.mock('../repositories/articlesRepo', () => ({
   getArticleById: (...args: unknown[]) => getArticleByIdMock(...args),
@@ -30,6 +31,10 @@ vi.mock('./extractFulltext', () => ({
   extractFulltext: (...args: unknown[]) => extractFulltextMock(...args),
 }));
 
+vi.mock('../http/externalHttpClient', () => ({
+  fetchHtml: (...args: unknown[]) => fetchHtmlMock(...args),
+}));
+
 describe('fetchFulltextAndStore', () => {
   beforeEach(() => {
     getArticleByIdMock.mockReset();
@@ -39,6 +44,7 @@ describe('fetchFulltextAndStore', () => {
     isSafeExternalUrlMock.mockReset();
     sanitizeContentMock.mockReset();
     extractFulltextMock.mockReset();
+    fetchHtmlMock.mockReset();
     vi.unstubAllGlobals();
   });
 
@@ -55,12 +61,12 @@ describe('fetchFulltextAndStore', () => {
     extractFulltextMock.mockReturnValue({ contentHtml: '<main><p>World</p></main>', title: null });
     sanitizeContentMock.mockReturnValue('<p>World</p>');
 
-    const res = new Response('<html><body><main><p>World</p></main></body></html>', {
+    fetchHtmlMock.mockResolvedValue({
       status: 200,
-      headers: { 'content-type': 'text/html; charset=utf-8' },
+      finalUrl: 'https://example.com/a',
+      contentType: 'text/html; charset=utf-8',
+      html: '<html><body><main><p>World</p></main></body></html>',
     });
-    Object.defineProperty(res, 'url', { value: 'https://example.com/a', configurable: true });
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(res));
 
     const mod = (await import('./fetchFulltextAndStore')) as typeof import('./fetchFulltextAndStore');
     await mod.fetchFulltextAndStore(pool as never, 'article-1');
@@ -72,4 +78,3 @@ describe('fetchFulltextAndStore', () => {
     expect(setArticleFulltextErrorMock).not.toHaveBeenCalled();
   });
 });
-

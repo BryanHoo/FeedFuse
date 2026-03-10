@@ -1,6 +1,7 @@
 import type { Pool } from 'pg';
 import { getArticleById, setArticleFulltext, setArticleFulltextError } from '../repositories/articlesRepo';
 import { getAppSettings } from '../repositories/settingsRepo';
+import { fetchHtml } from '../http/externalHttpClient';
 import { sanitizeContent } from '../rss/sanitizeContent';
 import { isSafeExternalUrl } from '../rss/ssrfGuard';
 import { extractFulltext } from './extractFulltext';
@@ -19,30 +20,6 @@ function toShortErrorMessage(err: unknown): string {
     return msg ? msg : 'Unknown error';
   }
   return 'Unknown error';
-}
-
-async function readTextWithLimit(res: Response, maxBytes: number): Promise<string> {
-  const reader = res.body?.getReader();
-  if (!reader) {
-    throw new Error('Missing response body');
-  }
-
-  const chunks: Uint8Array[] = [];
-  let received = 0;
-
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    if (!value) continue;
-
-    received += value.byteLength;
-    if (received > maxBytes) {
-      throw new Error('Response too large');
-    }
-    chunks.push(value);
-  }
-
-  return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString('utf8');
 }
 
 export async function fetchFulltextAndStore(pool: Pool, articleId: string): Promise<void> {
@@ -64,23 +41,16 @@ export async function fetchFulltextAndStore(pool: Pool, articleId: string): Prom
 
   const settings = await getAppSettings(pool);
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), settings.rssTimeoutMs);
-
   let sourceUrl: string | null = link;
 
   try {
-    const res = await fetch(link, {
-      method: 'GET',
-      redirect: 'follow',
-      headers: {
-        accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'user-agent': settings.rssUserAgent,
-      },
-      signal: controller.signal,
+    const res = await fetchHtml(link, {
+      timeoutMs: settings.rssTimeoutMs,
+      userAgent: settings.rssUserAgent,
+      maxBytes: MAX_HTML_BYTES,
     });
 
-    sourceUrl = res.url || sourceUrl;
+    sourceUrl = res.finalUrl || sourceUrl;
 
     if (!(await isSafeExternalUrl(sourceUrl))) {
       throw new Error('Unsafe URL');
@@ -90,11 +60,11 @@ export async function fetchFulltextAndStore(pool: Pool, articleId: string): Prom
       throw new Error(`HTTP ${res.status}`);
     }
 
-    if (!isHtmlContentType(res.headers.get('content-type'))) {
+    if (!isHtmlContentType(res.contentType)) {
       throw new Error('Non-HTML response');
     }
 
-    const html = await readTextWithLimit(res, MAX_HTML_BYTES);
+    const html = res.html;
     const extracted = extractFulltext({ html, url: sourceUrl });
     if (!extracted?.contentHtml) {
       throw new Error('Readability parse failed');
@@ -114,8 +84,5 @@ export async function fetchFulltextAndStore(pool: Pool, articleId: string): Prom
       error: toShortErrorMessage(err),
       sourceUrl,
     });
-  } finally {
-    clearTimeout(timeout);
   }
 }
-

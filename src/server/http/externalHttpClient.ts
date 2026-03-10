@@ -14,6 +14,13 @@ export interface FetchRssXmlResult {
   finalUrl: string;
 }
 
+export interface FetchHtmlResult {
+  status: number;
+  finalUrl: string;
+  contentType: string | null;
+  html: string;
+}
+
 export async function fetchRssXml(
   url: string,
   options: {
@@ -81,3 +88,69 @@ export async function fetchRssXml(
   }
 }
 
+export async function fetchHtml(
+  url: string,
+  options: {
+    timeoutMs: number;
+    userAgent: string;
+    maxBytes: number;
+    headers?: Record<string, string>;
+  },
+): Promise<FetchHtmlResult> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs);
+
+  try {
+    const headers: Record<string, string> = {
+      accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'user-agent': options.userAgent,
+      ...options.headers,
+    };
+
+    const req = client.stream(url, {
+      method: 'GET',
+      followRedirect: true,
+      headers,
+      signal: controller.signal,
+    });
+
+    let status = 0;
+    let finalUrl = url;
+    let contentType: string | null = null;
+
+    req.on('response', (res) => {
+      status = res.statusCode;
+      finalUrl = res.url || finalUrl;
+
+      const headerValue = res.headers['content-type'];
+      contentType = typeof headerValue === 'string' ? headerValue : headerValue?.[0] ?? null;
+    });
+
+    const chunks: Buffer[] = [];
+    let received = 0;
+
+    const html = await new Promise<string>((resolve, reject) => {
+      req.on('data', (chunk) => {
+        const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+
+        received += buf.byteLength;
+        if (received > options.maxBytes) {
+          req.destroy(new Error('Response too large'));
+          return;
+        }
+
+        chunks.push(buf);
+      });
+
+      req.on('end', () => {
+        resolve(Buffer.concat(chunks).toString('utf8'));
+      });
+
+      req.on('error', reject);
+    });
+
+    return { status, finalUrl, contentType, html };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
