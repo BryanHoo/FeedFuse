@@ -1,6 +1,10 @@
-import { useNotificationContext } from './NotificationProvider';
+import { toast } from '../toast/toast';
 
 export function useNotify() {
-  const { success, error, info, dismiss } = useNotificationContext();
-  return { success, error, info, dismiss };
+  return {
+    success: toast.success,
+    info: toast.info,
+    error: toast.error,
+    dismiss: toast.dismiss,
+  };
 }
