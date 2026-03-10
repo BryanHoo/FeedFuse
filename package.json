@@ -36,6 +36,7 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "got": "^14.6.6",
     "ipaddr.js": "^2.3.0",
     "jsdom": "^28.1.0",
     "ky": "^1.14.3",
