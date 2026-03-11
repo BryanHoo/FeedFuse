@@ -23,7 +23,7 @@ import GeneralSettingsPanel from './panels/GeneralSettingsPanel';
 import AISettingsPanel from './panels/AISettingsPanel';
 import RssSettingsPanel from './panels/RssSettingsPanel';
 import { useSettingsAutosave } from './useSettingsAutosave';
-import { useNotify } from '../notifications/useNotify';
+import { toast } from '../toast/toast';
 
 interface SettingsCenterDrawerProps {
   onClose: () => void;
@@ -79,7 +79,6 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
   const [draftVersion, setDraftVersion] = useState(0);
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<SettingsSectionKey>('general');
-  const notify = useNotify();
   const selectedView = useAppStore((state) => state.selectedView);
   const lastAutosaveStatusRef = useRef<keyof typeof autosaveStatusMeta>('idle');
   const lastSavedNotifyAtRef = useRef(0);
@@ -110,13 +109,13 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
     if (current === 'saved' && previous !== 'saved') {
       const now = Date.now();
       if (now - lastSavedNotifyAtRef.current >= 30000) {
-        notify.success('设置已自动保存');
+        toast.success('设置已自动保存');
         lastSavedNotifyAtRef.current = now;
       }
     }
 
     lastAutosaveStatusRef.current = current;
-  }, [autosave.status, notify]);
+  }, [autosave.status]);
 
   useEffect(() => {
     void (async () => {
