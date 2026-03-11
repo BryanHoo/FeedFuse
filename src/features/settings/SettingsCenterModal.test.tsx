@@ -203,12 +203,12 @@ describe('SettingsCenterModal', () => {
   it('renders settings in right drawer layout and removes footer save button', async () => {
     resetSettingsStore();
     renderWithNotifications();
-    fireEvent.click(screen.getByLabelText('open-settings'));
+    fireEvent.click(screen.getByLabelText('打开设置'));
 
     await waitFor(() => {
       expect(screen.getByTestId('settings-center-modal')).toBeInTheDocument();
       expect(screen.getByTestId('settings-center-overlay')).toBeInTheDocument();
-      expect(screen.getByLabelText('close-settings')).toBeInTheDocument();
+      expect(screen.getByLabelText('关闭设置')).toBeInTheDocument();
     });
 
     expect(screen.queryByRole('button', { name: '保存' })).not.toBeInTheDocument();
@@ -217,7 +217,7 @@ describe('SettingsCenterModal', () => {
   it('renders drawer with left nav and right content workspace layout', async () => {
     resetSettingsStore();
     renderWithNotifications();
-    fireEvent.click(screen.getByLabelText('open-settings'));
+    fireEvent.click(screen.getByLabelText('打开设置'));
 
     await waitFor(() => {
       expect(screen.getByTestId('settings-center-modal')).toBeInTheDocument();
@@ -232,7 +232,7 @@ describe('SettingsCenterModal', () => {
   it('does not show removed sidebar-collapsed and rss-fulltext settings items', async () => {
     resetSettingsStore();
     renderWithNotifications();
-    fireEvent.click(screen.getByLabelText('open-settings'));
+    fireEvent.click(screen.getByLabelText('打开设置'));
 
     await waitFor(() => {
       expect(screen.getByTestId('settings-center-modal')).toBeInTheDocument();
@@ -248,7 +248,7 @@ describe('SettingsCenterModal', () => {
   it('closes settings dialog on Escape', async () => {
     resetSettingsStore();
     renderWithNotifications();
-    fireEvent.click(screen.getByLabelText('open-settings'));
+    fireEvent.click(screen.getByLabelText('打开设置'));
     await waitFor(() => expect(screen.getByTestId('settings-center-modal')).toBeInTheDocument());
 
     fireEvent.keyDown(document, { key: 'Escape' });
@@ -258,7 +258,7 @@ describe('SettingsCenterModal', () => {
   it('closes settings dialog on overlay click', async () => {
     resetSettingsStore();
     renderWithNotifications();
-    fireEvent.click(screen.getByLabelText('open-settings'));
+    fireEvent.click(screen.getByLabelText('打开设置'));
     await waitFor(() => expect(screen.getByTestId('settings-center-modal')).toBeInTheDocument());
 
     const overlay = screen.getByTestId('settings-center-overlay');
@@ -270,13 +270,13 @@ describe('SettingsCenterModal', () => {
   it('asks for confirmation when closing with unresolved validation errors', async () => {
     resetSettingsStore();
     renderWithNotifications();
-    fireEvent.click(screen.getByLabelText('open-settings'));
+    fireEvent.click(screen.getByLabelText('打开设置'));
     fireEvent.click(await screen.findByTestId('settings-section-tab-ai'));
 
     const apiBaseUrlInput = await screen.findByLabelText('API 地址');
     fireEvent.change(apiBaseUrlInput, { target: { value: 'not-a-valid-url' } });
 
-    fireEvent.click(screen.getByLabelText('close-settings'));
+    fireEvent.click(screen.getByLabelText('关闭设置'));
     expect(screen.getByText('关闭后会丢失未成功保存的修改')).toBeInTheDocument();
   });
 
@@ -284,7 +284,7 @@ describe('SettingsCenterModal', () => {
     resetSettingsStore();
     renderWithNotifications();
 
-    fireEvent.click(screen.getByLabelText('open-settings'));
+    fireEvent.click(screen.getByLabelText('打开设置'));
     await waitFor(() => {
       expect(screen.getByTestId('settings-center-modal')).toBeInTheDocument();
       expect(useSettingsStore.getState().draft).not.toBeNull();
@@ -296,11 +296,11 @@ describe('SettingsCenterModal', () => {
     await waitFor(() => {
       expect(screen.getByText('已保存')).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByLabelText('close-settings'));
+    fireEvent.click(screen.getByLabelText('关闭设置'));
     expect(screen.queryByTestId('settings-center-modal')).not.toBeInTheDocument();
     expect(useSettingsStore.getState().draft).toBeNull();
 
-    fireEvent.click(screen.getByLabelText('open-settings'));
+    fireEvent.click(screen.getByLabelText('打开设置'));
     await waitFor(() => {
       expect(useSettingsStore.getState().draft?.persisted.general.theme).toBe('dark');
     });
@@ -310,7 +310,7 @@ describe('SettingsCenterModal', () => {
     resetSettingsStore();
     renderWithNotifications();
 
-    fireEvent.click(screen.getByLabelText('open-settings'));
+    fireEvent.click(screen.getByLabelText('打开设置'));
     await waitFor(() => {
       expect(screen.getByTestId('settings-center-modal')).toBeInTheDocument();
     });
@@ -324,7 +324,7 @@ describe('SettingsCenterModal', () => {
     resetSettingsStore();
     renderWithNotifications();
 
-    fireEvent.click(screen.getByLabelText('open-settings'));
+    fireEvent.click(screen.getByLabelText('打开设置'));
     await waitFor(() => {
       expect(screen.getByTestId('settings-center-modal')).toBeInTheDocument();
     });
@@ -348,7 +348,7 @@ describe('SettingsCenterModal', () => {
     resetSettingsStore();
     renderWithNotifications();
 
-    fireEvent.click(screen.getByLabelText('open-settings'));
+    fireEvent.click(screen.getByLabelText('打开设置'));
     await waitFor(() => {
       expect(screen.getByTestId('settings-center-modal')).toBeInTheDocument();
     });
@@ -360,13 +360,13 @@ describe('SettingsCenterModal', () => {
     resetSettingsStore();
     renderWithNotifications();
 
-    fireEvent.click(screen.getByLabelText('open-settings'));
+    fireEvent.click(screen.getByLabelText('打开设置'));
     await waitFor(() => {
       expect(screen.getByTestId('settings-center-modal')).toBeInTheDocument();
     });
 
     expect(screen.getByTestId('settings-center-overlay')).toBeInTheDocument();
-    expect(screen.getByLabelText('settings-sections')).toBeInTheDocument();
+    expect(screen.getByLabelText('设置导航')).toBeInTheDocument();
   });
 
 
@@ -374,7 +374,7 @@ describe('SettingsCenterModal', () => {
     resetSettingsStore();
     renderWithNotifications();
 
-    fireEvent.click(screen.getByLabelText('open-settings'));
+    fireEvent.click(screen.getByLabelText('打开设置'));
     await waitFor(() => expect(screen.getByTestId('settings-center-modal')).toBeInTheDocument());
 
     fireEvent.click(screen.getByTestId('settings-section-tab-rss'));
@@ -448,7 +448,7 @@ describe('SettingsCenterModal', () => {
 
     renderWithNotifications();
 
-    fireEvent.click(screen.getByLabelText('open-settings'));
+    fireEvent.click(screen.getByLabelText('打开设置'));
     await waitFor(() => {
       expect(screen.getByTestId('settings-center-modal')).toBeInTheDocument();
     });

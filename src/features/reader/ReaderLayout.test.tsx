@@ -90,10 +90,10 @@ describe('ReaderLayout', () => {
   it('keeps the existing 3-column reader interactions', async () => {
     resetSettingsStore();
     renderWithNotifications();
-    expect(screen.getByLabelText('add-feed')).toBeInTheDocument();
-    expect(screen.getByLabelText('open-settings')).toBeInTheDocument();
+    expect(screen.getByLabelText('添加 RSS 源')).toBeInTheDocument();
+    expect(screen.getByLabelText('打开设置')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText('open-settings'));
+    fireEvent.click(screen.getByLabelText('打开设置'));
     expect(await screen.findByTestId('settings-center-modal')).toBeInTheDocument();
   });
 
@@ -281,13 +281,13 @@ describe('ReaderLayout', () => {
 
     expect(screen.getByTestId('reader-non-desktop-topbar')).toBeInTheDocument();
     expect(screen.queryByTestId('reader-feed-pane')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('open-feeds')).toBeInTheDocument();
+    expect(screen.getByLabelText('打开订阅源列表')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText('open-feeds'));
+    fireEvent.click(screen.getByLabelText('打开订阅源列表'));
 
     expect(screen.getByTestId('reader-feed-drawer')).toBeInTheDocument();
     expect(screen.getByTestId('feed-list-header')).toHaveClass('pr-16');
-    expect(screen.getByLabelText('add-feed')).toBeInTheDocument();
+    expect(screen.getByLabelText('添加 RSS 源')).toBeInTheDocument();
   });
 
   it('hydrates responsive layout without rebuilding from a mismatched mobile first render', async () => {
@@ -357,9 +357,9 @@ describe('ReaderLayout', () => {
 
     renderWithNotifications();
 
-    expect(screen.getByLabelText('back-to-articles')).toBeInTheDocument();
+    expect(screen.getByLabelText('返回文章列表')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText('back-to-articles'));
+    fireEvent.click(screen.getByLabelText('返回文章列表'));
 
     expect(useAppStore.getState().selectedArticleId).toBeNull();
   });

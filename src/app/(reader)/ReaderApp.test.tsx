@@ -87,9 +87,9 @@ describe('ReaderApp', () => {
     });
     expect(screen.getByAltText('FeedFuse')).toBeInTheDocument();
     expect(screen.getByText('文章')).toBeInTheDocument();
-    expect(screen.getByLabelText('open-settings')).toBeInTheDocument();
+    expect(screen.getByLabelText('打开设置')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText('open-settings'));
+    fireEvent.click(screen.getByLabelText('打开设置'));
     expect(await screen.findByTestId('settings-center-modal')).toBeInTheDocument();
   });
 

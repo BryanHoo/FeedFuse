@@ -345,7 +345,7 @@ export default function ReaderLayout({ renderedAt }: ReaderLayoutProps = {}) {
                   type="button"
                   variant="outline"
                   size="icon"
-                  aria-label="back-to-articles"
+                  aria-label="返回文章列表"
                 >
                   <ChevronLeft />
                 </Button>
@@ -361,7 +361,7 @@ export default function ReaderLayout({ renderedAt }: ReaderLayoutProps = {}) {
                 type="button"
                 variant="outline"
                 size="icon"
-                aria-label="open-feeds"
+                aria-label="打开订阅源列表"
               >
                 <PanelLeft />
               </Button>
@@ -376,7 +376,7 @@ export default function ReaderLayout({ renderedAt }: ReaderLayoutProps = {}) {
               type="button"
               variant="outline"
               size="icon"
-              aria-label="open-settings"
+              aria-label="打开设置"
             >
               <SettingsIcon />
             </Button>
@@ -427,7 +427,7 @@ export default function ReaderLayout({ renderedAt }: ReaderLayoutProps = {}) {
           variant="outline"
           size="icon"
           className={cn('absolute right-4 top-6 z-40 -translate-y-1/2', FLOATING_SURFACE_CLASS_NAME)}
-          aria-label="open-settings"
+          aria-label="打开设置"
         >
           <SettingsIcon />
         </Button>
@@ -447,7 +447,7 @@ export default function ReaderLayout({ renderedAt }: ReaderLayoutProps = {}) {
             side="left"
             className={READER_FEED_DRAWER_SHEET_CLASS_NAME}
             data-testid="reader-feed-drawer"
-            closeLabel="close-feeds"
+            closeLabel="关闭订阅源列表"
             overlayProps={{ 'data-testid': 'reader-feed-drawer-overlay' }}
           >
             <SheetTitle className="sr-only">导航与 RSS 源</SheetTitle>

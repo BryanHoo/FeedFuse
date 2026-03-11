@@ -19,5 +19,20 @@ describe('ToastHost', () => {
 
     expect(await screen.findByText('已保存')).toBeInTheDocument();
   });
-});
 
+  it('clears pending toasts when the host unmounts', async () => {
+    toastStore.getState().reset();
+
+    const view = render(<ToastHost />);
+
+    await act(async () => {
+      toast.success('稍后关闭', { durationMs: 10000 });
+    });
+
+    expect(toastStore.getState().toasts).toHaveLength(1);
+
+    view.unmount();
+
+    expect(toastStore.getState().toasts).toHaveLength(0);
+  });
+});

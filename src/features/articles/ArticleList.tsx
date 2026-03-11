@@ -458,6 +458,8 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
   );
 
   const refreshButtonTitle = isAggregateView ? "刷新全部订阅源" : "刷新订阅源";
+  const displayModeButtonTitle = effectiveDisplayMode === "card" ? "切换为列表" : "切换为卡片";
+  const unreadOnlyButtonLabel = showUnreadOnly ? "显示全部文章" : "仅显示未读文章";
 
   const onRefreshClick = () => {
     if (!canRefresh) return;
@@ -560,7 +562,7 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
             size="icon"
             disabled={!canRefresh}
             className="h-6 w-6 text-muted-foreground"
-            aria-label="refresh-feeds"
+            aria-label={refreshButtonTitle}
             title={refreshButtonTitle}
           >
             <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
@@ -572,14 +574,14 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
               variant="ghost"
               size="icon"
               disabled={displayModeSaving}
-            className={cn(
-              "h-6 w-6 text-muted-foreground",
-              effectiveDisplayMode === "list" && "bg-primary/10 text-primary hover:bg-primary/15",
-            )}
-            aria-label="toggle-display-mode"
-            aria-pressed={effectiveDisplayMode === "list"}
-            title={effectiveDisplayMode === "card" ? "切换为列表" : "切换为卡片"}
-          >
+              className={cn(
+                "h-6 w-6 text-muted-foreground",
+                effectiveDisplayMode === "list" && "bg-primary/10 text-primary hover:bg-primary/15",
+              )}
+              aria-label={displayModeButtonTitle}
+              aria-pressed={effectiveDisplayMode === "list"}
+              title={displayModeButtonTitle}
+            >
               {effectiveDisplayMode === "card" ? (
                 <List className="h-3.5 w-3.5" />
               ) : (
@@ -598,9 +600,9 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
                   "h-6 w-6 text-muted-foreground",
                   showUnreadOnly && "bg-primary/10 text-primary hover:bg-primary/15",
                 )}
-                aria-label="toggle-unread-only"
+                aria-label={unreadOnlyButtonLabel}
                 aria-pressed={showUnreadOnly}
-                title="仅显示未读"
+                title={unreadOnlyButtonLabel}
               >
                 <CircleDot className="h-3.5 w-3.5" />
               </Button>
@@ -610,7 +612,7 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6 text-muted-foreground"
-                aria-label="mark-all-as-read"
+                aria-label="标记全部为已读"
                 title="标记全部为已读"
               >
                 <CheckCheck className="h-3.5 w-3.5" />

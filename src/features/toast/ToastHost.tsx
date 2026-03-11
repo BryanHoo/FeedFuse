@@ -39,6 +39,7 @@ export function ToastHost() {
 
     return () => {
       clearApiErrorNotifier();
+      toastStore.getState().reset();
     };
   }, []);
 
@@ -81,4 +82,3 @@ export function ToastHost() {
     </RadixToast.Provider>
   );
 }
-

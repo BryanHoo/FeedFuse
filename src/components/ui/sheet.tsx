@@ -55,25 +55,29 @@ const SheetContent = React.forwardRef<
       };
       closeLabel?: string;
     }
->(({ side = 'right', className, children, overlayProps, closeLabel, ...props }, ref) => (
-  <SheetPortal>
-    <SheetOverlay {...overlayProps} />
-    <SheetPrimitive.Content
-      ref={ref}
-      className={cn(sheetVariants({ side }), className)}
-      {...props}
-    >
-      {children}
-      <SheetClose
-        aria-label={closeLabel}
-        className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
+>(({ side = 'right', className, children, overlayProps, closeLabel, ...props }, ref) => {
+  const closeButtonLabel = closeLabel ?? '关闭';
+
+  return (
+    <SheetPortal>
+      <SheetOverlay {...overlayProps} />
+      <SheetPrimitive.Content
+        ref={ref}
+        className={cn(sheetVariants({ side }), className)}
+        {...props}
       >
-        <X className="h-4 w-4" />
-        <span className="sr-only">Close</span>
-      </SheetClose>
-    </SheetPrimitive.Content>
-  </SheetPortal>
-));
+        {children}
+        <SheetClose
+          aria-label={closeButtonLabel}
+          className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
+        >
+          <X className="h-4 w-4" />
+          <span className="sr-only">{closeButtonLabel}</span>
+        </SheetClose>
+      </SheetPrimitive.Content>
+    </SheetPortal>
+  );
+});
 SheetContent.displayName = SheetPrimitive.Content.displayName;
 
 const SheetHeader = ({

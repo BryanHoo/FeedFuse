@@ -305,7 +305,7 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
             variant="ghost"
             size="icon"
             className="h-7 w-7 text-muted-foreground"
-            aria-label="add-feed"
+            aria-label="添加 RSS 源"
             title="添加 RSS 源"
           >
             <Plus className="h-4 w-4" />

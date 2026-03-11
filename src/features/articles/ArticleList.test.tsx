@@ -8,6 +8,11 @@ type AppStoreModule = typeof import('../../store/appStore');
 type ToastHostModule = typeof import('../toast/ToastHost');
 type LoadSnapshot = (input?: { view?: ViewType }) => Promise<void>;
 
+const ALL_FEEDS_REFRESH_LABEL = '刷新全部订阅源';
+const FEED_REFRESH_LABEL = '刷新订阅源';
+const TOGGLE_TO_LIST_LABEL = '切换为列表';
+const MARK_ALL_AS_READ_LABEL = '标记全部为已读';
+
 function jsonResponse(payload: unknown, init?: ResponseInit) {
   return new Response(JSON.stringify(payload), {
     status: 200,
@@ -382,7 +387,7 @@ describe('ArticleList', () => {
 
     expect(screen.getByText('2 篇')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'mark-all-as-read' }));
+    fireEvent.click(screen.getByRole('button', { name: MARK_ALL_AS_READ_LABEL }));
 
     expect(screen.getByText('Selected Article')).toBeInTheDocument();
     expect(screen.queryByText('Other Article')).not.toBeInTheDocument();
@@ -740,7 +745,7 @@ describe('ArticleList', () => {
         renderWithNotifications();
 
         await act(async () => {
-          fireEvent.click(screen.getByRole('button', { name: 'refresh-feeds' }));
+          fireEvent.click(screen.getByRole('button', { name: ALL_FEEDS_REFRESH_LABEL }));
           await vi.runAllTimersAsync();
         });
 
@@ -769,7 +774,7 @@ describe('ArticleList', () => {
       renderWithNotifications();
 
       await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'refresh-feeds' }));
+        fireEvent.click(screen.getByRole('button', { name: FEED_REFRESH_LABEL }));
         await vi.runAllTimersAsync();
       });
 
@@ -797,7 +802,7 @@ describe('ArticleList', () => {
       renderWithNotifications();
 
       await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'refresh-feeds' }));
+        fireEvent.click(screen.getByRole('button', { name: ALL_FEEDS_REFRESH_LABEL }));
         await Promise.resolve();
       });
 
@@ -829,7 +834,7 @@ describe('ArticleList', () => {
 
     renderWithNotifications();
 
-    fireEvent.click(screen.getByRole('button', { name: 'refresh-feeds' }));
+    fireEvent.click(screen.getByRole('button', { name: ALL_FEEDS_REFRESH_LABEL }));
 
     await waitFor(() => {
       expect(screen.getByText('刷新失败：请求超时')).toBeInTheDocument();
@@ -850,7 +855,7 @@ describe('ArticleList', () => {
       renderWithNotifications();
 
       await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'refresh-feeds' }));
+        fireEvent.click(screen.getByRole('button', { name: ALL_FEEDS_REFRESH_LABEL }));
         await Promise.resolve();
       });
 
@@ -885,7 +890,7 @@ describe('ArticleList', () => {
 
     renderWithNotifications();
 
-    expect(screen.getByRole('button', { name: 'refresh-feeds' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: FEED_REFRESH_LABEL })).toBeDisabled();
   });
 
   it('shows selected feed title in header when viewing a specific feed', () => {
@@ -948,30 +953,30 @@ describe('ArticleList', () => {
     useAppStore.setState({ selectedView: 'feed-1' });
     renderWithNotifications();
 
-    expect(screen.getByRole('button', { name: 'toggle-display-mode' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: TOGGLE_TO_LIST_LABEL })).toBeInTheDocument();
 
     act(() => {
       useAppStore.setState({ selectedView: 'all' });
     });
-    expect(screen.queryByRole('button', { name: 'toggle-display-mode' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: TOGGLE_TO_LIST_LABEL })).not.toBeInTheDocument();
 
     act(() => {
       useAppStore.setState({ selectedView: 'unread' });
     });
-    expect(screen.queryByRole('button', { name: 'toggle-display-mode' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: TOGGLE_TO_LIST_LABEL })).not.toBeInTheDocument();
 
     act(() => {
       useAppStore.setState({ selectedView: 'starred' });
     });
-    expect(screen.queryByRole('button', { name: 'toggle-display-mode' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: TOGGLE_TO_LIST_LABEL })).not.toBeInTheDocument();
   });
 
   it('renders refresh icon before display mode toggle icon in feed view', () => {
     useAppStore.setState({ selectedView: 'feed-1' });
     renderWithNotifications();
 
-    const refreshButton = screen.getByRole('button', { name: 'refresh-feeds' });
-    const toggleDisplayModeButton = screen.getByRole('button', { name: 'toggle-display-mode' });
+    const refreshButton = screen.getByRole('button', { name: FEED_REFRESH_LABEL });
+    const toggleDisplayModeButton = screen.getByRole('button', { name: TOGGLE_TO_LIST_LABEL });
     const relation = refreshButton.compareDocumentPosition(toggleDisplayModeButton);
 
     expect(relation & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -981,7 +986,7 @@ describe('ArticleList', () => {
     useAppStore.setState({ selectedView: 'feed-1' });
     renderWithNotifications();
 
-    fireEvent.click(screen.getByRole('button', { name: 'toggle-display-mode' }));
+    fireEvent.click(screen.getByRole('button', { name: TOGGLE_TO_LIST_LABEL }));
 
     const title = await screen.findByTestId('article-list-row-art-1-title');
 
@@ -1038,7 +1043,7 @@ describe('ArticleList', () => {
     );
 
     renderWithNotifications();
-    fireEvent.click(screen.getByRole('button', { name: 'toggle-display-mode' }));
+    fireEvent.click(screen.getByRole('button', { name: TOGGLE_TO_LIST_LABEL }));
 
     await waitFor(() => {
       const feed = useAppStore.getState().feeds.find((item) => item.id === 'feed-1');
@@ -1076,7 +1081,7 @@ describe('ArticleList', () => {
     });
 
     renderWithNotifications();
-    const toggleButton = screen.getByRole('button', { name: 'toggle-display-mode' });
+    const toggleButton = screen.getByRole('button', { name: TOGGLE_TO_LIST_LABEL });
 
     fireEvent.click(toggleButton); // card -> list (optimistic)
 

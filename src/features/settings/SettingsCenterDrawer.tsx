@@ -201,7 +201,7 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
           side="right"
           className={SETTINGS_CENTER_SHEET_CLASS_NAME}
           data-testid="settings-center-modal"
-          closeLabel="close-settings"
+          closeLabel="关闭设置"
           overlayProps={{ 'data-testid': 'settings-center-overlay' }}
         >
           <div className="flex h-full flex-col">
@@ -230,7 +230,7 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
                 <div className="flex h-full min-h-0 flex-col md:flex-row">
                   <aside className="border-b border-border/70 bg-muted/35 backdrop-blur md:w-60 md:shrink-0 md:border-b-0 md:border-r supports-[backdrop-filter]:bg-muted/25">
                     <TabsList
-                      aria-label="settings-sections"
+                      aria-label="设置导航"
                       className="flex h-auto w-full justify-start gap-2 overflow-x-auto rounded-none bg-transparent px-3 py-4 text-muted-foreground md:flex-col md:items-stretch md:gap-1.5 md:overflow-visible md:px-3 md:py-5"
                     >
                       {sectionItems.map(({ key, label, hint, icon: Icon }) => {
