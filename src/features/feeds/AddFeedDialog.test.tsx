@@ -1,8 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, vi } from 'vitest';
 import ReaderLayout from '../reader/ReaderLayout';
-import { ApiNotificationBridge } from '../notifications/ApiNotificationBridge';
-import { NotificationProvider } from '../notifications/NotificationProvider';
+import { ToastHost } from '../toast/ToastHost';
 import { useAppStore } from '../../store/appStore';
 import { validateRssUrl } from './services/rssValidationService';
 
@@ -205,10 +204,10 @@ describe('AddFeedDialog', () => {
 
   function renderWithNotifications() {
     return render(
-      <NotificationProvider>
-        <ApiNotificationBridge />
+      <>
         <ReaderLayout />
-      </NotificationProvider>,
+        <ToastHost />
+      </>,
     );
   }
 

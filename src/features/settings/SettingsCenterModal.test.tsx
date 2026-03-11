@@ -2,8 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultPersistedSettings } from './settingsSchema';
 import ReaderLayout from '../reader/ReaderLayout';
-import { ApiNotificationBridge } from '../notifications/ApiNotificationBridge';
-import { NotificationProvider } from '../notifications/NotificationProvider';
+import { ToastHost } from '../toast/ToastHost';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useAppStore } from '../../store/appStore';
 
@@ -41,10 +40,10 @@ function resetSettingsStore() {
 
 function renderWithNotifications() {
   return render(
-    <NotificationProvider>
-      <ApiNotificationBridge />
+    <>
       <ReaderLayout />
-    </NotificationProvider>,
+      <ToastHost />
+    </>,
   );
 }
 

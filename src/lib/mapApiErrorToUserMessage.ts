@@ -1,4 +1,4 @@
-import { ApiError } from '../../lib/apiClient';
+import { ApiError } from './apiClient';
 
 export function mapApiErrorToUserMessage(err: unknown): string {
   if (err instanceof ApiError && err.message.trim()) {
@@ -7,3 +7,4 @@ export function mapApiErrorToUserMessage(err: unknown): string {
 
   return '暂时无法完成操作，请稍后重试。';
 }
+

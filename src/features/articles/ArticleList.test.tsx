@@ -5,8 +5,7 @@ import type { ViewType } from '../../types';
 
 type ArticleListModule = typeof import('./ArticleList');
 type AppStoreModule = typeof import('../../store/appStore');
-type NotificationModule = typeof import('../notifications/NotificationProvider');
-type ApiNotificationBridgeModule = typeof import('../notifications/ApiNotificationBridge');
+type ToastHostModule = typeof import('../toast/ToastHost');
 type LoadSnapshot = (input?: { view?: ViewType }) => Promise<void>;
 
 function jsonResponse(payload: unknown, init?: ResponseInit) {
@@ -97,8 +96,7 @@ function setupIntersectionObserverMock() {
 describe('ArticleList', () => {
   let ArticleList: ArticleListModule['default'];
   let useAppStore: AppStoreModule['useAppStore'];
-  let NotificationProvider: NotificationModule['NotificationProvider'];
-  let ApiNotificationBridge: ApiNotificationBridgeModule['ApiNotificationBridge'];
+  let ToastHost: ToastHostModule['ToastHost'];
   let fetchMock: ReturnType<typeof vi.fn>;
 
   function getFetchCallUrl(input: RequestInfo | URL): string {
@@ -126,10 +124,10 @@ describe('ArticleList', () => {
 
   function renderWithNotifications() {
     return render(
-      <NotificationProvider>
-        <ApiNotificationBridge />
+      <>
+        <ToastHost />
         <ArticleList />
-      </NotificationProvider>,
+      </>,
     );
   }
 
@@ -176,8 +174,7 @@ describe('ArticleList', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     ({ default: ArticleList } = await import('./ArticleList'));
-    ({ NotificationProvider } = await import('../notifications/NotificationProvider'));
-    ({ ApiNotificationBridge } = await import('../notifications/ApiNotificationBridge'));
+    ({ ToastHost } = await import('../toast/ToastHost'));
     ({ useAppStore } = await import('../../store/appStore'));
 
     useAppStore.setState({
@@ -1128,10 +1125,10 @@ describe('ArticleList', () => {
           commitCount += 1;
         }}
       >
-        <NotificationProvider>
-          <ApiNotificationBridge />
+        <>
+          <ToastHost />
           <ArticleList />
-        </NotificationProvider>
+        </>
       </React.Profiler>,
     );
 

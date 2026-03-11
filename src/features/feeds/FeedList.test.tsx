@@ -25,8 +25,7 @@ vi.mock('../articles/ArticleView', () => ({
 
 import ReaderLayout from '../reader/ReaderLayout';
 import FeedList from './FeedList';
-import { ApiNotificationBridge } from '../notifications/ApiNotificationBridge';
-import { NotificationProvider } from '../notifications/NotificationProvider';
+import { ToastHost } from '../toast/ToastHost';
 import { useAppStore } from '../../store/appStore';
 
 function jsonResponse(payload: unknown) {
@@ -129,14 +128,14 @@ describe('FeedList manage', () => {
     });
   }
 
-  function renderWithNotifications() {
-    return render(
-      <NotificationProvider>
-        <ApiNotificationBridge />
-        <ReaderLayout />
-      </NotificationProvider>,
-    );
-  }
+function renderWithNotifications() {
+  return render(
+    <>
+      <ReaderLayout />
+      <ToastHost />
+    </>,
+  );
+}
 
   async function openMoveToCategorySubmenu() {
     fireEvent.contextMenu(screen.getByRole('button', { name: /My Feed.*2/ }));
@@ -1349,9 +1348,10 @@ describe('FeedList manage', () => {
     });
 
     render(
-      <NotificationProvider>
+      <>
         <ReaderLayout />
-      </NotificationProvider>,
+        <ToastHost />
+      </>,
     );
 
     const feedButton = screen.getByRole('button', { name: /Broken Feed/i });
@@ -1394,9 +1394,10 @@ describe('FeedList manage', () => {
     });
 
     render(
-      <NotificationProvider>
+      <>
         <ReaderLayout />
-      </NotificationProvider>,
+        <ToastHost />
+      </>,
     );
 
     const feedButton = screen.getByRole('button', { name: /Broken Feed/i });
@@ -1429,9 +1430,10 @@ describe('FeedList manage', () => {
           commitCount += 1;
         }}
       >
-        <NotificationProvider>
+        <>
+          <ToastHost />
           <FeedList />
-        </NotificationProvider>
+        </>
       </Profiler>,
     );
 

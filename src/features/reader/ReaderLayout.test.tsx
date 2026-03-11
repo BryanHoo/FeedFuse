@@ -27,7 +27,7 @@ vi.mock('../articles/ArticleView', () => ({
 }));
 
 import ReaderLayout from './ReaderLayout';
-import { NotificationProvider } from '../notifications/NotificationProvider';
+import { ToastHost } from '../toast/ToastHost';
 import {
   READER_RESIZE_DESKTOP_MIN_WIDTH,
   READER_TABLET_MIN_WIDTH,
@@ -60,9 +60,10 @@ function resetSettingsStore() {
 
 function renderWithNotifications() {
   return render(
-    <NotificationProvider>
+    <>
       <ReaderLayout />
-    </NotificationProvider>,
+      <ToastHost />
+    </>,
   );
 }
 

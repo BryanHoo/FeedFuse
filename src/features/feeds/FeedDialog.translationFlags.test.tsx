@@ -1,11 +1,11 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { NotificationProvider } from '../notifications/NotificationProvider';
+import { ToastHost } from '../toast/ToastHost';
 import FeedDialog from './FeedDialog';
 
 function renderFeedDialog() {
   render(
-    <NotificationProvider>
+    <>
       <FeedDialog
         mode="edit"
         open
@@ -22,7 +22,8 @@ function renderFeedDialog() {
         }}
         onSubmit={async () => undefined}
       />
-    </NotificationProvider>,
+      <ToastHost />
+    </>,
   );
 }
 

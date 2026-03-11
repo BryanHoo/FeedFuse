@@ -1,7 +1,7 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { ApiError } from '@/lib/apiClient';
+import { mapApiErrorToUserMessage } from '@/lib/mapApiErrorToUserMessage';
 import type { Category } from '../../types';
-import { mapApiErrorToUserMessage } from '../notifications/mapApiErrorToUserMessage';
 import { toast } from '../toast/toast';
 import type {
   FeedDialogInitialValues,

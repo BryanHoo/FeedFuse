@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ApiError } from '../../lib/apiClient';
+import { ApiError } from './apiClient';
 import { mapApiErrorToUserMessage } from './mapApiErrorToUserMessage';
 
 describe('mapApiErrorToUserMessage', () => {
@@ -12,3 +12,4 @@ describe('mapApiErrorToUserMessage', () => {
     expect(mapApiErrorToUserMessage(new Error('boom'))).toBe('暂时无法完成操作，请稍后重试。');
   });
 });
+
