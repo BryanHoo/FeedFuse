@@ -135,6 +135,7 @@ OPML 能力放在“设置 > RSS”面板中，前端只负责交互与展示，
 
 - 带 `xmlUrl` 的 `outline` 视为 feed 条目
 - 位于分类 `outline` 下的 feed 条目，分类名取父级 `outline` 的 `text`，缺失时回退到 `title`
+- 若 OPML 出现多层分类嵌套，而本地模型只支持单一分类，则取离 feed 最近的祖先分类 `outline` 作为分类；更上层路径不做拼接保存
 - 根级 feed 条目视为未分类
 - feed 标题优先取 `text`，其次取 `title`，若都缺失则回退为 `xmlUrl`
 - `xmlUrl` 必须是合法的 `http/https` URL，否则记为无效条目
@@ -150,6 +151,7 @@ OPML 能力放在“设置 > RSS”面板中，前端只负责交互与展示，
 - 未分类 feed 直接输出到 `body` 根下，不输出“未分类”分组
 - feed 条目至少输出 `text`、`title`、`type="rss"`、`xmlUrl`
 - 若存在 `siteUrl`，可额外输出 `htmlUrl`，但导入逻辑不依赖该字段
+- 导出顺序应保持可预测：分类按现有分类顺序输出，分类内 feed 按当前仓库默认顺序输出，未分类 feed 统一放在分类分组之后
 
 ### 3. 组件边界、API 形状与用户反馈
 
@@ -198,9 +200,14 @@ OPML 能力放在“设置 > RSS”面板中，前端只负责交互与展示，
 
 - XML 非法
 - 根结构不是可识别的 OPML
-- 文件为空或找不到任何可导入 feed 条目
+- 请求体为空或无法读取为文本
 
 这类错误应返回明确的 validation/error code，而不是 500。
+
+补充约束：
+
+- 若 OPML 结构合法，但文件中没有任何 feed 条目，返回结构化成功结果，`importedCount = 0`
+- 若 OPML 结构合法，但所有条目都因 URL 缺失、URL 非法或重复而未导入，也返回结构化结果，不升级为文件级失败
 
 #### 条目级跳过
 
@@ -268,3 +275,4 @@ OPML 能力放在“设置 > RSS”面板中，前端只负责交互与展示，
 - implementation plan 应优先设计服务端 OPML service，再接 API route，最后接入 RSS 设置面板
 - 实现阶段必须避免把 OPML 逻辑散落到 `RssSettingsPanel` 以外的前端组件中
 - 实现阶段必须确保导入不会触发批量抓取任务
+- 实现阶段应保证空 OPML 与“全部条目被跳过”的结果可被前端摘要清晰呈现，而不是统一映射成失败 toast
