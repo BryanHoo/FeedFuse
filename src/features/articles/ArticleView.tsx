@@ -573,7 +573,7 @@ export default function ArticleView({
           data-testid="article-scroll-container"
         >
           <div
-            className="mx-auto max-w-3xl px-8 pb-12 pt-4"
+            className="w-full px-8 pb-12 pt-4 lg:pl-12 lg:pr-8"
             data-testid="article-content-shell"
           >
           <div className="mb-8">
