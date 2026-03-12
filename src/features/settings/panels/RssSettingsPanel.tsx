@@ -2,13 +2,27 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { SettingsDraft } from '../../../store/settingsStore';
 import type { RssSettings } from '../../../types';
+import OpmlTransferSection, { type OpmlTransferResultSummary } from './OpmlTransferSection';
 
 interface RssSettingsPanelProps {
   draft: SettingsDraft;
   onChange: (updater: (draft: SettingsDraft) => void) => void;
+  opmlImporting?: boolean;
+  opmlExporting?: boolean;
+  lastOpmlImportResult?: OpmlTransferResultSummary | null;
+  onOpmlImport?: (file: File) => void | Promise<void>;
+  onOpmlExport?: () => void | Promise<void>;
 }
 
-export default function RssSettingsPanel({ draft, onChange }: RssSettingsPanelProps) {
+export default function RssSettingsPanel({
+  draft,
+  onChange,
+  opmlImporting = false,
+  opmlExporting = false,
+  lastOpmlImportResult = null,
+  onOpmlImport = () => undefined,
+  onOpmlExport = () => undefined,
+}: RssSettingsPanelProps) {
   const rss = draft.persisted.rss;
   const globalKeywordsText = rss.articleKeywordFilter.globalKeywords.join('\n');
 
@@ -21,7 +35,7 @@ export default function RssSettingsPanel({ draft, onChange }: RssSettingsPanelPr
   ];
 
   return (
-    <section>
+    <section className="space-y-4">
       <div className="overflow-hidden rounded-lg border border-border bg-background">
         <div className="flex flex-col divide-y divide-border">
           <div className="flex items-center justify-between gap-4 px-4 py-3.5">
@@ -77,6 +91,14 @@ export default function RssSettingsPanel({ draft, onChange }: RssSettingsPanelPr
           </div>
         </div>
       </div>
+
+      <OpmlTransferSection
+        importing={opmlImporting}
+        exporting={opmlExporting}
+        lastImportResult={lastOpmlImportResult}
+        onImport={onOpmlImport}
+        onExport={onOpmlExport}
+      />
     </section>
   );
 }
