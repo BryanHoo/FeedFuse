@@ -22,6 +22,7 @@ describe('ArticleScrollAssist', () => {
 
     expect(label).toBeInTheDocument();
     expect(backToTopButton).toHaveClass('h-10', 'w-10', 'rounded-full', 'bg-background/70');
+    expect(backToTopButton.className).not.toContain('shadow-sm');
     expect(backToTopButton.className).not.toContain('[&_svg]:size-4');
     expect(ringLayer).toHaveClass('absolute', 'inset-[2px]', 'pointer-events-none');
     expect(progressSvg).toHaveClass('h-full', 'w-full', '-rotate-90');

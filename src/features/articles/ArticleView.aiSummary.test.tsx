@@ -780,7 +780,7 @@ describe('ArticleView ai summary', () => {
     });
   });
 
-  it('三个操作按钮展示可点击的 hover 状态', async () => {
+  it('三个操作按钮展示扁平化交互样式', async () => {
     useAppStore.setState({
       feeds: [
         {
@@ -824,10 +824,9 @@ describe('ArticleView ai summary', () => {
     expect(starButton).toHaveClass('cursor-pointer');
     expect(translateButton).toHaveClass('cursor-pointer');
     expect(aiSummaryButton).toHaveClass('cursor-pointer');
-
-    expect(starButton).toHaveClass('hover:shadow-md');
-    expect(translateButton).toHaveClass('hover:shadow-md');
-    expect(aiSummaryButton).toHaveClass('hover:shadow-md');
+    expect(starButton.className).not.toContain('hover:shadow-md');
+    expect(translateButton.className).not.toContain('hover:shadow-md');
+    expect(aiSummaryButton.className).not.toContain('hover:shadow-md');
   });
 
   it('点击 AI 摘要区域任意位置可展开和收起', async () => {

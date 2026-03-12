@@ -653,7 +653,8 @@ export default function ArticleView({
                 type="button"
                 onClick={() => toggleStar(article.id)}
                 variant={article.isStarred ? 'default' : 'secondary'}
-                className="h-8 px-3 text-sm cursor-pointer transition-shadow hover:shadow-md"
+                size="compact"
+                className="cursor-pointer"
               >
                 <Star fill={article.isStarred ? 'currentColor' : 'none'} />
                 <span>{article.isStarred ? '已收藏' : '收藏'}</span>
@@ -662,7 +663,8 @@ export default function ArticleView({
               <Button
                 type="button"
                 variant="secondary"
-                className="h-8 px-3 text-sm cursor-pointer transition-shadow hover:shadow-md"
+                size="compact"
+                className="cursor-pointer"
                 onClick={onFulltextButtonClick}
                 disabled={fulltextButtonDisabled}
               >
@@ -674,7 +676,8 @@ export default function ArticleView({
                 <Button
                   type="button"
                   variant="secondary"
-                  className="h-8 px-3 text-sm cursor-pointer transition-shadow hover:shadow-md"
+                  size="compact"
+                  className="cursor-pointer"
                   onClick={onAiTranslationButtonClick}
                 >
                   <Languages />
@@ -685,7 +688,8 @@ export default function ArticleView({
               <Button
                 type="button"
                 variant="secondary"
-                className="h-8 px-3 text-sm cursor-pointer transition-shadow hover:shadow-md"
+                size="compact"
+                className="cursor-pointer"
                 onClick={onAiSummaryButtonClick}
                 disabled={aiSummaryButtonDisabled}
               >
