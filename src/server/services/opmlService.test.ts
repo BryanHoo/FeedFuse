@@ -33,6 +33,21 @@ const VALID_OPML = `
   </opml>
 `;
 
+const OPML_WITH_HTML_URL = `
+  <?xml version="1.0"?>
+  <opml version="2.0">
+    <body>
+      <outline text="Tech">
+        <outline
+          text="New"
+          xmlUrl="https://example.com/b.xml"
+          htmlUrl="https://example.com/blog"
+        />
+      </outline>
+    </body>
+  </opml>
+`;
+
 describe('importOpml', () => {
   beforeEach(() => {
     listCategoriesMock.mockReset();
@@ -110,6 +125,7 @@ describe('importOpml', () => {
       title: 'New',
       url: 'https://example.com/b.xml',
       siteUrl: null,
+      iconUrl: null,
       categoryName: 'Tech',
     });
     expect(result).toMatchObject({
@@ -125,6 +141,43 @@ describe('importOpml', () => {
         reason: 'duplicate_in_db',
       },
     ]);
+  });
+
+  it('imports htmlUrl as siteUrl and derives iconUrl for imported feeds', async () => {
+    listCategoriesMock.mockResolvedValue([]);
+    listFeedsMock.mockResolvedValue([]);
+    createFeedWithCategoryResolutionMock.mockResolvedValue({
+      id: 'feed-2',
+      title: 'New',
+      url: 'https://example.com/b.xml',
+      siteUrl: 'https://example.com/blog',
+      iconUrl:
+        'https://www.google.com/s2/favicons?sz=64&domain_url=https%3A%2F%2Fexample.com',
+      enabled: true,
+      fullTextOnOpenEnabled: false,
+      aiSummaryOnOpenEnabled: false,
+      aiSummaryOnFetchEnabled: false,
+      bodyTranslateOnFetchEnabled: false,
+      bodyTranslateOnOpenEnabled: false,
+      titleTranslateEnabled: false,
+      bodyTranslateEnabled: false,
+      articleListDisplayMode: 'card',
+      categoryId: 'cat-tech',
+      fetchIntervalMinutes: 30,
+      lastFetchStatus: null,
+      lastFetchError: null,
+    });
+
+    await importOpml(pool, { content: OPML_WITH_HTML_URL });
+
+    expect(createFeedWithCategoryResolutionMock).toHaveBeenCalledWith(pool, {
+      title: 'New',
+      url: 'https://example.com/b.xml',
+      siteUrl: 'https://example.com/blog',
+      iconUrl:
+        'https://www.google.com/s2/favicons?sz=64&domain_url=https%3A%2F%2Fexample.com',
+      categoryName: 'Tech',
+    });
   });
 });
 

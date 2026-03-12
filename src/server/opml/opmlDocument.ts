@@ -3,6 +3,7 @@ import { JSDOM } from 'jsdom';
 export interface ParsedOpmlEntry {
   title: string;
   xmlUrl: string;
+  siteUrl: string | null;
   category: string | null;
 }
 
@@ -137,10 +138,12 @@ export function parseOpmlDocument(xml: string): ParsedOpmlDocument {
 
   const visitOutline = (outline: Element, nearestCategory: string | null) => {
     const xmlUrl = getAttributeValue(outline, 'xmlUrl');
+    const htmlUrl = getAttributeValue(outline, 'htmlUrl');
     const label = getOutlineLabel(outline);
 
     if (xmlUrl) {
       const normalizedUrl = normalizeHttpUrl(xmlUrl);
+      const normalizedSiteUrl = htmlUrl ? normalizeHttpUrl(htmlUrl) : null;
       if (!normalizedUrl) {
         invalidItems.push({
           title: label,
@@ -158,6 +161,7 @@ export function parseOpmlDocument(xml: string): ParsedOpmlDocument {
         entries.push({
           title: label ?? normalizedUrl,
           xmlUrl: normalizedUrl,
+          siteUrl: normalizedSiteUrl,
           category: nearestCategory,
         });
       }

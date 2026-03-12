@@ -20,7 +20,32 @@ describe('parseOpmlDocument', () => {
       {
         title: 'https://example.com/feed.xml',
         xmlUrl: 'https://example.com/feed.xml',
+        siteUrl: null,
         category: 'Leaf',
+      },
+    ]);
+  });
+
+  it('parses htmlUrl into siteUrl when present', () => {
+    const parsed = parseOpmlDocument(`
+      <?xml version="1.0"?>
+      <opml version="2.0">
+        <body>
+          <outline
+            text="Example"
+            xmlUrl="https://example.com/feed.xml"
+            htmlUrl="https://example.com/blog"
+          />
+        </body>
+      </opml>
+    `);
+
+    expect(parsed.entries).toEqual([
+      {
+        title: 'Example',
+        xmlUrl: 'https://example.com/feed.xml',
+        siteUrl: 'https://example.com/blog',
+        category: null,
       },
     ]);
   });

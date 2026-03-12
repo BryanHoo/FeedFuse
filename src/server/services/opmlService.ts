@@ -8,6 +8,7 @@ import {
 } from '../opml/opmlDocument';
 import { listCategories } from '../repositories/categoriesRepo';
 import { listFeeds } from '../repositories/feedsRepo';
+import { deriveFeedIconUrl } from '../rss/deriveFeedIconUrl';
 import { createFeedWithCategoryResolution } from './feedCategoryLifecycleService';
 
 export interface OpmlImportResult {
@@ -84,7 +85,8 @@ export async function importOpml(
     await createFeedWithCategoryResolution(pool, {
       title: entry.title,
       url: entry.xmlUrl,
-      siteUrl: null,
+      siteUrl: entry.siteUrl,
+      iconUrl: deriveFeedIconUrl(entry.siteUrl),
       categoryName: entry.category,
     });
 
