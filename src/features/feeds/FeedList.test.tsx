@@ -1437,6 +1437,30 @@ function renderWithNotifications() {
     });
   });
 
+  it('shows tooltip for the add feed icon button in header', async () => {
+    vi.useFakeTimers();
+    try {
+      render(<FeedList />);
+
+      const button = screen.getByRole('button', { name: '添加 RSS 源' });
+      expect(button).not.toHaveAttribute('title');
+
+      await act(async () => {
+        fireEvent.pointerMove(button, {
+          clientX: 120,
+          clientY: 32,
+          pointerType: 'mouse',
+        });
+        await vi.advanceTimersByTimeAsync(150);
+      });
+
+      expect(document.body.querySelector('[role="tooltip"]')).toHaveTextContent('添加 RSS 源');
+      expect(document.body.querySelector('[data-side="bottom"]')).toHaveClass('bg-black/80');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('does not commit again when unrelated app store state changes', () => {
     let commitCount = 0;
 

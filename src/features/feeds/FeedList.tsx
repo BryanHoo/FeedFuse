@@ -300,17 +300,25 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
             />
             <span className="text-[15px] font-semibold leading-none tracking-tight">FeedFuse</span>
           </h1>
-          <Button
-            onClick={openAddFeedModal}
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-muted-foreground"
-            aria-label="添加 RSS 源"
-            title="添加 RSS 源"
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
+          <TooltipProvider delayDuration={150}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={openAddFeedModal}
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-muted-foreground"
+                  aria-label="添加 RSS 源"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" aria-label="添加 RSS 源">
+                添加 RSS 源
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
 
         <div className="space-y-0.5 px-2 pb-2 pt-1">
