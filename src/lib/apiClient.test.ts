@@ -407,6 +407,34 @@ it('exportOpml reads XML text and filename without using requestApi JSON envelop
   expect(result.xml).toContain('<opml version="2.0">');
 });
 
+it('exportOpml throws ApiError when download endpoint returns JSON error envelope', async () => {
+  const fetchMock = vi.fn(async () => {
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        error: {
+          code: 'validation_error',
+          message: 'OPML 导出失败',
+        },
+      }),
+      {
+        status: 400,
+        headers: { 'content-type': 'application/json' },
+      },
+    );
+  });
+  vi.stubGlobal('fetch', fetchMock);
+
+  const { ApiError, exportOpml } = await import('./apiClient');
+
+  await expect(exportOpml()).rejects.toBeInstanceOf(ApiError);
+  await expect(exportOpml()).rejects.toMatchObject({
+    code: 'validation_error',
+    message: 'OPML 导出失败',
+    status: 400,
+  });
+});
+
 describe('refreshAllFeeds', () => {
   it('POSTs /api/feeds/refresh', async () => {
     const fetchMock = vi.fn(async () => {

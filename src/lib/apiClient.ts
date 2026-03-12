@@ -103,6 +103,14 @@ function parseContentDispositionFileName(value: string | null): string | null {
   return plainMatch?.[1]?.trim() ?? null;
 }
 
+function isApiErrorPayload(value: unknown): value is ApiErrorPayload {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return typeof value.code === 'string' && typeof value.message === 'string';
+}
+
 async function requestApi<T>(
   path: string,
   init?: RequestInit,
@@ -180,11 +188,11 @@ export async function exportOpml(): Promise<{ xml: string; fileName: string }> {
 
   if (!res.ok) {
     const json: unknown = await res.json().catch(() => null);
-    if (!isRecord(json) || json.ok !== false || !isRecord(json.error)) {
+    if (!isRecord(json) || json.ok !== false || !isApiErrorPayload(json.error)) {
       throwInvalidResponseApiError(res.status);
     }
 
-    const payload = json.error as ApiErrorPayload;
+    const payload = json.error;
     const message = payload.message ?? '暂时无法完成请求，请稍后重试';
     notifyApiError(message);
     throw new ApiError(
