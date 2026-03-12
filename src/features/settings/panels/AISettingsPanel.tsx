@@ -166,8 +166,8 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
                   }
                   aria-pressed={translation.useSharedAi}
                   variant={translation.useSharedAi ? 'default' : 'outline'}
-                  size="sm"
-                  className="h-8 rounded-lg px-3"
+                  size="compact"
+                  className="px-3"
                 >
                   复用主配置
                 </Button>
@@ -180,8 +180,8 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
                   }
                   aria-pressed={!translation.useSharedAi}
                   variant={!translation.useSharedAi ? 'default' : 'outline'}
-                  size="sm"
-                  className="h-8 rounded-lg px-3"
+                  size="compact"
+                  className="px-3"
                 >
                   单独配置
                 </Button>

@@ -62,8 +62,8 @@ export default function GeneralSettingsPanel({ draft, onChange }: GeneralSetting
                   }
                   aria-pressed={general.theme === value}
                   variant={general.theme === value ? 'default' : 'outline'}
-                  size="sm"
-                  className="h-8 gap-1.5 rounded-lg px-2.5"
+                  size="compact"
+                  className="gap-1.5 px-2.5"
                   title={label}
                 >
                   <Icon size={14} />
@@ -90,8 +90,8 @@ export default function GeneralSettingsPanel({ draft, onChange }: GeneralSetting
                   }
                   aria-pressed={general.fontSize === value}
                   variant={general.fontSize === value ? 'default' : 'outline'}
-                  size="sm"
-                  className="h-8 w-12 rounded-lg px-0"
+                  size="compact"
+                  className="w-12 px-0"
                 >
                   {label}
                 </Button>
@@ -116,8 +116,8 @@ export default function GeneralSettingsPanel({ draft, onChange }: GeneralSetting
                   }
                   aria-pressed={general.fontFamily === value}
                   variant={general.fontFamily === value ? 'default' : 'outline'}
-                  size="sm"
-                  className="h-8 w-16 rounded-lg px-0"
+                  size="compact"
+                  className="w-16 px-0"
                 >
                   {label}
                 </Button>
@@ -142,8 +142,8 @@ export default function GeneralSettingsPanel({ draft, onChange }: GeneralSetting
                   }
                   aria-pressed={general.lineHeight === value}
                   variant={general.lineHeight === value ? 'default' : 'outline'}
-                  size="sm"
-                  className="h-8 w-14 rounded-lg px-0"
+                  size="compact"
+                  className="w-14 px-0"
                 >
                   {label}
                 </Button>
@@ -167,8 +167,8 @@ export default function GeneralSettingsPanel({ draft, onChange }: GeneralSetting
                   }
                   aria-pressed={!general.autoMarkReadEnabled}
                   variant={!general.autoMarkReadEnabled ? 'default' : 'outline'}
-                  size="sm"
-                  className="h-8 w-[88px] rounded-lg px-0"
+                  size="compact"
+                  className="w-[88px] px-0"
                 >
                   手动标记
                 </Button>
@@ -181,8 +181,8 @@ export default function GeneralSettingsPanel({ draft, onChange }: GeneralSetting
                   }
                   aria-pressed={general.autoMarkReadEnabled}
                   variant={general.autoMarkReadEnabled ? 'default' : 'outline'}
-                  size="sm"
-                  className="h-8 w-[88px] rounded-lg px-0"
+                  size="compact"
+                  className="w-[88px] px-0"
                 >
                   自动标记
                 </Button>
@@ -199,7 +199,7 @@ export default function GeneralSettingsPanel({ draft, onChange }: GeneralSetting
                 }}
                 disabled={!general.autoMarkReadEnabled}
               >
-                <SelectTrigger className="h-8 w-[110px] rounded-lg">
+                <SelectTrigger className="h-8 w-[110px]">
                   <SelectValue placeholder="标记时间" />
                 </SelectTrigger>
                 <SelectContent>
@@ -228,8 +228,8 @@ export default function GeneralSettingsPanel({ draft, onChange }: GeneralSetting
                 }
                 aria-pressed={!general.defaultUnreadOnlyInAll}
                 variant={!general.defaultUnreadOnlyInAll ? 'default' : 'outline'}
-                size="sm"
-                className="h-8 w-[88px] rounded-lg px-0"
+                size="compact"
+                className="w-[88px] px-0"
               >
                 全部文章
               </Button>
@@ -242,8 +242,8 @@ export default function GeneralSettingsPanel({ draft, onChange }: GeneralSetting
                 }
                 aria-pressed={general.defaultUnreadOnlyInAll}
                 variant={general.defaultUnreadOnlyInAll ? 'default' : 'outline'}
-                size="sm"
-                className="h-8 w-[88px] rounded-lg px-0"
+                size="compact"
+                className="w-[88px] px-0"
               >
                 仅看未读
               </Button>

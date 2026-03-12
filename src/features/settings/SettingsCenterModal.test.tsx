@@ -399,6 +399,32 @@ describe('SettingsCenterModal', () => {
     expect(screen.getByLabelText('设置导航')).toBeInTheDocument();
   });
 
+  it('uses flat controls across settings sections', async () => {
+    resetSettingsStore();
+    renderWithNotifications();
+
+    fireEvent.click(screen.getByLabelText('打开设置'));
+    await screen.findByTestId('settings-center-modal');
+
+    const rssTab = screen.getByTestId('settings-section-tab-rss');
+    expect(rssTab.className).not.toContain('data-[state=active]:shadow-sm');
+
+    const autoMarkReadButton = screen.getByRole('button', { name: '自动标记' });
+    expect(autoMarkReadButton.className).not.toContain('rounded-lg');
+
+    fireEvent.click(rssTab);
+    expect((await screen.findByLabelText('全局关键词过滤')).className).not.toContain(
+      'shadow-sm',
+    );
+    const rssIntervalTrigger = screen.getAllByRole('combobox')[0];
+    expect(rssIntervalTrigger.className).not.toContain('rounded-lg');
+
+    fireEvent.click(screen.getByTestId('settings-section-tab-ai'));
+    expect(
+      await screen.findByRole('button', { name: '复用主配置' }),
+    ).not.toHaveClass('rounded-lg');
+  });
+
 
   it('saves global keyword filter from rss settings and refreshes snapshot', async () => {
     resetSettingsStore();

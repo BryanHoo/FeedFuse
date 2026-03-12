@@ -70,4 +70,20 @@ describe('FeedKeywordFilterDialog', () => {
       expect(onOpenChange).toHaveBeenCalledWith(false);
     });
   });
+
+  it('renders feed keyword textarea with flat shared input classes', async () => {
+    getFeedKeywordFilterMock.mockResolvedValue({ keywords: [] });
+
+    render(
+      <FeedKeywordFilterDialog
+        open
+        feed={buildFeed()}
+        onOpenChange={vi.fn()}
+      />,
+    );
+
+    const textarea = await screen.findByLabelText('文章关键词过滤规则');
+    expect(textarea.className).not.toContain('shadow-sm');
+    expect(textarea).toHaveClass('rounded-md');
+  });
 });

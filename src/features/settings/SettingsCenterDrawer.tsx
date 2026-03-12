@@ -66,7 +66,7 @@ const autosaveStatusMeta = {
 } as const;
 
 const settingsSectionTabClassName =
-  'group relative min-w-[152px] justify-start rounded-2xl border border-transparent bg-transparent px-3 py-2.5 text-left text-muted-foreground transition-colors hover:border-border/80 hover:bg-accent/60 hover:text-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm md:min-w-0 md:w-full md:px-3 md:py-3 md:pl-7 md:before:absolute md:before:inset-y-3 md:before:left-2 md:before:w-[3px] md:before:rounded-full md:before:content-[\'\'] md:data-[state=active]:before:bg-primary';
+  'group relative min-w-[152px] justify-start rounded-lg border border-transparent bg-transparent px-3 py-2.5 text-left text-muted-foreground transition-colors hover:border-border/80 hover:bg-accent/60 hover:text-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground md:min-w-0 md:w-full md:px-3 md:py-3 md:pl-7 md:before:absolute md:before:inset-y-3 md:before:left-2 md:before:w-[3px] md:before:rounded-full md:before:content-[\'\'] md:data-[state=active]:before:bg-primary';
 
 const settingsSectionIconClassName =
   'mt-0.5 shrink-0 text-muted-foreground transition-colors group-data-[state=active]:text-primary group-hover:text-foreground';

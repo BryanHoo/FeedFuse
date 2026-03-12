@@ -1,5 +1,6 @@
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import type { SettingsDraft } from '../../../store/settingsStore';
 import type { RssSettings } from '../../../types';
 import OpmlTransferSection, { type OpmlTransferResultSummary } from './OpmlTransferSection';
@@ -54,7 +55,7 @@ export default function RssSettingsPanel({
                   });
                 }}
               >
-                <SelectTrigger className="h-8 rounded-lg">
+                <SelectTrigger className="h-8">
                   <SelectValue placeholder="选择间隔" />
                 </SelectTrigger>
                 <SelectContent>
@@ -75,7 +76,7 @@ export default function RssSettingsPanel({
             <p className="mb-2 text-xs text-muted-foreground">
               每行输入一个关键词。只要标题或摘要包含该关键词，这篇文章就不会显示在列表中。
             </p>
-            <textarea
+            <Textarea
               id="rss-global-article-keyword-filter"
               aria-label="全局关键词过滤"
               value={globalKeywordsText}
@@ -86,7 +87,7 @@ export default function RssSettingsPanel({
                 });
               }}
               placeholder={'广告\n招聘\nSponsored'}
-              className="min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="min-h-28"
             />
           </div>
         </div>
