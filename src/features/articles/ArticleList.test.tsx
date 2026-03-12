@@ -902,6 +902,24 @@ describe('ArticleList', () => {
     expect(screen.queryByRole('heading', { level: 2, name: '文章' })).not.toBeInTheDocument();
   });
 
+  it('uses reader toolbar tooltips for middle-pane icon actions', async () => {
+    useAppStore.setState({ selectedView: 'feed-1' });
+
+    renderWithNotifications();
+
+    const refreshButton = screen.getByRole('button', { name: FEED_REFRESH_LABEL });
+    const displayModeButton = screen.getByRole('button', { name: TOGGLE_TO_LIST_LABEL });
+
+    expect(refreshButton).not.toHaveAttribute('title');
+    expect(displayModeButton).not.toHaveAttribute('title');
+
+    fireEvent.mouseEnter(refreshButton);
+    expect(await screen.findByText(FEED_REFRESH_LABEL)).toBeInTheDocument();
+
+    fireEvent.mouseEnter(displayModeButton);
+    expect(await screen.findByText(TOGGLE_TO_LIST_LABEL)).toBeInTheDocument();
+  });
+
   it('truncates long selected feed titles in header while preserving full title tooltip', () => {
     const longTitle = '这是一个非常非常长的订阅源标题🙂 مع نص عربي طويل للغاية for overflow hardening';
 

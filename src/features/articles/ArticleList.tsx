@@ -4,9 +4,9 @@ import { useAppStore } from "../../store/appStore";
 import { formatRelativeTime, getArticleSectionHeading, getLocalDayKey } from "../../utils/date";
 import { patchFeed, refreshAllFeeds, refreshFeed } from "../../lib/apiClient";
 import { useRenderTimeSnapshot } from "../../hooks/useRenderTimeSnapshot";
-import { Button } from "@/components/ui/button";
 import { READER_PANE_HOVER_BACKGROUND_CLASS_NAME } from "@/lib/designSystem";
 import { cn } from "@/lib/utils";
+import ReaderToolbarIconButton from "../reader/ReaderToolbarIconButton";
 import { toast } from "../toast/toast";
 
 const sessionVisibleArticleIds = new Set<string>();
@@ -556,68 +556,35 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
           {headerTitle}
         </h2>
         <div className="shrink-0 flex items-center gap-2">
-          <Button
-            onClick={onRefreshClick}
-            type="button"
-            variant="ghost"
-            size="icon"
+          <ReaderToolbarIconButton
+            icon={RefreshCw}
+            label={refreshButtonTitle}
             disabled={!canRefresh}
-            className="h-6 w-6 text-muted-foreground"
-            aria-label={refreshButtonTitle}
-            title={refreshButtonTitle}
-          >
-            <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
-          </Button>
+            onClick={onRefreshClick}
+            iconClassName={cn("h-3.5 w-3.5", refreshing && "animate-spin")}
+          />
           {!isAggregateView && selectedFeed && (
-            <Button
-              onClick={onToggleDisplayMode}
-              type="button"
-              variant="ghost"
-              size="icon"
+            <ReaderToolbarIconButton
+              icon={effectiveDisplayMode === "card" ? List : LayoutGrid}
+              label={displayModeButtonTitle}
               disabled={displayModeSaving}
-              className={cn(
-                "h-6 w-6 text-muted-foreground",
-                effectiveDisplayMode === "list" && "bg-primary/10 text-primary hover:bg-primary/15",
-              )}
-              aria-label={displayModeButtonTitle}
-              aria-pressed={effectiveDisplayMode === "list"}
-              title={displayModeButtonTitle}
-            >
-              {effectiveDisplayMode === "card" ? (
-                <List className="h-3.5 w-3.5" />
-              ) : (
-                <LayoutGrid className="h-3.5 w-3.5" />
-              )}
-            </Button>
+              pressed={effectiveDisplayMode === "list"}
+              onClick={onToggleDisplayMode}
+            />
           )}
           {showHeaderActions && (
             <>
-              <Button
+              <ReaderToolbarIconButton
+                icon={CircleDot}
+                label={unreadOnlyButtonLabel}
+                pressed={showUnreadOnly}
                 onClick={toggleShowUnreadOnly}
-                type="button"
-                variant="ghost"
-                size="icon"
-                className={cn(
-                  "h-6 w-6 text-muted-foreground",
-                  showUnreadOnly && "bg-primary/10 text-primary hover:bg-primary/15",
-                )}
-                aria-label={unreadOnlyButtonLabel}
-                aria-pressed={showUnreadOnly}
-                title={unreadOnlyButtonLabel}
-              >
-                <CircleDot className="h-3.5 w-3.5" />
-              </Button>
-              <Button
+              />
+              <ReaderToolbarIconButton
+                icon={CheckCheck}
+                label="标记全部为已读"
                 onClick={handleMarkAllAsRead}
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 text-muted-foreground"
-                aria-label="标记全部为已读"
-                title="标记全部为已读"
-              >
-                <CheckCheck className="h-3.5 w-3.5" />
-              </Button>
+              />
             </>
           )}
           <span className="text-[10px] font-medium text-muted-foreground">{articleCount} 篇</span>
