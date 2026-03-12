@@ -9,7 +9,7 @@ import {
   type MouseEvent,
   type UIEvent,
 } from 'react';
-import { FileText, Languages, Sparkles, Star } from 'lucide-react';
+import { FileText, Languages, Settings as SettingsIcon, Sparkles, Star } from 'lucide-react';
 import { useAppStore } from '../../store/appStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import {
@@ -28,11 +28,13 @@ import { useStreamingAiSummary } from './useStreamingAiSummary';
 import { buildImmersiveHtml } from './immersiveRender';
 import ArticleScrollAssist from './ArticleScrollAssist';
 import ArticleImagePreview from './ArticleImagePreview';
+import ReaderToolbarIconButton from '../reader/ReaderToolbarIconButton';
 import { READER_RESIZE_DESKTOP_MIN_WIDTH } from '../reader/readerLayoutSizing';
 
 const FLOATING_TITLE_SCROLL_THRESHOLD_PX = 96;
 
 interface ArticleViewProps {
+  onOpenSettings?: () => void;
   onTitleVisibilityChange?: (isVisible: boolean) => void;
   reserveTopSpace?: boolean;
   renderedAt?: string;
@@ -46,6 +48,7 @@ type ImagePreviewState = {
 };
 
 export default function ArticleView({
+  onOpenSettings,
   onTitleVisibilityChange,
   reserveTopSpace = true,
   renderedAt,
@@ -124,6 +127,10 @@ export default function ArticleView({
   const hasImmersiveSegments = immersiveTranslation.segments.length > 0;
   const hasAiTranslationContent = hasLegacyAiTranslationContent || hasImmersiveSegments;
   const bodyTranslationEligible = article?.bodyTranslationEligible !== false;
+  const titleOriginal = article?.titleOriginal?.trim() || article?.title || '';
+  const titleZh = article?.titleZh?.trim();
+  const showBilingualTitle = aiTranslationViewing && Boolean(titleZh);
+  const showDesktopToolbar = reserveTopSpace && isDesktop;
   const activeImagePreview =
     imagePreview?.articleId === currentArticleId ? imagePreview : null;
 
@@ -382,6 +389,67 @@ export default function ArticleView({
     void requestImmersiveTranslation({ force: true, autoView: true });
   }
 
+  function renderDesktopToolbar() {
+    const desktopToolbarTitle = article ? titleOriginal : '选择文章后可查看内容';
+    const showTranslationAction = !article || bodyTranslationEligible;
+
+    return (
+      <div className="flex h-12 min-w-0 items-center justify-between gap-3 border-b px-4">
+        <div className="min-w-0 flex-1">
+          {article?.link ? (
+            <a
+              href={article.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`打开原文：${desktopToolbarTitle}`}
+              className="block truncate rounded-sm text-[0.96rem] font-semibold tracking-[0.01em] underline-offset-4 transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              {desktopToolbarTitle}
+            </a>
+          ) : (
+            <span className="block truncate text-[0.96rem] font-semibold tracking-[0.01em] text-foreground">
+              {desktopToolbarTitle}
+            </span>
+          )}
+        </div>
+        <div className="shrink-0 flex items-center gap-2">
+          <ReaderToolbarIconButton
+            icon={Star}
+            label={article?.isStarred ? '已收藏' : '收藏'}
+            pressed={Boolean(article?.isStarred)}
+            disabled={!article}
+            onClick={article ? () => toggleStar(article.id) : undefined}
+          />
+          <ReaderToolbarIconButton
+            icon={FileText}
+            label="抓取全文"
+            disabled={!article || fulltextButtonDisabled}
+            onClick={article ? onFulltextButtonClick : undefined}
+          />
+          {showTranslationAction ? (
+            <ReaderToolbarIconButton
+              icon={Languages}
+              label="翻译"
+              disabled={!article}
+              onClick={article ? onAiTranslationButtonClick : undefined}
+            />
+          ) : null}
+          <ReaderToolbarIconButton
+            icon={Sparkles}
+            label="生成摘要"
+            disabled={!article || aiSummaryButtonDisabled}
+            onClick={article ? onAiSummaryButtonClick : undefined}
+          />
+          <ReaderToolbarIconButton
+            icon={SettingsIcon}
+            label="打开设置"
+            onClick={onOpenSettings}
+          />
+        </div>
+      </div>
+    );
+  }
+
   const toggleAiSummaryExpanded = useCallback(() => {
     if (!currentArticleId) return;
     setAiSummaryExpandedArticleId((current) =>
@@ -508,7 +576,7 @@ export default function ArticleView({
   if (!article) {
     return (
       <div className="flex h-full flex-col bg-background text-foreground">
-        {reserveTopSpace ? <div className="h-12 shrink-0" /> : null}
+        {showDesktopToolbar ? renderDesktopToolbar() : reserveTopSpace ? <div className="h-12 shrink-0" /> : null}
         <div className="flex flex-1 items-center justify-center">
           <p className="text-muted-foreground">从列表中选择一篇文章开始阅读</p>
         </div>
@@ -553,9 +621,6 @@ export default function ArticleView({
   const aiSummarySessionFailed = activeAiSummarySession?.status === 'failed';
   const aiSummarySessionRunning =
     activeAiSummarySession?.status === 'queued' || activeAiSummarySession?.status === 'running';
-  const titleOriginal = article.titleOriginal?.trim() || article.title;
-  const titleZh = article.titleZh?.trim();
-  const showBilingualTitle = aiTranslationViewing && Boolean(titleZh);
   const scrollStateMatchesCurrentArticle = scrollAssistArticleId === currentArticleId;
   const effectiveScrollAssistPercent = scrollStateMatchesCurrentArticle ? scrollAssistPercent : 0;
   const effectiveArticleTitleVisible = scrollStateMatchesCurrentArticle ? articleTitleVisible : true;
@@ -564,7 +629,7 @@ export default function ArticleView({
 
   return (
     <div className="flex h-full flex-col bg-background text-foreground">
-      {reserveTopSpace ? <div className="h-12 shrink-0" /> : null}
+      {showDesktopToolbar ? renderDesktopToolbar() : reserveTopSpace ? <div className="h-12 shrink-0" /> : null}
       <div className="relative flex-1 overflow-hidden" data-testid="article-viewport">
         <div
           ref={scrollContainerRef}
@@ -648,55 +713,57 @@ export default function ArticleView({
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                onClick={() => toggleStar(article.id)}
-                variant={article.isStarred ? 'default' : 'secondary'}
-                size="compact"
-                className="cursor-pointer"
-              >
-                <Star fill={article.isStarred ? 'currentColor' : 'none'} />
-                <span>{article.isStarred ? '已收藏' : '收藏'}</span>
-              </Button>
+            {!showDesktopToolbar ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  onClick={() => toggleStar(article.id)}
+                  variant={article.isStarred ? 'default' : 'secondary'}
+                  size="compact"
+                  className="cursor-pointer"
+                >
+                  <Star fill={article.isStarred ? 'currentColor' : 'none'} />
+                  <span>{article.isStarred ? '已收藏' : '收藏'}</span>
+                </Button>
 
-              <Button
-                type="button"
-                variant="secondary"
-                size="compact"
-                className="cursor-pointer"
-                onClick={onFulltextButtonClick}
-                disabled={fulltextButtonDisabled}
-              >
-                <FileText />
-                <span>抓取全文</span>
-              </Button>
-
-              {bodyTranslationEligible ? (
                 <Button
                   type="button"
                   variant="secondary"
                   size="compact"
                   className="cursor-pointer"
-                  onClick={onAiTranslationButtonClick}
+                  onClick={onFulltextButtonClick}
+                  disabled={fulltextButtonDisabled}
                 >
-                  <Languages />
-                  <span>翻译</span>
+                  <FileText />
+                  <span>抓取全文</span>
                 </Button>
-              ) : null}
 
-              <Button
-                type="button"
-                variant="secondary"
-                size="compact"
-                className="cursor-pointer"
-                onClick={onAiSummaryButtonClick}
-                disabled={aiSummaryButtonDisabled}
-              >
-                <Sparkles />
-                <span>生成摘要</span>
-              </Button>
-            </div>
+                {bodyTranslationEligible ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="compact"
+                    className="cursor-pointer"
+                    onClick={onAiTranslationButtonClick}
+                  >
+                    <Languages />
+                    <span>翻译</span>
+                  </Button>
+                ) : null}
+
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="compact"
+                  className="cursor-pointer"
+                  onClick={onAiSummaryButtonClick}
+                  disabled={aiSummaryButtonDisabled}
+                >
+                  <Sparkles />
+                  <span>生成摘要</span>
+                </Button>
+              </div>
+            ) : null}
           </div>
 
           {fulltextLoading ? (

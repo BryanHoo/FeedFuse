@@ -35,7 +35,7 @@ export default function ReaderToolbarIconButton({
       variant="ghost"
       size="icon"
       className={cn(
-        'h-6 w-6 text-muted-foreground',
+        'h-6 w-6 cursor-pointer text-muted-foreground',
         pressed && 'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary',
         className,
       )}
@@ -55,19 +55,15 @@ export default function ReaderToolbarIconButton({
   return (
     <TooltipProvider delayDuration={150}>
       <Tooltip open={tooltipOpen} onOpenChange={setTooltipOpen}>
-        {disabled ? (
-          <TooltipTrigger asChild>
-            <span
-              className="inline-flex"
-              onMouseEnter={() => setTooltipOpen(true)}
-              onMouseLeave={() => setTooltipOpen(false)}
-            >
-              {button}
-            </span>
-          </TooltipTrigger>
-        ) : (
-          <TooltipTrigger asChild>{button}</TooltipTrigger>
-        )}
+        <TooltipTrigger asChild>
+          <span
+            className="inline-flex"
+            onMouseEnter={() => setTooltipOpen(true)}
+            onMouseLeave={() => setTooltipOpen(false)}
+          >
+            {button}
+          </span>
+        </TooltipTrigger>
         <TooltipContent side="bottom" aria-label={label}>
           <span aria-hidden="true">{visualTooltipLabel}</span>
         </TooltipContent>
