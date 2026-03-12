@@ -997,6 +997,23 @@ describe('ArticleList', () => {
     expect(screen.getByTestId('article-list-row-art-1-unread-dot')).toBeInTheDocument();
   });
 
+  it('uses the stronger reader pane hover class for article cards and list rows', async () => {
+    useAppStore.setState({ selectedView: 'feed-1', selectedArticleId: 'art-1' });
+    renderWithNotifications();
+
+    const cardButton = screen.getByTestId('article-card-art-2-title').closest('button');
+
+    expect(cardButton).not.toBeNull();
+    expect(cardButton?.className).toContain('hover:bg-[var(--reader-pane-hover)]');
+
+    fireEvent.click(screen.getByRole('button', { name: TOGGLE_TO_LIST_LABEL }));
+
+    const listRowButton = (await screen.findByTestId('article-list-row-art-2-title')).closest('button');
+
+    expect(listRowButton).not.toBeNull();
+    expect(listRowButton?.className).toContain('hover:bg-[var(--reader-pane-hover)]');
+  });
+
   it('uses one summary line when card title wraps and two lines when title stays on one line', async () => {
     useAppStore.setState({ selectedView: 'feed-1' });
     renderWithNotifications();

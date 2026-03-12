@@ -16,6 +16,9 @@ export const READER_FEED_DRAWER_SHEET_CLASS_NAME =
 export const READER_TABLET_ARTICLE_PANE_CLASS_NAME =
   'w-[min(var(--layout-reader-tablet-list-max-width),42vw)] min-w-[var(--layout-reader-tablet-list-min-width)] shrink-0 border-r border-border bg-muted/5';
 
+export const READER_PANE_HOVER_BACKGROUND_CLASS_NAME =
+  'hover:bg-[var(--reader-pane-hover)]';
+
 export const NOTIFICATION_VIEWPORT_CLASS_NAME =
   'pointer-events-none fixed right-3 top-3 z-[100] flex w-[min(var(--layout-notification-viewport-max-width),calc(100vw-1.5rem))] flex-col gap-2 sm:right-4 sm:top-4';
 

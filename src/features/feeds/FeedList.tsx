@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/context-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { deleteCategory, patchCategory, reorderCategories } from '@/lib/apiClient';
+import { READER_PANE_HOVER_BACKGROUND_CLASS_NAME } from '@/lib/designSystem';
 import { toast } from '../toast/toast';
 import { cn } from '@/lib/utils';
 
@@ -323,7 +324,10 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
                 'w-full rounded-md px-3 py-2 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
                 selectedView === view.id
                   ? 'bg-primary/10 text-primary'
-                  : 'text-foreground hover:bg-accent hover:text-accent-foreground',
+                  : cn(
+                      'text-foreground hover:text-accent-foreground',
+                      READER_PANE_HOVER_BACKGROUND_CLASS_NAME,
+                    ),
               )}
             >
               <view.Icon aria-hidden="true" className="mr-2 inline-block h-4 w-4 shrink-0 align-[-2px]" />
@@ -344,7 +348,10 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
                 onKeyDown={(event) => handleCategoryKeyDown(event, category.id, expanded)}
                 aria-expanded={expanded}
                 aria-controls={`feed-category-panel-${category.id}`}
-                className="flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-semibold tracking-[0.04em] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                className={cn(
+                  'flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-semibold tracking-[0.04em] text-muted-foreground transition-colors hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+                  READER_PANE_HOVER_BACKGROUND_CLASS_NAME,
+                )}
               >
                 {expanded ? (
                   <ChevronDown size={16} aria-hidden="true" />
@@ -429,7 +436,10 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
                             'flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
                             selectedView === feed.id
                               ? 'bg-primary/10 text-primary'
-                              : 'text-foreground hover:bg-accent hover:text-accent-foreground',
+                              : cn(
+                                  'text-foreground hover:text-accent-foreground',
+                                  READER_PANE_HOVER_BACKGROUND_CLASS_NAME,
+                                ),
                             !feed.enabled && 'opacity-60',
                             isFeedErrored && 'text-destructive hover:text-destructive',
                           )}

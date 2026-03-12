@@ -5,6 +5,7 @@ import { formatRelativeTime, getArticleSectionHeading, getLocalDayKey } from "..
 import { patchFeed, refreshAllFeeds, refreshFeed } from "../../lib/apiClient";
 import { useRenderTimeSnapshot } from "../../hooks/useRenderTimeSnapshot";
 import { Button } from "@/components/ui/button";
+import { READER_PANE_HOVER_BACKGROUND_CLASS_NAME } from "@/lib/designSystem";
 import { cn } from "@/lib/utils";
 import { toast } from "../toast/toast";
 
@@ -661,7 +662,9 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
                       aria-label={getArticleButtonLabel(article, displayTitle)}
                       className={cn(
                         "w-full px-4 py-2.5 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
-                        selectedArticleId === article.id ? "bg-accent" : "hover:bg-accent",
+                        selectedArticleId === article.id
+                          ? "bg-accent"
+                          : READER_PANE_HOVER_BACKGROUND_CLASS_NAME,
                       )}
                     >
                       <div className="min-w-0">
@@ -725,7 +728,9 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
                     aria-label={getArticleButtonLabel(article, displayTitle)}
                     className={cn(
                       "h-[6.5rem] w-full px-4 py-2.5 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
-                      selectedArticleId === article.id ? "bg-accent" : "hover:bg-accent",
+                      selectedArticleId === article.id
+                        ? "bg-accent"
+                        : READER_PANE_HOVER_BACKGROUND_CLASS_NAME,
                     )}
                   >
                     <div className="flex h-full items-stretch gap-3">

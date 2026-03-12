@@ -560,6 +560,23 @@ function renderWithNotifications() {
     });
   });
 
+  it('uses the stronger reader pane hover class for left rail items', () => {
+    useAppStore.setState({
+      selectedView: 'all',
+      selectedArticleId: null,
+    });
+
+    renderWithNotifications();
+
+    const unreadArticlesButton = screen.getByRole('button', { name: '未读文章' });
+    const categoryButton = screen.getByRole('button', { name: /未分类/ });
+    const feedButton = screen.getByRole('button', { name: /My Feed.*2/ });
+
+    expect(unreadArticlesButton.className).toContain('hover:bg-[var(--reader-pane-hover)]');
+    expect(categoryButton.className).toContain('hover:bg-[var(--reader-pane-hover)]');
+    expect(feedButton.className).toContain('hover:bg-[var(--reader-pane-hover)]');
+  });
+
   it('shows AI摘要配置 and 翻译配置 in feed context menu', async () => {
     renderWithNotifications();
 

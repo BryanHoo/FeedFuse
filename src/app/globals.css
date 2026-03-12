@@ -61,6 +61,7 @@
     --layout-reader-feed-drawer-max-width: 22.5rem;
     --layout-reader-tablet-list-max-width: 23.75rem;
     --layout-reader-tablet-list-min-width: 20rem;
+    --reader-pane-hover: color-mix(in oklab, var(--color-accent) 97%, var(--color-foreground));
   }
 
   html {
