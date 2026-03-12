@@ -16,12 +16,14 @@ import {
   FROSTED_HEADER_CLASS_NAME,
   SETTINGS_CENTER_SHEET_CLASS_NAME,
 } from '@/lib/designSystem';
+import { exportOpml, importOpml } from '@/lib/apiClient';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '../../store/appStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import GeneralSettingsPanel from './panels/GeneralSettingsPanel';
 import AISettingsPanel from './panels/AISettingsPanel';
 import RssSettingsPanel from './panels/RssSettingsPanel';
+import type { OpmlTransferResultSummary } from './panels/OpmlTransferSection';
 import { useSettingsAutosave } from './useSettingsAutosave';
 import { toast } from '../toast/toast';
 
@@ -79,6 +81,10 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
   const [draftVersion, setDraftVersion] = useState(0);
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<SettingsSectionKey>('general');
+  const [opmlImporting, setOpmlImporting] = useState(false);
+  const [opmlExporting, setOpmlExporting] = useState(false);
+  const [lastOpmlImportResult, setLastOpmlImportResult] =
+    useState<OpmlTransferResultSummary | null>(null);
   const selectedView = useAppStore((state) => state.selectedView);
   const lastAutosaveStatusRef = useRef<keyof typeof autosaveStatusMeta>('idle');
   const lastSavedNotifyAtRef = useRef(0);
@@ -187,6 +193,43 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
     forceClose();
   };
 
+  const handleOpmlImport = async (file: File) => {
+    setOpmlImporting(true);
+
+    try {
+      const content = await file.text();
+      const result = await importOpml({ content, fileName: file.name });
+      setLastOpmlImportResult(result);
+      toast.success('OPML 导入完成');
+      await useAppStore.getState().loadSnapshot({ view: selectedView });
+    } finally {
+      setOpmlImporting(false);
+    }
+  };
+
+  const handleOpmlExport = async () => {
+    setOpmlExporting(true);
+
+    let objectUrl: string | null = null;
+    try {
+      const result = await exportOpml();
+      const blob = new Blob([result.xml], { type: 'application/xml;charset=utf-8' });
+      objectUrl = URL.createObjectURL(blob);
+
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = result.fileName;
+      anchor.click();
+
+      toast.success('OPML 已开始下载');
+    } finally {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+      setOpmlExporting(false);
+    }
+  };
+
   return (
     <>
       <Sheet
@@ -274,7 +317,15 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
                         <GeneralSettingsPanel draft={draft} onChange={handleDraftChange} />
                       </TabsContent>
                       <TabsContent value="rss" className="mt-0">
-                        <RssSettingsPanel draft={draft} onChange={handleDraftChange} />
+                        <RssSettingsPanel
+                          draft={draft}
+                          onChange={handleDraftChange}
+                          opmlImporting={opmlImporting}
+                          opmlExporting={opmlExporting}
+                          lastOpmlImportResult={lastOpmlImportResult}
+                          onOpmlImport={handleOpmlImport}
+                          onOpmlExport={handleOpmlExport}
+                        />
                       </TabsContent>
                       <TabsContent value="ai" className="mt-0">
                         <AISettingsPanel draft={draft} onChange={handleDraftChange} errors={validationErrors} />

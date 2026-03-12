@@ -177,6 +177,36 @@ describe('SettingsCenterModal', () => {
           );
         }
 
+        if (url.includes('/api/opml/import') && method === 'POST') {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                importedCount: 0,
+                duplicateCount: 0,
+                invalidCount: 0,
+                createdCategoryCount: 0,
+                duplicates: [],
+                invalidItems: [],
+              },
+            }),
+            {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            },
+          );
+        }
+
+        if (url.includes('/api/opml/export')) {
+          return new Response('<?xml version="1.0"?><opml version="2.0"></opml>', {
+            status: 200,
+            headers: {
+              'content-type': 'application/xml; charset=utf-8',
+              'content-disposition': 'attachment; filename="feedfuse-subscriptions.opml"',
+            },
+          });
+        }
+
         if (!url.includes('/api/settings')) {
           throw new Error(`Unexpected fetch: ${url}`);
         }
@@ -395,6 +425,34 @@ describe('SettingsCenterModal', () => {
     await waitFor(() => {
       const calls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
       expect(calls.some(([input]) => getFetchCallUrl(input).includes('/api/reader/snapshot'))).toBe(true);
+    });
+  });
+
+  it('imports opml from the RSS tab, shows summary, and reloads snapshot once', async () => {
+    resetSettingsStore();
+    renderWithNotifications();
+
+    fireEvent.click(screen.getByLabelText('打开设置'));
+    fireEvent.click(await screen.findByTestId('settings-section-tab-rss'));
+
+    const countSnapshotCalls = () =>
+      (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.filter(([input]) =>
+        getFetchCallUrl(input).includes('/api/reader/snapshot'),
+      ).length;
+
+    const snapshotCallsBeforeImport = countSnapshotCalls();
+    const input = await screen.findByTestId('opml-file-input');
+    const file = new File(['<opml version="2.0"><body /></opml>'], 'feeds.opml', {
+      type: 'text/xml',
+    });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByText('已导入 0 个订阅')).toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      expect(countSnapshotCalls()).toBe(snapshotCallsBeforeImport + 1);
     });
   });
 
