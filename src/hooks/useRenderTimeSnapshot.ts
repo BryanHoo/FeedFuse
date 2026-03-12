@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
 
 function getInitialRenderTime(renderedAt?: string): Date {
   if (renderedAt) {
@@ -12,19 +12,15 @@ function getInitialRenderTime(renderedAt?: string): Date {
 }
 
 export function useRenderTimeSnapshot(renderedAt?: string): Date {
-  const [referenceTime, setReferenceTime] = useState(() => getInitialRenderTime(renderedAt));
-
-  useEffect(() => {
-    if (!renderedAt) {
-      return undefined;
-    }
-
-    setReferenceTime((currentTime) => {
-      const nextTime = new Date();
-      return currentTime.getTime() === nextTime.getTime() ? currentTime : nextTime;
-    });
-    return undefined;
+  const serverSnapshot = useMemo(() => getInitialRenderTime(renderedAt), [renderedAt]);
+  const clientSnapshot = useMemo(() => {
+    void renderedAt;
+    return new Date();
   }, [renderedAt]);
 
-  return referenceTime;
+  return useSyncExternalStore(
+    () => () => undefined,
+    () => clientSnapshot,
+    () => serverSnapshot,
+  );
 }
