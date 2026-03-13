@@ -428,7 +428,9 @@ describe('ArticleView ai translate', () => {
     const { default: ArticleView } = await import('./ArticleView');
     render(<ArticleView />);
 
-    expect(await screen.findByRole('button', { name: '抓取全文' })).toBeDisabled();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '抓取全文' })).toBeDisabled();
+    });
   });
 
   it('triggers retry API from delegated retry button inside rendered html', async () => {

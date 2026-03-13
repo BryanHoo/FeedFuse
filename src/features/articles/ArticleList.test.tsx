@@ -913,11 +913,11 @@ describe('ArticleList', () => {
     expect(refreshButton).not.toHaveAttribute('title');
     expect(displayModeButton).not.toHaveAttribute('title');
 
-    fireEvent.mouseEnter(refreshButton);
-    expect(await screen.findByText(FEED_REFRESH_LABEL)).toBeInTheDocument();
+    fireEvent.focus(refreshButton);
+    expect(await screen.findByRole('tooltip', { name: FEED_REFRESH_LABEL })).toBeInTheDocument();
 
-    fireEvent.mouseEnter(displayModeButton);
-    expect(await screen.findByText(TOGGLE_TO_LIST_LABEL)).toBeInTheDocument();
+    fireEvent.focus(displayModeButton);
+    expect(await screen.findByRole('tooltip', { name: TOGGLE_TO_LIST_LABEL })).toBeInTheDocument();
   });
 
   it('truncates long selected feed titles in header while preserving full title tooltip', () => {

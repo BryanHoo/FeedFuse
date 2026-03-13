@@ -427,16 +427,15 @@ describe('ArticleView ai summary', () => {
 
     render(<ArticleView />);
 
-    const aiSummaryButton = await screen.findByRole('button', { name: '生成摘要' });
     await waitFor(() => {
-      expect(aiSummaryButton).toBeDisabled();
+      expect(screen.getByRole('button', { name: '生成摘要' })).toBeDisabled();
     });
 
     await waitFor(() => {
-      expect(aiSummaryButton).toBeEnabled();
+      expect(screen.getByRole('button', { name: '生成摘要' })).toBeEnabled();
     }, { timeout: 3000 });
 
-    fireEvent.click(aiSummaryButton);
+    fireEvent.click(screen.getByRole('button', { name: '生成摘要' }));
     await waitFor(() => {
       expect(enqueueArticleAiSummaryMock).toHaveBeenCalledWith('article-1', { force: true });
     });
