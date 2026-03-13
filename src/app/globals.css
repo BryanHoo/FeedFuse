@@ -5,13 +5,13 @@
 
 @layer theme {
   @theme default {
-    --color-background: hsl(214 60% 98%);
+    --color-background: hsl(210 12% 97%);
     --color-foreground: hsl(223 38% 17%);
 
-    --color-card: hsl(214 65% 99%);
+    --color-card: hsl(210 14% 98%);
     --color-card-foreground: hsl(223 38% 17%);
 
-    --color-popover: hsl(214 68% 99%);
+    --color-popover: hsl(210 16% 98%);
     --color-popover-foreground: hsl(223 38% 17%);
 
     --color-primary: hsl(221 67% 47%);
