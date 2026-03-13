@@ -21,9 +21,18 @@ describe('theme token usage contract', () => {
     expect(settingsDrawerSource).not.toMatch(/\b(?:slate|gray|amber|emerald|red|blue)-/);
     expect(settingsDrawerSource).not.toContain('bg-white');
 
-    expect(toastHostSource).toContain('border-success/25');
-    expect(toastHostSource).toContain('bg-info/10');
-    expect(toastHostSource).toContain('text-error-foreground');
+    expect(toastHostSource).toContain('border-success/20');
+    expect(toastHostSource).toContain('border-info/20');
+    expect(toastHostSource).toContain('border-error/30');
+    expect(toastHostSource).toContain('bg-background/92');
+    expect(toastHostSource).toContain('bg-error/12');
+    expect(toastHostSource).toContain('shadow-popover');
+    expect(toastHostSource).toContain('data-[state=open]:slide-in-from-top-2');
+    expect(toastHostSource).toContain('data-[state=closed]:slide-out-to-top-2');
+    expect(toastHostSource).not.toContain('bg-success/12');
+    expect(toastHostSource).not.toContain('text-error-foreground');
+    expect(toastHostSource).not.toContain('right-3 top-3');
+    expect(toastHostSource).not.toContain('shadow-md');
     expect(toastHostSource).not.toMatch(/\b(?:slate|gray|amber|emerald|red)-/);
     expect(toastHostSource).not.toContain('bg-black/5');
     expect(toastHostSource).not.toContain('bg-white/10');

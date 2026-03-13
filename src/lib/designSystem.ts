@@ -19,8 +19,8 @@ export const READER_TABLET_ARTICLE_PANE_CLASS_NAME =
 export const READER_PANE_HOVER_BACKGROUND_CLASS_NAME =
   'hover:bg-[var(--reader-pane-hover)]';
 
-export const NOTIFICATION_VIEWPORT_CLASS_NAME =
-  'pointer-events-none fixed right-3 top-3 z-[100] flex w-[min(var(--layout-notification-viewport-max-width),calc(100vw-1.5rem))] flex-col gap-2 sm:right-4 sm:top-4';
+export const TOP_MESSAGE_VIEWPORT_CLASS_NAME =
+  'pointer-events-none fixed inset-x-0 top-3 z-[100] flex flex-col items-center gap-2 px-2 sm:top-4 sm:px-4';
 
 export const FROSTED_HEADER_CLASS_NAME =
   'border-b border-border/70 bg-background/88 backdrop-blur-xl supports-[backdrop-filter]:bg-background/72';

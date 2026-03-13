@@ -27,6 +27,7 @@ describe('globals.css contract', () => {
     expect(css).toContain('--layout-dialog-form-max-width');
     expect(css).toContain('--layout-settings-drawer-max-width');
     expect(css).toContain('--layout-notification-viewport-max-width');
+    expect(css).toContain('--layout-notification-viewport-max-width: 28rem');
     expect(css).toContain('--layout-reader-feed-drawer-max-width');
     expect(css).toContain('--layout-reader-tablet-list-max-width');
     expect(css).toContain('--layout-reader-tablet-list-min-width');
