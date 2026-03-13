@@ -1,6 +1,7 @@
 import React from 'react';
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
+import { notifyApiError } from '@/lib/apiErrorNotifier';
 import { ToastHost } from './ToastHost';
 import { toast } from './toast';
 import { toastStore } from './toastStore';
@@ -34,19 +35,52 @@ describe('ToastHost', () => {
     expect(await screen.findByText('已保存')).toBeInTheDocument();
   });
 
-  it('clears pending toasts when the host unmounts', async () => {
+  it('renders newest toast first and keeps close buttons on every tone', async () => {
+    toastStore.getState().reset();
+
+    render(<ToastHost />);
+
+    await act(async () => {
+      toast.success('第一条');
+      toast.info('第二条');
+      toast.error('第三条');
+    });
+
+    const closeButtons = within(screen.getByTestId('notification-viewport')).getAllByRole('button', {
+      name: '关闭提醒',
+    });
+
+    expect(closeButtons).toHaveLength(3);
+    expect(closeButtons[0].parentElement).toHaveTextContent('第三条');
+    expect(closeButtons[1].parentElement).toHaveTextContent('第二条');
+    expect(closeButtons[2].parentElement).toHaveTextContent('第一条');
+
+    fireEvent.click(closeButtons[0]);
+
+    await waitFor(() => {
+      expect(screen.queryByText('第三条')).not.toBeInTheDocument();
+    });
+  });
+
+  it('bridges api errors while mounted and clears bridge state on unmount', async () => {
     toastStore.getState().reset();
 
     const view = render(<ToastHost />);
 
     await act(async () => {
-      toast.success('稍后关闭', { durationMs: 10000 });
+      notifyApiError('网络错误');
     });
 
+    expect(await screen.findByRole('alert')).toHaveTextContent('网络错误');
     expect(toastStore.getState().toasts).toHaveLength(1);
 
     view.unmount();
 
+    await act(async () => {
+      notifyApiError('卸载后不应出现');
+    });
+
     expect(toastStore.getState().toasts).toHaveLength(0);
+    expect(screen.queryByText('卸载后不应出现')).not.toBeInTheDocument();
   });
 });

@@ -31,6 +31,7 @@ function ToneIcon({ tone }: { tone: ToastTone }) {
 export function ToastHost() {
   const toasts = toastStore((state) => state.toasts);
   const dismiss = toastStore((state) => state.dismiss);
+  const orderedToasts = [...toasts].reverse();
 
   useLayoutEffect(() => {
     setApiErrorNotifier((message) => {
@@ -45,7 +46,7 @@ export function ToastHost() {
 
   return (
     <RadixToast.Provider label="通知" swipeDirection="right">
-      {toasts.map((item) => (
+      {orderedToasts.map((item) => (
         <RadixToast.Root
           key={item.id}
           open
