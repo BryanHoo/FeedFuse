@@ -12,6 +12,9 @@ const ALL_FEEDS_REFRESH_LABEL = '刷新全部订阅源';
 const FEED_REFRESH_LABEL = '刷新订阅源';
 const TOGGLE_TO_LIST_LABEL = '切换为列表';
 const MARK_ALL_AS_READ_LABEL = '标记全部为已读';
+const UNREAD_SIGNAL_DOT_CLASS = 'bg-[color-mix(in_oklab,var(--color-primary)_78%,white)]';
+const UNREAD_SIGNAL_TIME_CLASS =
+  'text-[color-mix(in_oklab,var(--color-primary)_88%,white_12%)]';
 
 function jsonResponse(payload: unknown, init?: ResponseInit) {
   return new Response(JSON.stringify(payload), {
@@ -1013,6 +1016,33 @@ describe('ArticleList', () => {
     expect(screen.getByTestId('article-list-row-art-1-feed')).toHaveTextContent('Example Feed');
     expect(screen.getByTestId('article-list-row-art-1-time')).toBeInTheDocument();
     expect(screen.getByTestId('article-list-row-art-1-unread-dot')).toBeInTheDocument();
+  });
+
+  it('renders brighter unread signals consistently in card and list modes', async () => {
+    useAppStore.setState({ selectedView: 'feed-1' });
+    renderWithNotifications();
+
+    const cardDot = screen.getByTestId('article-card-art-1-unread-dot');
+    const cardTime = screen.getByTestId('article-card-art-1-time');
+
+    expect(cardDot.className).toContain('h-2');
+    expect(cardDot.className).toContain('w-2');
+    expect(cardDot.className).toContain(UNREAD_SIGNAL_DOT_CLASS);
+    expect(cardDot.className).toContain('ring-2');
+    expect(cardTime.className).toContain('font-semibold');
+    expect(cardTime.className).toContain(UNREAD_SIGNAL_TIME_CLASS);
+
+    fireEvent.click(screen.getByRole('button', { name: TOGGLE_TO_LIST_LABEL }));
+
+    const rowDot = await screen.findByTestId('article-list-row-art-1-unread-dot');
+    const rowTime = screen.getByTestId('article-list-row-art-1-time');
+
+    expect(rowDot.className).toContain('h-2');
+    expect(rowDot.className).toContain('w-2');
+    expect(rowDot.className).toContain(UNREAD_SIGNAL_DOT_CLASS);
+    expect(rowDot.className).toContain('ring-2');
+    expect(rowTime.className).toContain('font-semibold');
+    expect(rowTime.className).toContain(UNREAD_SIGNAL_TIME_CLASS);
   });
 
   it('uses the stronger reader pane hover class for article cards and list rows', async () => {

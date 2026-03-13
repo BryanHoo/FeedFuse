@@ -14,6 +14,10 @@ const REFRESH_POLL_INTERVAL_MS = 1000;
 const REFRESH_POLL_MAX_ATTEMPTS = 12;
 const PREVIEW_PRELOAD_MAX_CONCURRENT = 2;
 type PreviewImageStatus = "loading" | "ready" | "failed";
+const unreadSignalDotClassName =
+  "h-2 w-2 rounded-full bg-[color-mix(in_oklab,var(--color-primary)_78%,white)] ring-2 ring-background/95";
+const unreadSignalTimeClassName =
+  "font-semibold text-[color-mix(in_oklab,var(--color-primary)_88%,white_12%)]";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -659,12 +663,12 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
                               <span
                                 data-testid={`article-list-row-${article.id}-unread-dot`}
                                 aria-hidden="true"
-                                className="h-1.5 w-1.5 rounded-full bg-primary"
+                                className={unreadSignalDotClassName}
                               />
                             )}
                             <span
                               data-testid={`article-list-row-${article.id}-time`}
-                              className={article.isRead ? "text-muted-foreground" : "text-primary"}
+                              className={article.isRead ? "text-muted-foreground" : unreadSignalTimeClassName}
                             >
                               {formatRelativeTime(article.publishedAt, referenceTime)}
                             </span>
@@ -738,9 +742,16 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
                           </span>
                           <div className="shrink-0 flex items-center gap-1.5">
                             {!article.isRead && (
-                              <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-primary" />
+                              <span
+                                data-testid={`article-card-${article.id}-unread-dot`}
+                                aria-hidden="true"
+                                className={unreadSignalDotClassName}
+                              />
                             )}
-                            <span className={article.isRead ? "text-muted-foreground" : "text-primary"}>
+                            <span
+                              data-testid={`article-card-${article.id}-time`}
+                              className={article.isRead ? "text-muted-foreground" : unreadSignalTimeClassName}
+                            >
                               {formatRelativeTime(article.publishedAt, referenceTime)}
                             </span>
                           </div>
