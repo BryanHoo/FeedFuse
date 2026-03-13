@@ -30,6 +30,10 @@ describe('globals.css contract', () => {
     expect(css).toContain('--layout-reader-feed-drawer-max-width');
     expect(css).toContain('--layout-reader-tablet-list-max-width');
     expect(css).toContain('--layout-reader-tablet-list-min-width');
+    expect(css).not.toContain('--color-background: hsl(0 0% 100%)');
+    expect(css).not.toContain('--color-primary: hsl(221.2 83.2% 53.3%)');
+    expect(css).not.toContain('--color-background: hsl(222.2 84% 4.9%)');
+    expect(css).not.toContain('--color-primary: hsl(217.2 91.2% 59.8%)');
     expect(css).not.toContain('fonts.googleapis.com');
     expect(css).not.toContain('.font-brand');
   });

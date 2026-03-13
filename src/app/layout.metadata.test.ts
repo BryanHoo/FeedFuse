@@ -18,8 +18,9 @@ describe('layout metadata contract', () => {
   it('aligns viewport themeColor with the semantic page background', () => {
     const source = readFileSync('src/app/layout.tsx', 'utf-8');
 
-    expect(source).toContain("color: '#ffffff'");
-    expect(source).toContain("color: '#020817'");
-    expect(source).not.toContain("color: '#0f172a'");
+    expect(source).toContain("color: '#f4f7ff'");
+    expect(source).toContain("color: '#111a30'");
+    expect(source).not.toContain("color: '#ffffff'");
+    expect(source).not.toContain("color: '#020817'");
   });
 });

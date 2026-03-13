@@ -5,26 +5,26 @@
 
 @layer theme {
   @theme default {
-    --color-background: hsl(0 0% 100%);
-    --color-foreground: hsl(222.2 84% 4.9%);
+    --color-background: hsl(220 44% 97%);
+    --color-foreground: hsl(224 36% 18%);
 
-    --color-card: hsl(0 0% 100%);
-    --color-card-foreground: hsl(222.2 84% 4.9%);
+    --color-card: hsl(220 42% 98%);
+    --color-card-foreground: hsl(224 36% 18%);
 
-    --color-popover: hsl(0 0% 100%);
-    --color-popover-foreground: hsl(222.2 84% 4.9%);
+    --color-popover: hsl(220 40% 98%);
+    --color-popover-foreground: hsl(224 36% 18%);
 
-    --color-primary: hsl(221.2 83.2% 53.3%);
-    --color-primary-foreground: hsl(210 40% 98%);
+    --color-primary: hsl(224 54% 42%);
+    --color-primary-foreground: hsl(220 45% 98%);
 
-    --color-secondary: hsl(210 40% 96.1%);
-    --color-secondary-foreground: hsl(222.2 47.4% 11.2%);
+    --color-secondary: hsl(221 36% 93%);
+    --color-secondary-foreground: hsl(224 32% 22%);
 
-    --color-muted: hsl(210 40% 96.1%);
-    --color-muted-foreground: hsl(215.4 16.3% 43%);
+    --color-muted: hsl(221 33% 94%);
+    --color-muted-foreground: hsl(223 18% 41%);
 
-    --color-accent: hsl(210 40% 96.1%);
-    --color-accent-foreground: hsl(222.2 47.4% 11.2%);
+    --color-accent: hsl(221 37% 92%);
+    --color-accent-foreground: hsl(224 32% 22%);
 
     --color-success: hsl(142.1 70.6% 45.3%);
     --color-success-foreground: hsl(142.1 72.3% 24.1%);
@@ -41,11 +41,11 @@
     --color-destructive: hsl(0 84.2% 60.2%);
     --color-destructive-foreground: hsl(210 40% 98%);
 
-    --color-border: hsl(214.3 31.8% 91.4%);
-    --color-input: hsl(214.3 31.8% 91.4%);
-    --color-ring: hsl(221.2 83.2% 53.3%);
-    --color-overlay: hsl(222.2 47.4% 11.2% / 0.56);
-    --shadow-popover: 0 18px 38px -24px rgb(15 23 42 / 0.24), 0 10px 18px -16px rgb(15 23 42 / 0.18);
+    --color-border: hsl(223 27% 87%);
+    --color-input: hsl(223 27% 87%);
+    --color-ring: hsl(224 54% 42%);
+    --color-overlay: hsl(224 41% 12% / 0.58);
+    --shadow-popover: 0 24px 48px -28px rgb(22 34 71 / 0.34), 0 14px 24px -20px rgb(22 34 71 / 0.24);
 
     --breakpoint-sm: 40rem;
     --breakpoint-md: 48rem;
@@ -70,26 +70,26 @@
 
   .dark {
     color-scheme: dark;
-    --color-background: hsl(222.2 84% 4.9%);
-    --color-foreground: hsl(210 40% 98%);
+    --color-background: hsl(226 34% 11%);
+    --color-foreground: hsl(220 36% 95%);
 
-    --color-card: hsl(222.2 84% 4.9%);
-    --color-card-foreground: hsl(210 40% 98%);
+    --color-card: hsl(226 30% 13%);
+    --color-card-foreground: hsl(220 36% 95%);
 
-    --color-popover: hsl(222.2 84% 4.9%);
-    --color-popover-foreground: hsl(210 40% 98%);
+    --color-popover: hsl(226 30% 14%);
+    --color-popover-foreground: hsl(220 36% 95%);
 
-    --color-primary: hsl(217.2 91.2% 59.8%);
-    --color-primary-foreground: hsl(222.2 47.4% 11.2%);
+    --color-primary: hsl(221 72% 67%);
+    --color-primary-foreground: hsl(226 34% 14%);
 
-    --color-secondary: hsl(217.2 32.6% 17.5%);
-    --color-secondary-foreground: hsl(210 40% 98%);
+    --color-secondary: hsl(224 20% 20%);
+    --color-secondary-foreground: hsl(220 36% 95%);
 
-    --color-muted: hsl(217.2 32.6% 17.5%);
-    --color-muted-foreground: hsl(215 20.2% 65.1%);
+    --color-muted: hsl(224 18% 18%);
+    --color-muted-foreground: hsl(220 18% 71%);
 
-    --color-accent: hsl(217.2 32.6% 17.5%);
-    --color-accent-foreground: hsl(210 40% 98%);
+    --color-accent: hsl(224 21% 22%);
+    --color-accent-foreground: hsl(220 36% 96%);
 
     --color-success: hsl(142.1 69.2% 58%);
     --color-success-foreground: hsl(141.7 84.4% 91.6%);
@@ -106,11 +106,11 @@
     --color-destructive: hsl(0 62.8% 30.6%);
     --color-destructive-foreground: hsl(210 40% 98%);
 
-    --color-border: hsl(217.2 32.6% 17.5%);
-    --color-input: hsl(217.2 32.6% 17.5%);
-    --color-ring: hsl(217.2 91.2% 59.8%);
-    --color-overlay: hsl(222.2 84% 4.9% / 0.72);
-    --shadow-popover: 0 20px 42px -26px rgb(2 6 23 / 0.72), 0 10px 20px -14px rgb(2 6 23 / 0.58);
+    --color-border: hsl(223 18% 26%);
+    --color-input: hsl(223 18% 26%);
+    --color-ring: hsl(221 72% 67%);
+    --color-overlay: hsl(228 48% 6% / 0.74);
+    --shadow-popover: 0 28px 60px -34px rgb(3 8 22 / 0.8), 0 18px 28px -24px rgb(9 18 46 / 0.62);
   }
 
   * {
