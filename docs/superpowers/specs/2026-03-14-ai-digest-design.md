@@ -119,6 +119,9 @@
 - `重复时间`：固定选项（存储为 `interval_minutes`）
 - `分类`：选择一个分类（若不存在则创建；存在则放现有分类下）
 - 说明文案：强调“只会解读窗口内更新，且最终只纳入 Top 10 篇”
+- 创建成功后行为：
+  - 仅刷新 snapshot（`loadSnapshot`）
+  - 不触发 `refreshFeed` 或 RSS 抓取（避免复用 RSS 新增订阅时的自动抓取语义）
 
 #### 阅读器三栏表现
 
@@ -180,6 +183,8 @@
 
 - 通过 `runId` 作为幂等粒度，保证 job 重试不会生成多篇重复解读文章
 - run 表也为后续“显示上次生成状态/错误”提供基础
+- 为避免 tick 或手动触发重复创建同一窗口的 run，建议增加唯一约束：
+  - `unique(feed_id, window_start_at)`
 
 #### 3.4 必要索引
 
@@ -216,7 +221,9 @@
 
 错误与校验：
 
-- 若未配置 `AI API key`（`getAiApiKey()` 为空），自动与手动生成都应返回结构化原因（例如 `missing_api_key`），并记录 run 为 `failed`（或直接不创建 run，按实现取舍）
+- 若未配置 `AI API key`（`getAiApiKey()` 为空）：
+  - `POST /api/ai-digests/:feedId/generate` 返回结构化原因（例如 `missing_api_key`），且不创建 run、不入队
+  - `ai.digest_tick` 也不创建 run、不入队（避免后台无意义重试与堆积）
 
 ### 5) 合成 URL 规则（兼容现有约束）
 
@@ -247,16 +254,24 @@
 
 - `ai.digest_tick`：`localConcurrency: 1`
 - `ai.digest_generate`：`localConcurrency: 1 or 2`（避免过多并发占用 LLM quota）
-  - send options：按 `runId` 做 `singletonKey`，保证 job 重试幂等
+  - queue options：建议开启有限重试与退避（例如 `retryLimit: 3` + `retryBackoff: true`），降低瞬时网络/供应商错误导致的空窗
+  - send options：按 `runId` 做 `singletonKey`，保证同一 run 不会被并发重复执行
 
 #### 6.2 调度方式（间隔语义）
 
 - 使用 `boss.schedule('ai.digest_tick', '* * * * *')` 每分钟 tick
 - tick 逻辑：
+  - 若未配置 `AI API key`，直接跳过（不创建 run、不入队）
   - 找出 `now - last_window_end_at >= interval_minutes` 的 configs
-  - 若存在同 `feed_id` 的 `queued/running` run，则跳过（避免堆积）
-  - 创建 `ai_digest_runs`（`status='queued'`，固定 `window_start_at` 与 `window_end_at`）
-  - enqueue `ai.digest_generate`（data: `{ runId }`）
+  - 对每条 due config：
+    - `window_start_at = last_window_end_at`
+    - `window_end_at = now()`（写入 run 后固定，不随 tick 再变化）
+    - 若已存在 `ai_digest_runs` 满足：
+      - `feed_id = <ai_digest_feed_id>` 且 `window_start_at = <window_start_at>`
+      - `status in ('queued','running','failed')`
+      则跳过（避免重复创建同一窗口的 run；重试由队列 retry 负责）
+    - 否则创建 `ai_digest_runs`（`status='queued'`，固定 `window_start_at` 与 `window_end_at`）
+    - enqueue `ai.digest_generate`（data: `{ runId }`）
 
 #### 6.3 生成逻辑（`ai.digest_generate`）
 
@@ -312,7 +327,9 @@
 
 - 生成失败时：
   - run: `failed`，记录 `error_code/error_message`
-  - 不推进 `last_window_end_at`（保证下次重试仍覆盖同一窗口）
+  - 若队列仍有 retry 次数，则抛出错误交给队列重试（保持 `last_window_end_at` 不变）
+  - 若已是最终失败（无 retry 次数），则推进 `ai_digest_configs.last_window_end_at = window_end_at`
+    - 目的：避免单次窗口卡死导致后续调度完全停滞
 
 ### 7) 智能视图与全局操作的隔离点（必须补齐）
 
@@ -355,4 +372,3 @@
 ## 开放问题（本版已做默认决策）
 
 - 候选极端多时的成本控制：本版采用“增量 shortlist rerank”保证上下文不爆，但调用次数仍随候选数量线性增长。先按此实现，后续如有性能压力再加软预算（例如候选上限或分层预过滤）。
-
