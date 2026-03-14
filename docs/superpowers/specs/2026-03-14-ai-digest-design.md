@@ -211,7 +211,13 @@
 
 - `POST /api/ai-digests/:feedId/generate`
   - 手动触发“立即生成”
-  - 若该 feed 已存在 `queued/running` run，则返回 `already_running`
+  - 行为（find-or-create）：
+    - 校验 `AI API key` 已配置；缺失则按下文错误策略返回
+    - 计算本次窗口：`window_start_at = last_window_end_at`、`window_end_at = now()`
+    - 若已存在 `ai_digest_runs(feed_id, window_start_at)`：
+      - `status in ('queued','running')`：返回 `already_running`
+      - `status = 'failed'`：允许重新 enqueue 同一个 `runId`（手动重试）
+    - 否则创建 run 并 enqueue
 
 - `GET /api/ai-digests/:feedId`
   - 用于编辑弹窗回填（可后续做）
