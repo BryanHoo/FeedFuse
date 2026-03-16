@@ -54,10 +54,41 @@ function getFetchCallHeader(call: unknown[], name: string): string | undefined {
 }
 
 describe('mapFeedDto', () => {
+  it('maps kind', () => {
+    const mapped = mapFeedDto(
+      {
+        id: 'feed-0',
+        kind: 'ai_digest',
+        title: 'Digest',
+        url: 'http://localhost/__feedfuse_ai_digest__/feed-0',
+        siteUrl: null,
+        iconUrl: null,
+        enabled: true,
+        fullTextOnOpenEnabled: false,
+        aiSummaryOnOpenEnabled: false,
+        aiSummaryOnFetchEnabled: false,
+        bodyTranslateOnFetchEnabled: false,
+        bodyTranslateOnOpenEnabled: false,
+        titleTranslateEnabled: false,
+        bodyTranslateEnabled: false,
+        articleListDisplayMode: 'card',
+        categoryId: null,
+        fetchIntervalMinutes: 30,
+        unreadCount: 0,
+        lastFetchStatus: null,
+        lastFetchError: null,
+      } as Parameters<typeof mapFeedDto>[0],
+      [],
+    );
+
+    expect(mapped.kind).toBe('ai_digest');
+  });
+
   it('maps fetch result fields from snapshot feeds', () => {
     const mapped = mapFeedDto(
       {
         id: 'feed-1',
+        kind: 'rss',
         title: 'Example',
         url: 'https://example.com/rss.xml',
         siteUrl: null,
@@ -88,6 +119,7 @@ describe('mapFeedDto', () => {
     const mapped = mapFeedDto(
       {
         id: 'feed-2',
+        kind: 'rss',
         title: 'Created Feed',
         url: 'https://example.com/new.xml',
         siteUrl: null,

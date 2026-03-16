@@ -319,6 +319,7 @@ export interface ReaderSnapshotDto {
   }>;
   feeds: Array<{
     id: string;
+    kind: Feed['kind'];
     title: string;
     url: string;
     siteUrl: string | null;
@@ -405,6 +406,34 @@ export async function createFeed(input: {
   });
 }
 
+export async function createAiDigest(input: {
+  title: string;
+  prompt: string;
+  intervalMinutes: number;
+  selectedFeedIds: string[];
+  selectedCategoryIds: string[];
+  categoryId?: string | null;
+  categoryName?: string | null;
+}): Promise<
+  ReaderSnapshotDto['feeds'][number] & {
+    unreadCount: number;
+  }
+> {
+  return requestApi('/api/ai-digests', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function generateAiDigest(
+  feedId: string,
+): Promise<{ enqueued: boolean; jobId?: string; reason?: string; runId?: string }> {
+  return requestApi(`/api/ai-digests/${encodeURIComponent(feedId)}/generate`, {
+    method: 'POST',
+  });
+}
+
 export async function refreshFeed(feedId: string): Promise<{ enqueued: true; jobId: string }> {
   return requestApi(`/api/feeds/${encodeURIComponent(feedId)}/refresh`, {
     method: 'POST',
@@ -419,6 +448,7 @@ export async function refreshAllFeeds(): Promise<{ enqueued: true; jobId: string
 
 export interface FeedRowDto {
   id: string;
+  kind: Feed['kind'];
   title: string;
   url: string;
   siteUrl: string | null;
@@ -816,6 +846,7 @@ export function mapFeedDto(dto: FeedDtoLike, categories: Category[]): Feed {
   const categoryNameById = new Map(categories.map((category) => [category.id, category.name]));
   return {
     id: dto.id,
+    kind: dto.kind,
     title: dto.title,
     url: dto.url,
     siteUrl: dto.siteUrl,

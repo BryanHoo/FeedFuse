@@ -1,5 +1,8 @@
+export type FeedKind = 'rss' | 'ai_digest';
+
 export interface Feed {
   id: string;
+  kind: FeedKind;
   title: string;
   url: string;
   siteUrl?: string | null;
