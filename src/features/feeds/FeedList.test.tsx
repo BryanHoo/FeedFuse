@@ -586,6 +586,39 @@ function renderWithNotifications() {
     expect(screen.getByRole('menuitem', { name: '翻译配置' })).toBeInTheDocument();
   });
 
+  it('hides RSS-only items in feed context menu for ai_digest feeds', async () => {
+    useAppStore.setState((state) => ({
+      ...state,
+      feeds: [
+        {
+          ...state.feeds[0],
+          id: 'digest-1',
+          kind: 'ai_digest',
+          title: 'My Digest',
+          url: 'http://localhost/__feedfuse_ai_digest__/digest-1',
+          unreadCount: 0,
+        },
+      ],
+      selectedView: 'digest-1',
+    }));
+
+    renderWithNotifications();
+
+    fireEvent.contextMenu(screen.getByRole('button', { name: /My Digest/ }));
+
+    await screen.findByRole('menuitem', { name: '移动到分类' });
+
+    expect(screen.queryByRole('menuitem', { name: '编辑' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: '全文抓取配置' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'AI摘要配置' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: '翻译配置' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: '配置关键词过滤' })).not.toBeInTheDocument();
+
+    expect(screen.getByRole('menuitem', { name: '移动到分类' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: '停用' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: '删除' })).toBeInTheDocument();
+  });
+
 
   it('renders feed context menu with shared compact surface classes', async () => {
     renderWithNotifications();
