@@ -120,15 +120,10 @@ function resolveTargetFeedIds(input: {
   config: AiDigestConfigRow;
   feeds: Awaited<ReturnType<typeof listFeeds>>;
 }): string[] {
-  const rssFeeds = input.feeds.filter((feed) => feed.kind === 'rss');
-  const rssFeedIds = new Set(rssFeeds.map((feed) => feed.id));
-  const selectedRssFeedIds = input.config.selectedFeedIds.filter((id) => rssFeedIds.has(id));
-  const categoryIdSet = new Set(input.config.selectedCategoryIds);
-  const categoryFeedIds = rssFeeds
-    .filter((feed) => feed.categoryId && categoryIdSet.has(feed.categoryId))
-    .map((feed) => feed.id);
-
-  return uniq([...selectedRssFeedIds, ...categoryFeedIds]);
+  const rssFeedIds = new Set(
+    input.feeds.filter((feed) => feed.kind === 'rss').map((feed) => feed.id),
+  );
+  return uniq(input.config.selectedFeedIds.filter((id) => rssFeedIds.has(id)));
 }
 
 async function pickTopNArticles(input: {
@@ -346,4 +341,3 @@ async function executeAiDigestRun(input: {
 
   await input.deps.updateAiDigestConfigLastWindowEndAt(input.pool, input.run.feedId, input.run.windowEndAt);
 }
-

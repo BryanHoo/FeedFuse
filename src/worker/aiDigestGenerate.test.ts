@@ -70,5 +70,66 @@ describe('runAiDigestGenerate', () => {
       '2026-03-14T01:00:00.000Z',
     );
   });
-});
 
+  it('uses selectedFeedIds only when resolving target feeds', async () => {
+    const pool = { query: vi.fn() } as unknown as Pool;
+
+    const getAiDigestRunByIdMock = vi.fn().mockResolvedValue({
+      id: 'run-2',
+      feedId: 'feed-ai',
+      windowStartAt: '2026-03-15T00:00:00.000Z',
+      windowEndAt: '2026-03-15T01:00:00.000Z',
+      status: 'queued',
+      candidateTotal: 0,
+      selectedCount: 0,
+      articleId: null,
+      model: null,
+      errorCode: null,
+      errorMessage: null,
+      jobId: null,
+      createdAt: '2026-03-15T00:00:00.000Z',
+      updatedAt: '2026-03-15T00:00:00.000Z',
+    });
+
+    const getAiDigestConfigByFeedIdMock = vi.fn().mockResolvedValue({
+      feedId: 'feed-ai',
+      prompt: 'x',
+      intervalMinutes: 60,
+      topN: 10,
+      selectedFeedIds: [],
+      selectedCategoryIds: ['cat-tech'],
+      lastWindowEndAt: '2026-03-15T00:00:00.000Z',
+      createdAt: '2026-03-15T00:00:00.000Z',
+      updatedAt: '2026-03-15T00:00:00.000Z',
+    });
+
+    const listFeedsMock = vi.fn().mockResolvedValue([
+      { id: 'feed-ai', kind: 'ai_digest', title: 'AI解读', categoryId: null },
+      { id: 'feed-rss-1', kind: 'rss', title: 'RSS 1', categoryId: 'cat-tech' },
+    ]);
+    const listAiDigestCandidateArticlesMock = vi.fn().mockResolvedValue([]);
+    const updateAiDigestRunMock = vi.fn().mockResolvedValue(undefined);
+    const updateAiDigestConfigLastWindowEndAtMock = vi.fn().mockResolvedValue(undefined);
+
+    const { runAiDigestGenerate } = await import('./aiDigestGenerate');
+    await runAiDigestGenerate({
+      pool,
+      runId: 'run-2',
+      jobId: null,
+      isFinalAttempt: true,
+      deps: {
+        getAiDigestRunById: getAiDigestRunByIdMock,
+        getAiDigestConfigByFeedId: getAiDigestConfigByFeedIdMock,
+        listFeeds: listFeedsMock as never,
+        listAiDigestCandidateArticles: listAiDigestCandidateArticlesMock,
+        updateAiDigestRun: updateAiDigestRunMock,
+        updateAiDigestConfigLastWindowEndAt: updateAiDigestConfigLastWindowEndAtMock,
+      },
+    });
+
+    expect(listAiDigestCandidateArticlesMock).toHaveBeenCalledWith(
+      pool,
+      expect.objectContaining({ targetFeedIds: [] }),
+    );
+  });
+});
