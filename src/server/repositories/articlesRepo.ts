@@ -210,6 +210,8 @@ export async function markAllRead(
   if (input.feedId) {
     params.push(`feed_id = $${index++}`);
     values.push(input.feedId);
+  } else {
+    params.push("feed_id in (select id from feeds where kind = 'rss')");
   }
 
   const whereParts = [...params, 'is_read = false'];
