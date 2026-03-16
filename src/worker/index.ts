@@ -31,6 +31,7 @@ import { startBoss } from '../server/queue/boss';
 import { bootstrapQueues } from '../server/queue/bootstrap';
 import { QUEUE_CONTRACTS } from '../server/queue/contracts';
 import {
+  JOB_AI_DIGEST_GENERATE,
   JOB_AI_DIGEST_TICK,
   JOB_AI_SUMMARIZE,
   JOB_AI_TRANSLATE,
@@ -50,6 +51,7 @@ import { runImmersiveTranslateSession } from './immersiveTranslateWorker';
 import { enqueueAutoAiTriggersOnFetch } from './autoAiTriggers';
 import { runAiSummaryStreamWorker } from './aiSummaryStreamWorker';
 import { runAiDigestTick } from './aiDigestTick';
+import { runAiDigestGenerate } from './aiDigestGenerate';
 
 const DEFAULT_TRANSLATION_MODEL = 'gpt-4o-mini';
 const DEFAULT_TRANSLATION_API_BASE_URL = 'https://api.openai.com/v1';
@@ -494,13 +496,92 @@ async function main() {
     }
   };
 
-  const aiDigestTickHandler = async (_jobs: unknown[]) => {
-    await runAiDigestTick({ pool: getPool(), boss, now: new Date() });
+  const aiDigestTickHandler = async (jobs: unknown[]) => {
+    void jobs;
+    await runAiDigestTick({
+      pool: getPool(),
+      boss: {
+        // Wrap `PgBoss.send` to avoid overload variance issues in Next.js typecheck.
+        send: (name: string, data?: object | null, options?: unknown) =>
+          // pg-boss types differ between builds; keep options loosely typed.
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          boss.send(name, data, options as any),
+      },
+      now: new Date(),
+    });
+  };
+
+  const aiDigestGenerateHandler = async (jobs: unknown[]) => {
+    const pool = getPool();
+    for (const job of jobs) {
+      const data =
+        typeof job === 'object' && job !== null && 'data' in job
+          ? (job as { data?: unknown }).data
+          : null;
+
+      const runId =
+        typeof data === 'object' &&
+        data !== null &&
+        'runId' in data &&
+        typeof (data as { runId?: unknown }).runId === 'string'
+          ? (data as { runId: string }).runId
+          : null;
+
+      if (!runId) throw new Error('Missing runId');
+
+      const jobId =
+        typeof job === 'object' &&
+        job !== null &&
+        'id' in job &&
+        (typeof (job as { id?: unknown }).id === 'string' ||
+          typeof (job as { id?: unknown }).id === 'number')
+          ? String((job as { id: string | number }).id)
+          : null;
+
+      const retryCountRaw =
+        typeof job === 'object' && job !== null
+          ? (job as { retrycount?: unknown; retryCount?: unknown; retry_count?: unknown })
+          : ({} as { retrycount?: unknown; retryCount?: unknown; retry_count?: unknown });
+      const retryLimitRaw =
+        typeof job === 'object' && job !== null
+          ? (job as { retrylimit?: unknown; retryLimit?: unknown; retry_limit?: unknown })
+          : ({} as { retrylimit?: unknown; retryLimit?: unknown; retry_limit?: unknown });
+
+      const retryCountValue =
+        typeof retryCountRaw.retrycount === 'number'
+          ? retryCountRaw.retrycount
+          : typeof retryCountRaw.retryCount === 'number'
+            ? retryCountRaw.retryCount
+            : typeof retryCountRaw.retry_count === 'number'
+              ? retryCountRaw.retry_count
+              : null;
+
+      const retryLimitValue =
+        typeof retryLimitRaw.retrylimit === 'number'
+          ? retryLimitRaw.retrylimit
+          : typeof retryLimitRaw.retryLimit === 'number'
+            ? retryLimitRaw.retryLimit
+            : typeof retryLimitRaw.retry_limit === 'number'
+              ? retryLimitRaw.retry_limit
+              : null;
+
+      const isFinalAttempt =
+        retryCountValue !== null && retryLimitValue !== null ? retryCountValue >= retryLimitValue : false;
+
+      await runAiDigestGenerate({
+        pool,
+        runId,
+        jobId,
+        isFinalAttempt,
+        now: new Date(),
+      });
+    }
   };
 
   await registerWorkers(boss, {
     [JOB_REFRESH_ALL]: refreshAllHandler,
     [JOB_AI_DIGEST_TICK]: aiDigestTickHandler,
+    [JOB_AI_DIGEST_GENERATE]: aiDigestGenerateHandler,
     [JOB_FEED_FETCH]: feedFetchHandler,
     [JOB_ARTICLE_FULLTEXT_FETCH]: fulltextHandler,
     [JOB_AI_SUMMARIZE]: aiSummaryHandler,

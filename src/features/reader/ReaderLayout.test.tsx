@@ -99,7 +99,7 @@ describe('ReaderLayout', () => {
   it('keeps the existing 3-column reader interactions', async () => {
     resetSettingsStore();
     renderWithNotifications();
-    expect(screen.getByLabelText('添加 RSS 源')).toBeInTheDocument();
+    expect(screen.getByLabelText('添加订阅')).toBeInTheDocument();
     expect(screen.getAllByLabelText('打开设置').length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getAllByLabelText('打开设置').at(-1) as HTMLElement);
@@ -371,7 +371,13 @@ describe('ReaderLayout', () => {
 
     expect(screen.getByTestId('reader-feed-drawer')).toBeInTheDocument();
     expect(screen.getByTestId('feed-list-header')).toHaveClass('pr-16');
-    expect(screen.getByLabelText('添加 RSS 源')).toBeInTheDocument();
+    const addSubscriptionButton = screen.getByLabelText('添加订阅');
+    expect(addSubscriptionButton).toBeInTheDocument();
+
+    fireEvent.click(addSubscriptionButton);
+
+    expect(screen.getByRole('button', { name: '添加 RSS 源' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '添加 AI解读' })).toBeInTheDocument();
   });
 
   it('hydrates responsive layout without rebuilding from a mismatched mobile first render', async () => {

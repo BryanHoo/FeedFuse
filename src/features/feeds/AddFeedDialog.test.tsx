@@ -212,7 +212,8 @@ describe('AddFeedDialog', () => {
   }
 
   async function openAddFeedDialog() {
-    fireEvent.click(screen.getByLabelText('添加 RSS 源'));
+    fireEvent.click(screen.getByLabelText('添加订阅'));
+    fireEvent.click(await screen.findByRole('button', { name: '添加 RSS 源' }));
     return screen.findByRole('dialog', { name: '添加 RSS 源' });
   }
 

@@ -1,9 +1,20 @@
 alter table feeds
   add column if not exists kind text not null default 'rss';
 
-alter table feeds
-  add constraint if not exists feeds_kind_check
-    check (kind in ('rss', 'ai_digest'));
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'feeds_kind_check'
+      and conrelid = 'feeds'::regclass
+  ) then
+    alter table feeds
+      add constraint feeds_kind_check
+        check (kind in ('rss', 'ai_digest'));
+  end if;
+end
+$$;
 
 create table if not exists ai_digest_configs (
   feed_id uuid primary key references feeds(id) on delete cascade,
@@ -44,4 +55,3 @@ create unique index if not exists ai_digest_runs_feed_window_unique
 
 create index if not exists articles_feed_fetched_id_idx
   on articles(feed_id, fetched_at desc, id desc);
-

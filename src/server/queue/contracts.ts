@@ -73,6 +73,24 @@ export const QUEUE_CONTRACTS: Record<string, QueueContract> = {
     worker: { localConcurrency: 2, batchSize: 1 },
     send: (ctx) => ({ singletonKey: ctx.articleId, singletonSeconds: 600, retryLimit: 0 }),
   },
+  'ai.digest_tick': {
+    queue: { warningQueueSize: 5 },
+    worker: { localConcurrency: 1, batchSize: 1 },
+    send: () => ({ singletonKey: 'ai.digest_tick', singletonSeconds: 55 }),
+  },
+  'ai.digest_generate': {
+    queue: {
+      retryLimit: 3,
+      retryDelay: 30,
+      retryBackoff: true,
+      retryDelayMax: 600,
+      heartbeatSeconds: 60,
+      expireInSeconds: 1800,
+      warningQueueSize: 50,
+    },
+    worker: { localConcurrency: 1, batchSize: 1 },
+    send: (ctx) => (ctx.runId ? { singletonKey: ctx.runId, singletonSeconds: 3600 } : {}),
+  },
   'feed.refresh_all': {
     queue: { warningQueueSize: 50 },
     worker: { localConcurrency: 1, batchSize: 1 },

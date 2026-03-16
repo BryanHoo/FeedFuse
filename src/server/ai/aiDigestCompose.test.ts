@@ -17,7 +17,7 @@ describe('aiDigestCompose', () => {
           choices: [
             {
               message: {
-                content: '```json\n{\"title\":\"今日解读\",\"html\":\"<h1>今日解读</h1><p>内容</p>\"}\n```',
+                content: '```json\n{"title":"今日解读","html":"<h1>今日解读</h1><p>内容</p>"}\n```',
               },
             },
           ],
@@ -52,4 +52,3 @@ describe('aiDigestCompose', () => {
     expect(getFetchUrl(fetchMock.mock.calls[0]?.[0])).toBe('https://api.openai.com/v1/chat/completions');
   });
 });
-

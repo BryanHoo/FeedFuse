@@ -10,8 +10,16 @@ import { getQueueSendOptions } from '../server/queue/contracts';
 import { JOB_AI_DIGEST_GENERATE } from '../server/queue/jobs';
 
 export async function runAiDigestTick(deps: {
-  pool: { query: Function };
-  boss: { send: Function };
+  pool: { query: (...args: unknown[]) => unknown };
+  boss: {
+    send: (
+      name: string,
+      data?: object | null,
+      // pg-boss send options shape differs between builds; keep it permissive.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      options?: any,
+    ) => unknown;
+  };
   now?: Date;
 }) {
   const now = deps.now ?? new Date();
@@ -37,6 +45,9 @@ export async function runAiDigestTick(deps: {
     if (existing && (existing.status === 'queued' || existing.status === 'running' || existing.status === 'failed')) {
       continue;
     }
+    if (existing) {
+      continue;
+    }
 
     const created = await createAiDigestRun(deps.pool as never, {
       feedId,
@@ -45,25 +56,19 @@ export async function runAiDigestTick(deps: {
       status: 'queued',
     });
 
-    const run =
-      created ??
-      (await getAiDigestRunByFeedIdAndWindowStartAt(deps.pool as never, {
-        feedId,
-        windowStartAt,
-      }));
-    if (!run) continue;
-    if (run.status === 'queued' || run.status === 'running') continue;
-    if (run.status === 'failed') continue;
+    if (!created) continue;
 
-    const jobId = await deps.boss.send(
+    const jobIdRaw = await deps.boss.send(
       JOB_AI_DIGEST_GENERATE,
-      { runId: run.id },
-      getQueueSendOptions(JOB_AI_DIGEST_GENERATE, { runId: run.id }),
+      { runId: created.id },
+      getQueueSendOptions(JOB_AI_DIGEST_GENERATE, { runId: created.id }),
     );
 
-    if (typeof jobId === 'string' && jobId.trim()) {
-      await updateAiDigestRun(deps.pool as never, run.id, { jobId: jobId.trim() });
+    const jobId =
+      typeof jobIdRaw === 'string' || typeof jobIdRaw === 'number' ? String(jobIdRaw) : null;
+
+    if (jobId && jobId.trim()) {
+      await updateAiDigestRun(deps.pool as never, created.id, { jobId: jobId.trim() });
     }
   }
 }
-
