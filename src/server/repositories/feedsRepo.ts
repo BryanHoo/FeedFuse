@@ -2,8 +2,11 @@ import type { Pool, PoolClient } from 'pg';
 
 type DbClient = Pool | PoolClient;
 
+export type FeedKind = 'rss' | 'ai_digest';
+
 export interface FeedRow {
   id: string;
+  kind: FeedKind;
   title: string;
   url: string;
   siteUrl: string | null;
@@ -27,6 +30,7 @@ export async function listFeeds(db: DbClient): Promise<FeedRow[]> {
   const { rows } = await db.query<FeedRow>(`
     select
       id,
+      kind,
       title,
       url,
       site_url as "siteUrl",
@@ -92,6 +96,7 @@ export async function createFeed(
       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       returning
         id,
+        kind,
         title,
         url,
         site_url as "siteUrl",
@@ -226,6 +231,7 @@ export async function updateFeed(
       where id = $${paramIndex}
       returning
         id,
+        kind,
         title,
         url,
         site_url as "siteUrl",
@@ -346,7 +352,7 @@ export async function listEnabledFeedsForFetch(db: DbClient): Promise<FeedFetchR
       fetch_interval_minutes as "fetchIntervalMinutes",
       last_fetched_at as "lastFetchedAt"
     from feeds
-    where enabled = true
+    where enabled = true and kind = 'rss'
     order by created_at asc, id asc
   `);
   return rows;
@@ -370,7 +376,7 @@ export async function getFeedForFetch(
         fetch_interval_minutes as "fetchIntervalMinutes",
         last_fetched_at as "lastFetchedAt"
       from feeds
-      where id = $1
+      where id = $1 and kind = 'rss'
       limit 1
     `,
     [id],
@@ -420,9 +426,45 @@ export async function updateAllFeedsFetchIntervalMinutes(
       set
         fetch_interval_minutes = $1,
         updated_at = now()
+      where kind = 'rss'
     `,
     [minutes],
   );
 
   return { updatedCount: res.rowCount ?? 0 };
+}
+
+export async function createAiDigestFeed(
+  db: DbClient,
+  input: { id: string; title: string; categoryId: string | null },
+): Promise<FeedRow> {
+  const url = `http://localhost/__feedfuse_ai_digest__/${input.id}`;
+  const { rows } = await db.query<FeedRow>(
+    `
+      insert into feeds(id, kind, title, url, category_id)
+      values ($1, 'ai_digest', $2, $3, $4)
+      returning
+        id,
+        kind,
+        title,
+        url,
+        site_url as "siteUrl",
+        icon_url as "iconUrl",
+        enabled,
+        full_text_on_open_enabled as "fullTextOnOpenEnabled",
+        ai_summary_on_open_enabled as "aiSummaryOnOpenEnabled",
+        ai_summary_on_fetch_enabled as "aiSummaryOnFetchEnabled",
+        body_translate_on_fetch_enabled as "bodyTranslateOnFetchEnabled",
+        body_translate_on_open_enabled as "bodyTranslateOnOpenEnabled",
+        title_translate_enabled as "titleTranslateEnabled",
+        body_translate_enabled as "bodyTranslateEnabled",
+        article_list_display_mode as "articleListDisplayMode",
+        category_id as "categoryId",
+        fetch_interval_minutes as "fetchIntervalMinutes",
+        last_fetch_status as "lastFetchStatus",
+        last_fetch_error as "lastFetchError"
+    `,
+    [input.id, input.title, url, input.categoryId],
+  );
+  return rows[0];
 }
