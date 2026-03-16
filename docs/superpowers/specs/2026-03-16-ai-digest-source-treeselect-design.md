@@ -132,10 +132,16 @@
 - `selectedFeedIds` 至少 1 个。
 - 对 `selectedCategoryIds` 采用严格拒绝：
   - 若请求体包含该字段，返回 400 与明确错误信息。
+- 请求体采用严格对象校验（拒绝未知字段）：
+  - 需使用 `z.strictObject(...)` 或 `z.object(...).strict()`。
+  - 目的：确保 `selectedCategoryIds` 不会被静默丢弃，而是显式报错。
 
 服务与仓储类型：
 - `createAiDigestWithCategoryResolution` 入参仅保留 `selectedFeedIds`。
 - `createAiDigestConfig` 入参仅保留 `selectedFeedIds`（`selected_category_ids` 不再参与新写入）。
+- 运行时候选解析链路（tick/generate）统一只读取 `selected_feed_ids`：
+  - 全面移除按 `selected_category_ids` 展开 RSS 的逻辑。
+  - 从行为上保证历史“仅分类来源”配置不再生效。
 
 ### 4.6 旧配置策略（破坏性变更）
 
@@ -143,6 +149,7 @@
 - 不做历史 `selected_category_ids -> selected_feed_ids` 迁移。
 - 历史仅依赖分类选择的 AI 解读配置将失效（候选为空或不再按分类扩展）。
 - 通过发布说明提示用户重建相关 AI 解读源。
+- 若历史配置“同时包含 feed 与 category”，仅保留 `selected_feed_ids` 的行为。
 
 ## 5. 错误处理与空态
 
@@ -171,10 +178,15 @@ API 路由测试：
 - 包含 `selectedCategoryIds` 返回 400。
 - 仅含合法 `selectedFeedIds` 返回 200。
 - `selectedFeedIds` 为空时返回 400。
+- 包含任意未知字段时返回 400（严格对象模式生效）。
 
 服务/仓储测试：
 - 类型与入参不再依赖 `selectedCategoryIds`。
 - 新配置写入仅基于 RSS 选择。
+
+worker/运行时测试：
+- 历史仅有 `selected_category_ids` 的配置不会再按分类展开候选。
+- 历史同时有 `selected_feed_ids` 与 `selected_category_ids` 时，仅 `selected_feed_ids` 生效。
 
 ## 7. 风险与缓解
 
