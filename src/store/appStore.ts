@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Article, Category, Feed, ViewType } from '../types';
 import { useSettingsStore } from './settingsStore';
 import {
+  createAiDigest,
   createFeed,
   deleteFeed,
   getArticle,
@@ -108,6 +109,15 @@ interface AppState {
     bodyTranslateOnOpenEnabled?: boolean;
     titleTranslateEnabled?: boolean;
     bodyTranslateEnabled?: boolean;
+  }) => Promise<void>;
+  addAiDigest: (payload: {
+    title: string;
+    prompt: string;
+    intervalMinutes: number;
+    selectedFeedIds: string[];
+    selectedCategoryIds: string[];
+    categoryId?: string | null;
+    categoryName?: string | null;
   }) => Promise<void>;
   updateFeed: (
     feedId: string,
@@ -435,6 +445,21 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch (err) {
       console.error(err);
     }
+  },
+
+  addAiDigest: async (payload) => {
+    const created = await createAiDigest(payload);
+    const categories = get().categories;
+    const mapped = mapFeedDto(created, categories);
+
+    set((state) => ({
+      feeds: state.feeds.some((item) => item.id === mapped.id) ? state.feeds : [...state.feeds, mapped],
+      selectedView: mapped.id,
+      selectedArticleId: null,
+    }));
+
+    // AI digest feed creation should not trigger RSS refresh; it only needs a snapshot reload.
+    await get().loadSnapshot({ view: mapped.id });
   },
 
   updateFeed: async (feedId, patch) => {
