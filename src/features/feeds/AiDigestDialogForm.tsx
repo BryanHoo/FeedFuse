@@ -3,11 +3,10 @@ import { Button } from '@/components/ui/button';
 import { DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { cn } from '@/lib/utils';
 import type { Category, Feed } from '../../types';
+import AiDigestSourceTreeSelect from './AiDigestSourceTreeSelect';
 import CreatableCategoryField from './CreatableCategoryField';
 import { AI_DIGEST_INTERVAL_OPTIONS_MINUTES } from './useAiDigestDialogForm';
 
@@ -30,10 +29,8 @@ interface AiDigestDialogFormProps {
   sourceFeedOptions: Feed[];
   sourceCategoryOptions: Category[];
   selectedFeedIds: string[];
-  selectedCategoryIds: string[];
   sourcesFieldError: string | null;
-  onToggleSelectedFeedId: (feedId: string) => void;
-  onToggleSelectedCategoryId: (categoryId: string) => void;
+  onSelectedFeedIdsChange: (feedIds: string[]) => void;
   onCancel: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }
@@ -63,10 +60,8 @@ export default function AiDigestDialogForm({
   sourceFeedOptions,
   sourceCategoryOptions,
   selectedFeedIds,
-  selectedCategoryIds,
   sourcesFieldError,
-  onToggleSelectedFeedId,
-  onToggleSelectedCategoryId,
+  onSelectedFeedIdsChange,
   onCancel,
   onSubmit,
 }: AiDigestDialogFormProps) {
@@ -134,83 +129,13 @@ export default function AiDigestDialogForm({
 
           <div className="grid gap-1.5">
             <Label className="text-xs">来源</Label>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-lg border border-border/70 p-2">
-                <p className="mb-2 text-xs font-medium text-foreground">RSS 源</p>
-                <ScrollArea className="h-40 pr-2">
-                  <div className="space-y-1">
-                    {sourceFeedOptions.length > 0 ? (
-                      sourceFeedOptions.map((feed) => {
-                        const inputId = `${fieldIdPrefix}-feed-${feed.id}`;
-                        const checked = selectedFeedIds.includes(feed.id);
-
-                        return (
-                          <label
-                            key={feed.id}
-                            htmlFor={inputId}
-                            className={cn(
-                              'flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
-                              checked
-                                ? 'bg-primary/10 text-foreground'
-                                : 'text-foreground hover:bg-accent/60 hover:text-accent-foreground',
-                            )}
-                          >
-                            <input
-                              id={inputId}
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => onToggleSelectedFeedId(feed.id)}
-                              className="mt-0.5 h-4 w-4 shrink-0 rounded border-border"
-                            />
-                            <span className="min-w-0 flex-1 truncate">{feed.title}</span>
-                          </label>
-                        );
-                      })
-                    ) : (
-                      <p className="px-2 py-2 text-xs text-muted-foreground">暂无 RSS 源，请先添加 RSS 源。</p>
-                    )}
-                  </div>
-                </ScrollArea>
-              </div>
-
-              <div className="rounded-lg border border-border/70 p-2">
-                <p className="mb-2 text-xs font-medium text-foreground">分类</p>
-                <ScrollArea className="h-40 pr-2">
-                  <div className="space-y-1">
-                    {sourceCategoryOptions.length > 0 ? (
-                      sourceCategoryOptions.map((category) => {
-                        const inputId = `${fieldIdPrefix}-cat-${category.id}`;
-                        const checked = selectedCategoryIds.includes(category.id);
-
-                        return (
-                          <label
-                            key={category.id}
-                            htmlFor={inputId}
-                            className={cn(
-                              'flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
-                              checked
-                                ? 'bg-primary/10 text-foreground'
-                                : 'text-foreground hover:bg-accent/60 hover:text-accent-foreground',
-                            )}
-                          >
-                            <input
-                              id={inputId}
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => onToggleSelectedCategoryId(category.id)}
-                              className="mt-0.5 h-4 w-4 shrink-0 rounded border-border"
-                            />
-                            <span className="min-w-0 flex-1 truncate">{category.name}</span>
-                          </label>
-                        );
-                      })
-                    ) : (
-                      <p className="px-2 py-2 text-xs text-muted-foreground">暂无分类。</p>
-                    )}
-                  </div>
-                </ScrollArea>
-              </div>
-            </div>
+            <AiDigestSourceTreeSelect
+              categories={sourceCategoryOptions}
+              feeds={sourceFeedOptions}
+              selectedFeedIds={selectedFeedIds}
+              onChange={onSelectedFeedIdsChange}
+              error={sourcesFieldError}
+            />
             {sourcesFieldError ? (
               <p role="alert" className="text-xs text-destructive">
                 {sourcesFieldError}
@@ -275,4 +200,3 @@ export default function AiDigestDialogForm({
     </form>
   );
 }
-

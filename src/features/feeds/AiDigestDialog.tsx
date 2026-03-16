@@ -24,7 +24,7 @@ export default function AiDigestDialog({ open, onOpenChange, categories, feeds }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        closeLabel="close-add-ai-digest"
+        closeLabel="关闭添加AI解读源"
         className={DIALOG_FORM_CONTENT_CLASS_NAME}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
@@ -57,10 +57,8 @@ export default function AiDigestDialog({ open, onOpenChange, categories, feeds }
           sourceFeedOptions={form.sourceFeedOptions}
           sourceCategoryOptions={form.sourceCategoryOptions}
           selectedFeedIds={form.selectedFeedIds}
-          selectedCategoryIds={form.selectedCategoryIds}
           sourcesFieldError={form.sourcesFieldError}
-          onToggleSelectedFeedId={form.toggleSelectedFeedId}
-          onToggleSelectedCategoryId={form.toggleSelectedCategoryId}
+          onSelectedFeedIdsChange={form.setSelectedFeedIds}
           onCancel={() => onOpenChange(false)}
           onSubmit={form.handleSubmit}
         />
@@ -68,4 +66,3 @@ export default function AiDigestDialog({ open, onOpenChange, categories, feeds }
     </Dialog>
   );
 }
-

@@ -411,7 +411,6 @@ export async function createAiDigest(input: {
   prompt: string;
   intervalMinutes: number;
   selectedFeedIds: string[];
-  selectedCategoryIds: string[];
   categoryId?: string | null;
   categoryName?: string | null;
 }): Promise<

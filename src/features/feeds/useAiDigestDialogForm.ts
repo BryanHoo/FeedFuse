@@ -67,10 +67,6 @@ function resolveCategoryPayload(categories: Category[], input: string): Category
   return { categoryName: normalizeCategoryText(input) };
 }
 
-function toggleListValue(values: string[], value: string): string[] {
-  return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
-}
-
 export function useAiDigestDialogForm(input: {
   categories: Category[];
   feeds: Feed[];
@@ -79,21 +75,14 @@ export function useAiDigestDialogForm(input: {
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const addAiDigest = useAppStore((state) => state.addAiDigest);
   const categoryOptions = useMemo(() => ensureCategoryOptions(input.categories), [input.categories]);
-  const sourceFeedOptions = useMemo(
-    () => input.feeds.filter((feed) => feed.kind === 'rss'),
-    [input.feeds],
-  );
-  const sourceCategoryOptions = useMemo(
-    () => input.categories.filter((category) => category.id !== uncategorizedCategory.id),
-    [input.categories],
-  );
+  const sourceFeedOptions = useMemo(() => input.feeds, [input.feeds]);
+  const sourceCategoryOptions = useMemo(() => ensureCategoryOptions(input.categories), [input.categories]);
 
   const [title, setTitle] = useState('');
   const [prompt, setPrompt] = useState('');
   const [intervalMinutes, setIntervalMinutes] = useState<AiDigestIntervalMinutes>(60);
   const [categoryInput, setCategoryInput] = useState(uncategorizedCategory.name);
   const [selectedFeedIds, setSelectedFeedIds] = useState<string[]>([]);
-  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [serverFieldErrors, setServerFieldErrors] = useState<Record<string, string>>({});
@@ -101,7 +90,7 @@ export function useAiDigestDialogForm(input: {
 
   const trimmedTitle = title.trim();
   const trimmedPrompt = prompt.trim();
-  const hasSources = selectedFeedIds.length > 0 || selectedCategoryIds.length > 0;
+  const hasSources = selectedFeedIds.length > 0;
 
   const titleFieldError =
     serverFieldErrors.title ?? (submitAttempted && !trimmedTitle ? '标题为必填项' : null);
@@ -133,7 +122,6 @@ export function useAiDigestDialogForm(input: {
         prompt: trimmedPrompt,
         intervalMinutes,
         selectedFeedIds,
-        selectedCategoryIds,
         ...categoryPayload,
       });
 
@@ -172,10 +160,7 @@ export function useAiDigestDialogForm(input: {
     sourceFeedOptions,
     sourceCategoryOptions,
     selectedFeedIds,
-    selectedCategoryIds,
-    toggleSelectedFeedId: (feedId: string) => setSelectedFeedIds((current) => toggleListValue(current, feedId)),
-    toggleSelectedCategoryId: (categoryId: string) =>
-      setSelectedCategoryIds((current) => toggleListValue(current, categoryId)),
+    setSelectedFeedIds,
     titleFieldError,
     promptFieldError,
     sourcesFieldError,

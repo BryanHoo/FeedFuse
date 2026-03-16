@@ -42,6 +42,7 @@ export function buildAiDigestSourceTreeData(input: {
   }
 
   const nodes: SourceTreeNode[] = [];
+  const renderedCategoryIds = new Set<string>();
   for (const category of input.categories) {
     const feeds = groupedFeeds.get(category.id) ?? [];
     if (feeds.length === 0) continue;
@@ -59,10 +60,11 @@ export function buildAiDigestSourceTreeData(input: {
           key: getFeedNodeValue(feed.id),
         })),
     });
+    renderedCategoryIds.add(category.id);
   }
 
   const uncategorizedFeeds = groupedFeeds.get(UNCATEGORIZED_KEY) ?? [];
-  if (uncategorizedFeeds.length > 0) {
+  if (uncategorizedFeeds.length > 0 && !renderedCategoryIds.has(UNCATEGORIZED_KEY)) {
     nodes.push({
       title: categoryNameById.get(UNCATEGORIZED_KEY) ?? UNCATEGORIZED_LABEL,
       value: getCategoryNodeValue(UNCATEGORIZED_KEY),
