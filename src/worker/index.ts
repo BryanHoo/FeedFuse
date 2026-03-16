@@ -31,6 +31,7 @@ import { startBoss } from '../server/queue/boss';
 import { bootstrapQueues } from '../server/queue/bootstrap';
 import { QUEUE_CONTRACTS } from '../server/queue/contracts';
 import {
+  JOB_AI_DIGEST_TICK,
   JOB_AI_SUMMARIZE,
   JOB_AI_TRANSLATE,
   JOB_AI_TRANSLATE_TITLE,
@@ -48,6 +49,7 @@ import { runArticleTaskWithStatus } from './articleTaskStatus';
 import { runImmersiveTranslateSession } from './immersiveTranslateWorker';
 import { enqueueAutoAiTriggersOnFetch } from './autoAiTriggers';
 import { runAiSummaryStreamWorker } from './aiSummaryStreamWorker';
+import { runAiDigestTick } from './aiDigestTick';
 
 const DEFAULT_TRANSLATION_MODEL = 'gpt-4o-mini';
 const DEFAULT_TRANSLATION_API_BASE_URL = 'https://api.openai.com/v1';
@@ -492,8 +494,13 @@ async function main() {
     }
   };
 
+  const aiDigestTickHandler = async (_jobs: unknown[]) => {
+    await runAiDigestTick({ pool: getPool(), boss, now: new Date() });
+  };
+
   await registerWorkers(boss, {
     [JOB_REFRESH_ALL]: refreshAllHandler,
+    [JOB_AI_DIGEST_TICK]: aiDigestTickHandler,
     [JOB_FEED_FETCH]: feedFetchHandler,
     [JOB_ARTICLE_FULLTEXT_FETCH]: fulltextHandler,
     [JOB_AI_SUMMARIZE]: aiSummaryHandler,
@@ -511,6 +518,8 @@ async function main() {
 
   await boss.schedule(JOB_REFRESH_ALL, '* * * * *');
   await boss.send(JOB_REFRESH_ALL, {});
+  await boss.schedule(JOB_AI_DIGEST_TICK, '* * * * *');
+  await boss.send(JOB_AI_DIGEST_TICK, {});
 
   const shutdown = async () => {
     await boss.stop();
