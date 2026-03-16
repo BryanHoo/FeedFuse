@@ -1,0 +1,67 @@
+.container {
+  width: 100%;
+}
+
+.root {
+  width: 100%;
+  font-size: 0.875rem;
+}
+
+.root :global(.rc-tree-select-selector) {
+  min-height: 2.5rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--color-input);
+  background: var(--color-background);
+  padding: 0.25rem 0.5rem;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.root:global(.rc-tree-select-focused) :global(.rc-tree-select-selector) {
+  border-color: var(--color-ring);
+  box-shadow: 0 0 0 1px var(--color-ring);
+}
+
+.root :global(.rc-tree-select-selection-overflow) {
+  flex-wrap: nowrap;
+  gap: 0.5rem;
+}
+
+.root :global(.rc-tree-select-selection-item) {
+  max-width: 7rem;
+}
+
+.root :global(.rc-tree-select-selection-item-content) {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.root :global(.rc-tree-select-selection-placeholder) {
+  color: var(--color-muted-foreground);
+}
+
+.error :global(.rc-tree-select-selector) {
+  border-color: var(--color-destructive);
+}
+
+.dropdown {
+  border-radius: 0.625rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-popover);
+  color: var(--color-popover-foreground);
+  box-shadow: var(--shadow-popover);
+  padding: 0.25rem;
+}
+
+.dropdown :global(.rc-tree-select-tree-node-content-wrapper) {
+  border-radius: 0.375rem;
+}
+
+.dropdown :global(.rc-tree-select-tree-node-content-wrapper:hover) {
+  background: var(--color-accent);
+  color: var(--color-accent-foreground);
+}
