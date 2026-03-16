@@ -2,7 +2,7 @@ import { CheckCheck, CircleDot, LayoutGrid, List, RefreshCw } from "lucide-react
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppStore } from "../../store/appStore";
 import { formatRelativeTime, getArticleSectionHeading, getLocalDayKey } from "../../utils/date";
-import { patchFeed, refreshAllFeeds, refreshFeed } from "../../lib/apiClient";
+import { generateAiDigest, patchFeed, refreshAllFeeds, refreshFeed } from "../../lib/apiClient";
 import { useRenderTimeSnapshot } from "../../hooks/useRenderTimeSnapshot";
 import { READER_PANE_HOVER_BACKGROUND_CLASS_NAME } from "@/lib/designSystem";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,8 @@ import { toast } from "../toast/toast";
 const sessionVisibleArticleIds = new Set<string>();
 const REFRESH_POLL_INTERVAL_MS = 1000;
 const REFRESH_POLL_MAX_ATTEMPTS = 12;
+const AI_DIGEST_POLL_INTERVAL_MS = 1000;
+const AI_DIGEST_POLL_MAX_ATTEMPTS = 30;
 const PREVIEW_PRELOAD_MAX_CONCURRENT = 2;
 type PreviewImageStatus = "loading" | "ready" | "failed";
 const unreadSignalDotClassName =
@@ -332,6 +334,7 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
     : feeds.find((feed) => feed.id === selectedView) ?? null;
   const headerTitle = selectedFeed?.title ?? "文章";
   const effectiveDisplayMode = isAggregateView ? "card" : (selectedFeed?.articleListDisplayMode ?? "card");
+  const isAiDigestView = Boolean(selectedFeed && (selectedFeed.kind ?? "rss") === "ai_digest");
 
   useEffect(() => {
     if (effectiveDisplayMode !== "card") {
@@ -462,7 +465,11 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
     [setSelectedArticle],
   );
 
-  const refreshButtonTitle = isAggregateView ? "刷新全部订阅源" : "刷新订阅源";
+  const refreshButtonTitle = isAggregateView
+    ? "刷新全部订阅源"
+    : isAiDigestView
+      ? "立即生成"
+      : "刷新订阅源";
   const displayModeButtonTitle = effectiveDisplayMode === "card" ? "切换为列表" : "切换为卡片";
   const unreadOnlyButtonLabel = showUnreadOnly ? "显示全部文章" : "仅显示未读文章";
 
@@ -473,6 +480,7 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
     refreshRequestIdRef.current = requestId;
     const view = selectedView;
     const isGlobalView = isAggregateView;
+    const isDigestView = isAiDigestView;
 
     setRefreshing(true);
 
@@ -481,24 +489,74 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
         if (isGlobalView) {
           await refreshAllFeeds();
           toast.success("已开始刷新全部订阅源");
+        } else if (isDigestView) {
+          // AI digest feeds use "generate" semantics instead of RSS refresh.
+          const existingArticleIds = new Set(
+            useAppStore.getState().articles
+              .filter((article) => article.feedId === view)
+              .map((article) => article.id),
+          );
+
+          const result = await generateAiDigest(view);
+
+          if (!result.enqueued) {
+            if (result.reason === "missing_api_key") {
+              toast.error("请先在设置中配置 AI API Key");
+              return;
+            }
+
+            if (result.reason === "already_running") {
+              toast.info("已在生成中");
+              return;
+            }
+
+            toast.info("已提交生成请求");
+            return;
+          }
+
+          toast.success("已开始生成 AI 解读");
+
+          for (let attempt = 0; attempt < AI_DIGEST_POLL_MAX_ATTEMPTS; attempt += 1) {
+            if (refreshRequestIdRef.current !== requestId) return;
+
+            await loadSnapshot({ view });
+
+            if (refreshRequestIdRef.current !== requestId) return;
+
+            const nextIds = useAppStore.getState().articles
+              .filter((article) => article.feedId === view)
+              .map((article) => article.id);
+
+            const hasNewArticle = nextIds.some((id) => !existingArticleIds.has(id));
+            if (hasNewArticle) return;
+
+            if (attempt < AI_DIGEST_POLL_MAX_ATTEMPTS - 1) {
+              await sleep(AI_DIGEST_POLL_INTERVAL_MS);
+            }
+          }
+
+          if (refreshRequestIdRef.current !== requestId) return;
+          toast.info("本次窗口无更新，未生成解读（可稍后重试）");
         } else {
           await refreshFeed(view);
           toast.success("已开始刷新订阅源");
         }
 
-        for (let attempt = 0; attempt < REFRESH_POLL_MAX_ATTEMPTS; attempt += 1) {
-          if (refreshRequestIdRef.current !== requestId) return;
+        if (!isDigestView) {
+          for (let attempt = 0; attempt < REFRESH_POLL_MAX_ATTEMPTS; attempt += 1) {
+            if (refreshRequestIdRef.current !== requestId) return;
 
-          await loadSnapshot({ view });
+            await loadSnapshot({ view });
 
-          if (refreshRequestIdRef.current !== requestId) return;
-          if (attempt < REFRESH_POLL_MAX_ATTEMPTS - 1) {
-            await sleep(REFRESH_POLL_INTERVAL_MS);
+            if (refreshRequestIdRef.current !== requestId) return;
+            if (attempt < REFRESH_POLL_MAX_ATTEMPTS - 1) {
+              await sleep(REFRESH_POLL_INTERVAL_MS);
+            }
           }
-        }
 
-        if (refreshRequestIdRef.current !== requestId) return;
-        toast.success(isGlobalView ? "已完成刷新全部订阅源" : "已完成刷新订阅源");
+          if (refreshRequestIdRef.current !== requestId) return;
+          toast.success(isGlobalView ? "已完成刷新全部订阅源" : "已完成刷新订阅源");
+        }
       } catch {
         // apiClient handles failure notifications globally
       } finally {

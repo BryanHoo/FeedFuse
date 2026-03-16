@@ -792,6 +792,28 @@ describe('ArticleList', () => {
     }
   });
 
+  it('shows 立即生成 in ai_digest feed view', () => {
+    useAppStore.setState((state) => ({
+      ...state,
+      feeds: [
+        {
+          ...state.feeds[0],
+          id: 'digest-1',
+          kind: 'ai_digest',
+          title: 'My Digest',
+          url: 'http://localhost/__feedfuse_ai_digest__/digest-1',
+        },
+      ],
+      selectedView: 'digest-1',
+      selectedArticleId: null,
+    }));
+
+    renderWithNotifications();
+
+    expect(screen.getByRole('button', { name: '立即生成' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: FEED_REFRESH_LABEL })).not.toBeInTheDocument();
+  });
+
   it('shows success notification when refreshing all feeds starts', async () => {
     vi.useFakeTimers();
     try {
