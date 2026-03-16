@@ -1,19 +1,47 @@
+import type { FormEvent } from 'react';
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import type { Feed } from '../../types';
 import { useAiDigestDialogForm } from './useAiDigestDialogForm';
 
 const addAiDigestMock = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('../../store/appStore', () => ({
-  useAppStore: (selector: any) => selector({ addAiDigest: addAiDigestMock }),
+  useAppStore: <TResult,>(selector: (state: { addAiDigest: typeof addAiDigestMock }) => TResult) =>
+    selector({ addAiDigest: addAiDigestMock }),
 }));
+
+function createFeed(input: Pick<Feed, 'id' | 'kind' | 'title'>): Feed {
+  return {
+    id: input.id,
+    kind: input.kind,
+    title: input.title,
+    url: 'https://example.com/feed.xml',
+    siteUrl: null,
+    icon: undefined,
+    unreadCount: 0,
+    enabled: true,
+    fullTextOnOpenEnabled: false,
+    aiSummaryOnOpenEnabled: false,
+    aiSummaryOnFetchEnabled: false,
+    bodyTranslateOnFetchEnabled: false,
+    bodyTranslateOnOpenEnabled: false,
+    titleTranslateEnabled: false,
+    bodyTranslateEnabled: false,
+    articleListDisplayMode: 'card',
+    categoryId: null,
+    category: null,
+    fetchStatus: null,
+    fetchError: null,
+  };
+}
 
 describe('useAiDigestDialogForm', () => {
   it('submits selectedFeedIds only', async () => {
     const { result } = renderHook(() =>
       useAiDigestDialogForm({
         categories: [{ id: 'cat-tech', name: '科技', expanded: true }],
-        feeds: [{ id: 'rss-1', kind: 'rss', title: 'RSS 1' } as any],
+        feeds: [createFeed({ id: 'rss-1', kind: 'rss', title: 'RSS 1' })],
         onOpenChange: vi.fn(),
       }),
     );
@@ -25,7 +53,10 @@ describe('useAiDigestDialogForm', () => {
     });
 
     await act(async () => {
-      await result.current.handleSubmit({ preventDefault() {} } as any);
+      const submitEvent = {
+        preventDefault() {},
+      } as FormEvent<HTMLFormElement>;
+      await result.current.handleSubmit(submitEvent);
     });
 
     expect(addAiDigestMock).toHaveBeenCalledWith(

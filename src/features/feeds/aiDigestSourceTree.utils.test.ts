@@ -1,9 +1,35 @@
 import { describe, expect, it } from 'vitest';
+import type { Feed } from '../../types';
 import {
   buildAiDigestSourceTreeData,
   collectSelectedFeedIds,
   computeVisibleTagCount,
 } from './aiDigestSourceTree.utils';
+
+function createFeed(input: Pick<Feed, 'id' | 'kind' | 'title'> & { categoryId?: string | null }): Feed {
+  return {
+    id: input.id,
+    kind: input.kind,
+    title: input.title,
+    url: 'https://example.com/feed.xml',
+    siteUrl: null,
+    icon: undefined,
+    unreadCount: 0,
+    enabled: true,
+    fullTextOnOpenEnabled: false,
+    aiSummaryOnOpenEnabled: false,
+    aiSummaryOnFetchEnabled: false,
+    bodyTranslateOnFetchEnabled: false,
+    bodyTranslateOnOpenEnabled: false,
+    titleTranslateEnabled: false,
+    bodyTranslateEnabled: false,
+    articleListDisplayMode: 'card',
+    categoryId: input.categoryId ?? null,
+    category: null,
+    fetchStatus: null,
+    fetchError: null,
+  };
+}
 
 describe('aiDigestSourceTree.utils', () => {
   it('filters ai_digest feeds and hides empty categories', () => {
@@ -13,18 +39,8 @@ describe('aiDigestSourceTree.utils', () => {
         { id: 'cat-empty', name: '空分类' },
       ],
       feeds: [
-        {
-          id: 'rss-1',
-          kind: 'rss',
-          title: 'RSS 1',
-          categoryId: 'cat-tech',
-        } as any,
-        {
-          id: 'digest-1',
-          kind: 'ai_digest',
-          title: 'Digest',
-          categoryId: 'cat-tech',
-        } as any,
+        createFeed({ id: 'rss-1', kind: 'rss', title: 'RSS 1', categoryId: 'cat-tech' }),
+        createFeed({ id: 'digest-1', kind: 'ai_digest', title: 'Digest', categoryId: 'cat-tech' }),
       ],
     });
 
