@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const pool = {};
+const poolQueryMock = vi.fn();
+const pool = { query: poolQueryMock };
 
 const getArticleByIdMock = vi.fn();
 const setArticleReadMock = vi.fn();
@@ -74,7 +75,6 @@ vi.mock('../../../../../../../../server/repositories/articlesRepo', () => ({
   setArticleStarred: (...args: unknown[]) => setArticleStarredMock(...args),
   markAllRead: (...args: unknown[]) => markAllReadMock(...args),
 }));
-
 vi.mock('../../../server/repositories/feedsRepo', () => ({
   getFeedFullTextOnOpenEnabled: (...args: unknown[]) => getFeedFullTextOnOpenEnabledMock(...args),
   getFeedBodyTranslateEnabled: (...args: unknown[]) => getFeedBodyTranslateEnabledMock(...args),
@@ -236,6 +236,7 @@ describe('/api/articles', () => {
     markAiSummarySessionSupersededMock.mockReset();
     extractImmersiveSegmentsMock.mockReset();
     hashSourceHtmlMock.mockReset();
+    poolQueryMock.mockReset();
 
     getTranslationSessionByArticleIdMock.mockResolvedValue(null);
     getArticleTasksByArticleIdMock.mockResolvedValue([]);
@@ -258,6 +259,7 @@ describe('/api/articles', () => {
     upsertTranslationSegmentMock.mockResolvedValue(undefined);
     deleteTranslationSegmentsBySessionIdMock.mockResolvedValue(undefined);
     deleteTranslationEventsBySessionIdMock.mockResolvedValue(undefined);
+    poolQueryMock.mockResolvedValue({ rows: [] });
     listTranslationEventsAfterMock.mockResolvedValue([]);
     getActiveAiSummarySessionByArticleIdMock.mockResolvedValue(null);
     upsertAiSummarySessionMock.mockResolvedValue({
@@ -523,6 +525,70 @@ describe('/api/articles', () => {
 
     expect(json.data.bodyTranslationEligible).toBe(false);
     expect(json.data.bodyTranslationBlockedReason).toBe('source_is_simplified_chinese');
+  });
+
+  it('GET returns aiDigestSources ordered by position', async () => {
+    getArticleByIdMock.mockResolvedValue({
+      id: articleId,
+      feedId,
+      dedupeKey: 'guid:1',
+      title: 'Digest',
+      titleOriginal: 'Digest',
+      titleZh: null,
+      link: null,
+      author: null,
+      publishedAt: null,
+      contentHtml: '<p>digest</p>',
+      contentFullHtml: null,
+      contentFullFetchedAt: null,
+      contentFullError: null,
+      contentFullSourceUrl: null,
+      previewImageUrl: null,
+      aiSummary: null,
+      aiSummaryModel: null,
+      aiSummarizedAt: null,
+      aiTranslationBilingualHtml: null,
+      aiTranslationZhHtml: null,
+      aiTranslationModel: null,
+      aiTranslatedAt: null,
+      summary: null,
+      sourceLanguage: 'en',
+      isRead: false,
+      readAt: null,
+      isStarred: false,
+      starredAt: null,
+    });
+    poolQueryMock.mockResolvedValue({
+      rows: [
+      {
+        articleId: 'a-1',
+        feedId: 'f-1',
+        feedTitle: 'Feed 1',
+        title: 'S1',
+        link: 'https://x/1',
+        publishedAt: '2026-03-17T00:00:00.000Z',
+        position: 0,
+      },
+      {
+        articleId: 'a-2',
+        feedId: 'f-2',
+        feedTitle: 'Feed 2',
+        title: 'S2',
+        link: 'https://x/2',
+        publishedAt: '2026-03-16T00:00:00.000Z',
+        position: 1,
+      },
+      ],
+    });
+
+    const mod = await import('./[id]/route');
+    const res = await mod.GET(new Request(`http://localhost/api/articles/${articleId}`), {
+      params: Promise.resolve({ id: articleId }),
+    });
+    const json = await res.json();
+
+    expect(json.data.aiDigestSources).toHaveLength(2);
+    expect(json.data.aiDigestSources[0].position).toBe(0);
   });
 
   it('GET returns not_found when missing', async () => {
