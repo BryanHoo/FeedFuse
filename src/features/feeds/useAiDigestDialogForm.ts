@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { ApiError } from "@/lib/apiClient";
 import { mapApiErrorToUserMessage } from "@/lib/mapApiErrorToUserMessage";
 import type { Category, Feed } from "../../types";
@@ -15,6 +15,18 @@ type AiDigestIntervalMinutes =
 type CategoryResolutionInput = {
   categoryId?: string | null;
   categoryName?: string | null;
+};
+
+type AiDigestDialogMode = "add" | "edit";
+
+type UseAiDigestDialogFormInput = {
+  mode: AiDigestDialogMode;
+  categories: Category[];
+  feeds: Feed[];
+  onOpenChange: (open: boolean) => void;
+  feedId?: string;
+  initialTitle?: string;
+  initialCategoryId?: string | null;
 };
 
 const uncategorizedCategory: Category = {
@@ -37,6 +49,18 @@ function ensureCategoryOptions(categories: Category[]): Category[] {
   }
 
   return [uncategorizedCategory, ...categories];
+}
+
+function resolveInitialCategoryInput(
+  categories: Category[],
+  initialCategoryId?: string | null,
+): string {
+  if (!initialCategoryId) {
+    return uncategorizedCategory.name;
+  }
+
+  const matchedCategory = categories.find((item) => item.id === initialCategoryId);
+  return matchedCategory?.name ?? uncategorizedCategory.name;
 }
 
 function findMatchingCategory(
@@ -79,13 +103,26 @@ function resolveCategoryPayload(
   return { categoryName: normalizeCategoryText(input) };
 }
 
-export function useAiDigestDialogForm(input: {
-  categories: Category[];
-  feeds: Feed[];
-  onOpenChange: (open: boolean) => void;
-}) {
+function normalizeSelectedFeedIds(
+  feedIds: string[],
+  sourceFeedOptions: Feed[],
+): string[] {
+  const rssFeedIds = new Set(
+    sourceFeedOptions
+      .filter((feed) => feed.kind === "rss")
+      .map((feed) => feed.id),
+  );
+
+  return [...new Set(feedIds.filter((id) => rssFeedIds.has(id)))].sort((a, b) =>
+    a.localeCompare(b),
+  );
+}
+
+export function useAiDigestDialogForm(input: UseAiDigestDialogFormInput) {
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const addAiDigest = useAppStore((state) => state.addAiDigest);
+  const getAiDigestConfig = useAppStore((state) => state.getAiDigestConfig);
+  const updateAiDigest = useAppStore((state) => state.updateAiDigest);
   const categoryOptions = useMemo(
     () => ensureCategoryOptions(input.categories),
     [input.categories],
@@ -95,13 +132,14 @@ export function useAiDigestDialogForm(input: {
     () => ensureCategoryOptions(input.categories),
     [input.categories],
   );
+  const isEditMode = input.mode === "edit";
 
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState(input.initialTitle ?? "");
   const [prompt, setPrompt] = useState("");
   const [intervalMinutes, setIntervalMinutes] =
     useState<AiDigestIntervalMinutes>(60);
-  const [categoryInput, setCategoryInput] = useState(
-    uncategorizedCategory.name,
+  const [categoryInput, setCategoryInput] = useState(() =>
+    resolveInitialCategoryInput(categoryOptions, input.initialCategoryId),
   );
   const [selectedFeedIds, setSelectedFeedIds] = useState<string[]>([]);
   const [submitAttempted, setSubmitAttempted] = useState(false);
@@ -110,6 +148,55 @@ export function useAiDigestDialogForm(input: {
     Record<string, string>
   >({});
   const [submitting, setSubmitting] = useState(false);
+  const [loadingInitialValues, setLoadingInitialValues] = useState(isEditMode);
+
+  useEffect(() => {
+    if (!isEditMode) {
+      setLoadingInitialValues(false);
+      return;
+    }
+    if (!input.feedId) {
+      setLoadingInitialValues(false);
+      setSubmitError("缺少 AI 解读源 ID，无法编辑");
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingInitialValues(true);
+    setSubmitError(null);
+
+    void (async () => {
+      try {
+        const config = await getAiDigestConfig(input.feedId!);
+        if (cancelled) return;
+
+        const nextIntervalMinutes =
+          AI_DIGEST_INTERVAL_OPTIONS_MINUTES.includes(
+            config.intervalMinutes as never,
+          )
+            ? (config.intervalMinutes as AiDigestIntervalMinutes)
+            : 60;
+
+        // 编辑模式只保留当前仍可选的 RSS 来源，避免历史脏数据干扰表单。
+        setPrompt(config.prompt);
+        setIntervalMinutes(nextIntervalMinutes);
+        setSelectedFeedIds(
+          normalizeSelectedFeedIds(config.selectedFeedIds, sourceFeedOptions),
+        );
+      } catch {
+        if (cancelled) return;
+        setSubmitError("暂时无法加载 AI 解读源配置，请稍后重试");
+      } finally {
+        if (!cancelled) {
+          setLoadingInitialValues(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [getAiDigestConfig, input.feedId, isEditMode, sourceFeedOptions]);
 
   const trimmedTitle = title.trim();
   const trimmedPrompt = prompt.trim();
@@ -128,6 +215,10 @@ export function useAiDigestDialogForm(input: {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    if (loadingInitialValues) {
+      return;
+    }
+
     setSubmitAttempted(true);
     setSubmitError(null);
     setServerFieldErrors({});
@@ -144,16 +235,32 @@ export function useAiDigestDialogForm(input: {
         categoryInput,
       );
 
-      // Keep payload aligned with server Zod schema keys.
-      await addAiDigest({
-        title: trimmedTitle,
-        prompt: trimmedPrompt,
-        intervalMinutes,
-        selectedFeedIds,
-        ...categoryPayload,
-      });
+      // 保持 payload 与服务端 Zod schema 字段命名一致。
+      if (isEditMode) {
+        if (!input.feedId) {
+          setSubmitError("缺少 AI 解读源 ID，无法编辑");
+          return;
+        }
 
-      toast.success("已创建 AI 解读源");
+        await updateAiDigest(input.feedId, {
+          title: trimmedTitle,
+          prompt: trimmedPrompt,
+          intervalMinutes,
+          selectedFeedIds,
+          ...categoryPayload,
+        });
+        toast.success("已更新 AI 解读源");
+      } else {
+        await addAiDigest({
+          title: trimmedTitle,
+          prompt: trimmedPrompt,
+          intervalMinutes,
+          selectedFeedIds,
+          ...categoryPayload,
+        });
+        toast.success("已创建 AI 解读源");
+      }
+
       input.onOpenChange(false);
     } catch (err) {
       if (err instanceof ApiError) {
@@ -162,7 +269,11 @@ export function useAiDigestDialogForm(input: {
         return;
       }
 
-      setSubmitError("暂时无法创建 AI 解读源，请稍后重试");
+      setSubmitError(
+        isEditMode
+          ? "暂时无法更新 AI 解读源，请稍后重试"
+          : "暂时无法创建 AI 解读源，请稍后重试",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -170,6 +281,7 @@ export function useAiDigestDialogForm(input: {
 
   return {
     titleInputRef,
+    loadingInitialValues,
     submitting,
     submitError,
     title,
@@ -188,7 +300,9 @@ export function useAiDigestDialogForm(input: {
     sourceFeedOptions,
     sourceCategoryOptions,
     selectedFeedIds,
-    setSelectedFeedIds,
+    setSelectedFeedIds: (nextValue: string[]) => {
+      setSelectedFeedIds(normalizeSelectedFeedIds(nextValue, sourceFeedOptions));
+    },
     titleFieldError,
     promptFieldError,
     sourcesFieldError,

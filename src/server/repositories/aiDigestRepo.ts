@@ -109,6 +109,64 @@ export async function getAiDigestConfigByFeedId(
   return rows[0] ?? null;
 }
 
+export async function updateAiDigestConfig(
+  db: DbClient,
+  feedId: string,
+  patch: Partial<{
+    prompt: string;
+    intervalMinutes: number;
+    selectedFeedIds: string[];
+    lastWindowEndAt: string;
+  }>,
+): Promise<AiDigestConfigRow | null> {
+  const fields: string[] = [];
+  const values: Array<string | number | string[]> = [];
+  let paramIndex = 1;
+
+  if (typeof patch.prompt !== 'undefined') {
+    fields.push(`prompt = $${paramIndex++}`);
+    values.push(patch.prompt);
+  }
+  if (typeof patch.intervalMinutes !== 'undefined') {
+    fields.push(`interval_minutes = $${paramIndex++}`);
+    values.push(patch.intervalMinutes);
+  }
+  if (typeof patch.selectedFeedIds !== 'undefined') {
+    fields.push(`selected_feed_ids = $${paramIndex++}::uuid[]`);
+    values.push(patch.selectedFeedIds);
+  }
+  if (typeof patch.lastWindowEndAt !== 'undefined') {
+    fields.push(`last_window_end_at = $${paramIndex++}::timestamptz`);
+    values.push(patch.lastWindowEndAt);
+  }
+  if (fields.length === 0) {
+    return getAiDigestConfigByFeedId(db, feedId);
+  }
+
+  fields.push('updated_at = now()');
+  values.push(feedId);
+
+  const { rows } = await db.query<AiDigestConfigRow>(
+    `
+      update ai_digest_configs
+      set ${fields.join(', ')}
+      where feed_id = $${paramIndex}
+      returning
+        feed_id as "feedId",
+        prompt,
+        interval_minutes as "intervalMinutes",
+        top_n as "topN",
+        selected_feed_ids as "selectedFeedIds",
+        selected_category_ids as "selectedCategoryIds",
+        last_window_end_at as "lastWindowEndAt",
+        created_at as "createdAt",
+        updated_at as "updatedAt"
+    `,
+    values,
+  );
+  return rows[0] ?? null;
+}
+
 export async function updateAiDigestConfigLastWindowEndAt(
   db: DbClient,
   feedId: string,

@@ -23,6 +23,7 @@ interface AiDigestSourceTreeSelectProps {
   selectedFeedIds: string[];
   onChange: (nextSelectedFeedIds: string[]) => void;
   error?: string | null;
+  disabled?: boolean;
 }
 
 interface TriStateCheckboxProps {
@@ -64,6 +65,7 @@ export default function AiDigestSourceTreeSelect({
   selectedFeedIds,
   onChange,
   error,
+  disabled: disabledFromParent = false,
 }: AiDigestSourceTreeSelectProps) {
   const triggerButtonRef = useRef<HTMLButtonElement | null>(null);
   const triggerMetaRef = useRef<HTMLSpanElement | null>(null);
@@ -131,7 +133,7 @@ export default function AiDigestSourceTreeSelect({
     return () => window.clearTimeout(timerId);
   }, [open]);
 
-  const disabled = treeData.length === 0;
+  const disabled = disabledFromParent || treeData.length === 0;
   const placeholder = disabled ? '暂无可选 RSS 源' : '选择 RSS 来源';
   const forceExpanded = searchQuery.trim().length > 0;
 

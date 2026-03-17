@@ -13,6 +13,7 @@ interface CreatableCategoryFieldProps {
   value: string;
   options: Category[];
   onChange: (value: string) => void;
+  disabled?: boolean;
 }
 
 function normalizeCategoryText(value: string): string {
@@ -28,6 +29,7 @@ export default function CreatableCategoryField({
   value,
   options,
   onChange,
+  disabled = false,
 }: CreatableCategoryFieldProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -91,7 +93,16 @@ export default function CreatableCategoryField({
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={disabled ? false : open}
+      onOpenChange={(nextOpen) => {
+        if (disabled) {
+          setOpen(false);
+          return;
+        }
+        setOpen(nextOpen);
+      }}
+    >
       <PopoverAnchor asChild>
         <div ref={wrapperRef} className="relative">
           <Input
@@ -150,6 +161,7 @@ export default function CreatableCategoryField({
             placeholder="输入分类或选择已有分类"
             autoComplete="off"
             className="pr-10"
+            disabled={disabled}
             role="combobox"
             aria-autocomplete="list"
             aria-expanded={open}
@@ -163,6 +175,7 @@ export default function CreatableCategoryField({
             aria-label={open ? '收起分类选项' : '展开分类选项'}
             onMouseDown={(event) => event.preventDefault()}
             onClick={toggleSuggestions}
+            disabled={disabled}
           >
             <ChevronDown className={cn('h-4 w-4 transition-transform', open && 'rotate-180')} />
           </Button>

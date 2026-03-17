@@ -18,8 +18,11 @@ import { AI_DIGEST_INTERVAL_OPTIONS_MINUTES } from "./useAiDigestDialogForm";
 
 interface AiDigestDialogFormProps {
   fieldIdPrefix: string;
+  loadingInitialValues: boolean;
   submitting: boolean;
   submitError: string | null;
+  submitButtonLabel: string;
+  submittingButtonLabel: string;
   title: string;
   titleInputRef: RefObject<HTMLInputElement | null>;
   titleFieldError: string | null;
@@ -49,8 +52,11 @@ function formatIntervalOption(minutes: number): string {
 
 export default function AiDigestDialogForm({
   fieldIdPrefix,
+  loadingInitialValues,
   submitting,
   submitError,
+  submitButtonLabel,
+  submittingButtonLabel,
   title,
   titleInputRef,
   titleFieldError,
@@ -71,6 +77,7 @@ export default function AiDigestDialogForm({
   onCancel,
   onSubmit,
 }: AiDigestDialogFormProps) {
+  const isBusy = loadingInitialValues || submitting;
   const titleInputId = `${fieldIdPrefix}-title`;
   const promptInputId = `${fieldIdPrefix}-prompt`;
   const intervalInputId = `${fieldIdPrefix}-interval`;
@@ -81,7 +88,7 @@ export default function AiDigestDialogForm({
     <form
       onSubmit={onSubmit}
       className="space-y-4"
-      aria-busy={submitting}
+      aria-busy={isBusy}
       noValidate
     >
       <div className="space-y-4 border-b border-border pb-4">
@@ -99,6 +106,7 @@ export default function AiDigestDialogForm({
               value={title}
               onChange={(event) => onTitleChange(event.target.value)}
               placeholder="例如：每日科技解读"
+              disabled={isBusy}
               aria-invalid={titleFieldError ? "true" : "false"}
               aria-errormessage={
                 titleFieldError ? `${titleInputId}-error` : undefined
@@ -126,6 +134,7 @@ export default function AiDigestDialogForm({
               onChange={(event) => onPromptChange(event.target.value)}
               placeholder="例如：请用要点总结这些文章的核心观点，并给出你的解读与建议。"
               className="min-h-24"
+              disabled={isBusy}
               aria-invalid={promptFieldError ? "true" : "false"}
               aria-errormessage={
                 promptFieldError ? `${promptInputId}-error` : undefined
@@ -155,6 +164,7 @@ export default function AiDigestDialogForm({
               selectedFeedIds={selectedFeedIds}
               onChange={onSelectedFeedIdsChange}
               error={sourcesFieldError}
+              disabled={isBusy}
             />
             {sourcesFieldError ? (
               <p role="alert" className="text-xs text-destructive">
@@ -170,6 +180,7 @@ export default function AiDigestDialogForm({
             <Select
               value={String(intervalMinutes)}
               onValueChange={(value) => onIntervalMinutesChange(Number(value))}
+              disabled={isBusy}
             >
               <SelectTrigger id={intervalInputId} className="w-full">
                 <SelectValue placeholder="选择重复时间" />
@@ -193,6 +204,7 @@ export default function AiDigestDialogForm({
               value={categoryInput}
               options={categoryOptions}
               onChange={onCategoryInputChange}
+              disabled={isBusy}
             />
           </div>
         </div>
@@ -209,16 +221,20 @@ export default function AiDigestDialogForm({
           type="button"
           variant="outline"
           onClick={onCancel}
-          disabled={submitting}
+          disabled={isBusy}
         >
           取消
         </Button>
         <Button
           type="submit"
-          disabled={submitting}
+          disabled={isBusy}
           aria-describedby={submitError ? submitErrorId : undefined}
         >
-          {submitting ? "创建中…" : "创建 AI 解读源"}
+          {loadingInitialValues
+            ? "加载中…"
+            : submitting
+            ? submittingButtonLabel
+            : submitButtonLabel}
         </Button>
       </DialogFooter>
     </form>

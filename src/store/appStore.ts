@@ -6,11 +6,13 @@ import {
   createFeed,
   deleteFeed,
   getArticle,
+  getAiDigestConfig as getAiDigestConfigRequest,
   getReaderSnapshot,
   mapArticleDto,
   mapFeedDto,
   mapSnapshotArticleItem,
   markAllRead,
+  patchAiDigest as patchAiDigestRequest,
   patchFeed,
   patchArticle,
   refreshFeed,
@@ -118,6 +120,23 @@ interface AppState {
     categoryId?: string | null;
     categoryName?: string | null;
   }) => Promise<void>;
+  getAiDigestConfig: (feedId: string) => Promise<{
+    feedId: string;
+    prompt: string;
+    intervalMinutes: number;
+    selectedFeedIds: string[];
+  }>;
+  updateAiDigest: (
+    feedId: string,
+    payload: {
+      title: string;
+      prompt: string;
+      intervalMinutes: number;
+      selectedFeedIds: string[];
+      categoryId?: string | null;
+      categoryName?: string | null;
+    },
+  ) => Promise<void>;
   updateFeed: (
     feedId: string,
     patch: {
@@ -459,6 +478,42 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     // AI digest feed creation should not trigger RSS refresh; it only needs a snapshot reload.
     await get().loadSnapshot({ view: mapped.id });
+  },
+
+  getAiDigestConfig: async (feedId) => getAiDigestConfigRequest(feedId),
+
+  updateAiDigest: async (feedId, payload) => {
+    const updated = await patchAiDigestRequest(feedId, payload);
+    set((state) => {
+      const categoryNameById = new Map(state.categories.map((category) => [category.id, category.name]));
+
+      return {
+        feeds: state.feeds.map((feed) => {
+          if (feed.id !== feedId) return feed;
+
+          return {
+            ...feed,
+            title: updated.title,
+            url: updated.url,
+            siteUrl: updated.siteUrl,
+            icon: updated.iconUrl ?? undefined,
+            enabled: updated.enabled,
+            fullTextOnOpenEnabled: updated.fullTextOnOpenEnabled,
+            aiSummaryOnOpenEnabled: updated.aiSummaryOnOpenEnabled,
+            aiSummaryOnFetchEnabled: updated.aiSummaryOnFetchEnabled,
+            bodyTranslateOnFetchEnabled: updated.bodyTranslateOnFetchEnabled,
+            bodyTranslateOnOpenEnabled: updated.bodyTranslateOnOpenEnabled,
+            titleTranslateEnabled: updated.titleTranslateEnabled,
+            bodyTranslateEnabled: updated.bodyTranslateEnabled,
+            articleListDisplayMode: updated.articleListDisplayMode,
+            categoryId: updated.categoryId,
+            category: updated.categoryId ? (categoryNameById.get(updated.categoryId) ?? null) : null,
+          };
+        }),
+      };
+    });
+
+    await get().loadSnapshot({ view: get().selectedView });
   },
 
   updateFeed: async (feedId, patch) => {

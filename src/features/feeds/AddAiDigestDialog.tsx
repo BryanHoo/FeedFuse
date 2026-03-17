@@ -9,6 +9,13 @@ interface AddAiDigestDialogProps {
 }
 
 export default function AddAiDigestDialog({ open, onOpenChange, categories, feeds }: AddAiDigestDialogProps) {
-  return <AiDigestDialog open={open} onOpenChange={onOpenChange} categories={categories} feeds={feeds} />;
+  return (
+    <AiDigestDialog
+      mode="add"
+      open={open}
+      onOpenChange={onOpenChange}
+      categories={categories}
+      feeds={feeds}
+    />
+  );
 }
-

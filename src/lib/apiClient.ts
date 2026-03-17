@@ -425,6 +425,39 @@ export async function createAiDigest(input: {
   });
 }
 
+export interface AiDigestConfigDto {
+  feedId: string;
+  prompt: string;
+  intervalMinutes: number;
+  selectedFeedIds: string[];
+}
+
+export async function getAiDigestConfig(feedId: string): Promise<AiDigestConfigDto> {
+  return requestApi(`/api/ai-digests/${encodeURIComponent(feedId)}`);
+}
+
+export async function patchAiDigest(
+  feedId: string,
+  input: {
+    title: string;
+    prompt: string;
+    intervalMinutes: number;
+    selectedFeedIds: string[];
+    categoryId?: string | null;
+    categoryName?: string | null;
+  },
+): Promise<FeedRowDto> {
+  const payload = Object.fromEntries(
+    Object.entries(input).filter(([, value]) => typeof value !== 'undefined'),
+  );
+
+  return requestApi(`/api/ai-digests/${encodeURIComponent(feedId)}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function generateAiDigest(
   feedId: string,
 ): Promise<{ enqueued: boolean; jobId?: string; reason?: string; runId?: string }> {

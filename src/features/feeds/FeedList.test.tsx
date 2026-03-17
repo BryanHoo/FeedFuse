@@ -282,6 +282,18 @@ function renderWithNotifications() {
           });
         }
 
+        if (url.includes('/api/ai-digests/digest-1') && method === 'GET') {
+          return jsonResponse({
+            ok: true,
+            data: {
+              feedId: 'digest-1',
+              prompt: '请解读这些文章',
+              intervalMinutes: 60,
+              selectedFeedIds: ['feed-1'],
+            },
+          });
+        }
+
         if (url.includes('/api/rss/validate') && method === 'GET') {
           const feedUrl = new URL(url).searchParams.get('url') ?? '';
           if (feedUrl.includes('changed.example.com')) {
@@ -608,15 +620,39 @@ function renderWithNotifications() {
 
     await screen.findByRole('menuitem', { name: '移动到分类' });
 
-    expect(screen.queryByRole('menuitem', { name: '编辑' })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: '全文抓取配置' })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'AI摘要配置' })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: '翻译配置' })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: '配置关键词过滤' })).not.toBeInTheDocument();
 
+    expect(screen.getByRole('menuitem', { name: '编辑' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: '移动到分类' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: '停用' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: '删除' })).toBeInTheDocument();
+  });
+
+  it('opens edit dialog from context menu for ai_digest feeds', async () => {
+    useAppStore.setState((state) => ({
+      ...state,
+      feeds: [
+        {
+          ...state.feeds[0],
+          id: 'digest-1',
+          kind: 'ai_digest',
+          title: 'My Digest',
+          url: 'http://localhost/__feedfuse_ai_digest__/digest-1',
+          unreadCount: 0,
+        },
+      ],
+      selectedView: 'digest-1',
+    }));
+
+    renderWithNotifications();
+
+    fireEvent.contextMenu(screen.getByRole('button', { name: /My Digest/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: '编辑' }));
+
+    expect(await screen.findByRole('dialog', { name: '编辑 AI 解读源' })).toBeInTheDocument();
   });
 
 

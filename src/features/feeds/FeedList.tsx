@@ -39,6 +39,7 @@ const uncategorizedId = 'cat-uncategorized';
 const AddFeedDialog = dynamic(() => import('./AddFeedDialog'), { ssr: false, loading: () => null });
 const AddAiDigestDialog = dynamic(() => import('./AddAiDigestDialog'), { ssr: false, loading: () => null });
 const EditFeedDialog = dynamic(() => import('./EditFeedDialog'), { ssr: false, loading: () => null });
+const EditAiDigestDialog = dynamic(() => import('./EditAiDigestDialog'), { ssr: false, loading: () => null });
 const FeedFulltextPolicyDialog = dynamic(() => import('./FeedFulltextPolicyDialog'), {
   ssr: false,
   loading: () => null,
@@ -79,6 +80,7 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
   const [addFeedOpen, setAddFeedOpen] = useState(false);
   const [addAiDigestOpen, setAddAiDigestOpen] = useState(false);
   const [editFeedId, setEditFeedId] = useState<string | null>(null);
+  const [editAiDigestFeedId, setEditAiDigestFeedId] = useState<string | null>(null);
   const [deleteFeedId, setDeleteFeedId] = useState<string | null>(null);
   const [fulltextPolicyFeedId, setFulltextPolicyFeedId] = useState<string | null>(null);
   const [summaryPolicyFeedId, setSummaryPolicyFeedId] = useState<string | null>(null);
@@ -206,6 +208,13 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
     () => (editFeedId ? feeds.find((feed) => feed.id === editFeedId) ?? null : null),
     [editFeedId, feeds],
   );
+  const activeEditAiDigestFeed = useMemo(
+    () =>
+      editAiDigestFeedId
+        ? feeds.find((feed) => feed.id === editAiDigestFeedId && (feed.kind ?? 'rss') === 'ai_digest') ?? null
+        : null,
+    [editAiDigestFeedId, feeds],
+  );
 
   const activeDeleteFeed = useMemo(
     () => (deleteFeedId ? feeds.find((feed) => feed.id === deleteFeedId) ?? null : null),
@@ -315,7 +324,8 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
                 <Plus className="h-4 w-4" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-44 p-1">
+            {/* 固定添加菜单从 + 按钮下方弹出，并保持左边缘对齐 */}
+            <PopoverContent side="bottom" align="start" sideOffset={8} className="w-44 p-1">
               <div className="flex flex-col gap-0.5">
                 <Button
                   type="button"
@@ -546,21 +556,21 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
                           <ContextMenuTrigger asChild>{feedButton}</ContextMenuTrigger>
                         )}
                         <ContextMenuContent className="w-48">
-                          {isRssFeed ? (
-                            <>
-                              <ContextMenuItem
-                                onSelect={() => {
-                                  setEditFeedId(feed.id);
-                                }}
-                              >
-                                <ContextMenuItemIcon aria-hidden="true">
-                                  <PencilLine className="h-3.5 w-3.5" />
-                                </ContextMenuItemIcon>
-                                <ContextMenuItemLabel>编辑</ContextMenuItemLabel>
-                              </ContextMenuItem>
-                              <ContextMenuSeparator />
-                            </>
-                          ) : null}
+                          <ContextMenuItem
+                            onSelect={() => {
+                              if (isRssFeed) {
+                                setEditFeedId(feed.id);
+                                return;
+                              }
+                              setEditAiDigestFeedId(feed.id);
+                            }}
+                          >
+                            <ContextMenuItemIcon aria-hidden="true">
+                              <PencilLine className="h-3.5 w-3.5" />
+                            </ContextMenuItemIcon>
+                            <ContextMenuItemLabel>编辑</ContextMenuItemLabel>
+                          </ContextMenuItem>
+                          <ContextMenuSeparator />
                           <ContextMenuSub>
                             <ContextMenuSubTrigger>
                               <ContextMenuItemIcon aria-hidden="true">
@@ -732,6 +742,20 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
             }
           }}
           onSubmit={(payload) => updateFeed(activeEditFeed.id, payload)}
+        />
+      ) : null}
+
+      {activeEditAiDigestFeed ? (
+        <EditAiDigestDialog
+          open
+          feed={activeEditAiDigestFeed}
+          categories={categoryMaster}
+          feeds={feeds}
+          onOpenChange={(open) => {
+            if (!open) {
+              setEditAiDigestFeedId(null);
+            }
+          }}
         />
       ) : null}
 
