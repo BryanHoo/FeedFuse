@@ -12,6 +12,7 @@ import {
 import { FileText, Languages, Settings as SettingsIcon, Sparkles, Star } from 'lucide-react';
 import { useAppStore } from '../../store/appStore';
 import { useSettingsStore } from '../../store/settingsStore';
+import type { ArticleAiDigestSource } from '../../types';
 import {
   enqueueArticleFulltext,
   getArticleTasks,
@@ -65,6 +66,9 @@ export default function ArticleView({
   const markAsRead = useAppStore((state) => state.markAsRead);
   const toggleStar = useAppStore((state) => state.toggleStar);
   const refreshArticle = useAppStore((state) => state.refreshArticle);
+  const setSelectedView = useAppStore((state) => state.setSelectedView);
+  const setSelectedArticle = useAppStore((state) => state.setSelectedArticle);
+  const loadSnapshot = useAppStore((state) => state.loadSnapshot);
   const general = useSettingsStore((state) => state.persistedSettings.general);
   const autoMarkReadEnabled = useSettingsStore(
     (state) => state.persistedSettings.general.autoMarkReadEnabled,
@@ -129,6 +133,7 @@ export default function ArticleView({
   const bodyTranslationEligible = article?.bodyTranslationEligible !== false;
   // AI digest articles are already synthesized content, so fulltext/translation actions stay disabled.
   const isAiDigestArticle = (feed?.kind ?? 'rss') === 'ai_digest';
+  const aiDigestSources = article?.aiDigestSources ?? [];
   const titleOriginal = article?.titleOriginal?.trim() || article?.title || '';
   const titleZh = article?.titleZh?.trim();
   const showBilingualTitle = aiTranslationViewing && Boolean(titleZh);
@@ -404,6 +409,12 @@ export default function ArticleView({
     if (!article?.id) return;
     if (isAiDigestArticle) return;
     void requestImmersiveTranslation({ force: true, autoView: true });
+  }
+
+  async function onAiDigestSourceClick(source: ArticleAiDigestSource) {
+    setSelectedView(source.feedId);
+    await loadSnapshot({ view: source.feedId });
+    setSelectedArticle(source.articleId);
   }
 
   function renderDesktopToolbar() {
@@ -982,6 +993,44 @@ export default function ArticleView({
                 </Button>
               </div>
             </div>
+          ) : null}
+
+          {isAiDigestArticle ? (
+            <section
+              className="mb-6 rounded-xl border border-border/65 bg-muted/20 px-4 py-3"
+              aria-label="来源"
+            >
+              <h2 className="text-sm font-semibold">来源</h2>
+              {aiDigestSources.length === 0 ? (
+                <p className="mt-2 text-sm text-muted-foreground">暂无来源记录</p>
+              ) : (
+                <ul className="mt-2 space-y-2">
+                  {aiDigestSources.map((source) => (
+                    <li key={`${article.id}-${source.articleId}-${source.position}`}>
+                      <button
+                        type="button"
+                        className="flex w-full items-start justify-between gap-3 rounded-lg border border-border/60 bg-background/80 px-3 py-2 text-left transition-colors hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        onClick={() => {
+                          void onAiDigestSourceClick(source);
+                        }}
+                      >
+                        <span className="min-w-0 space-y-0.5">
+                          <span className="block break-words text-sm font-medium text-foreground">
+                            {source.title}
+                          </span>
+                          <span className="block break-words text-xs text-muted-foreground">
+                            {source.feedTitle}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {formatRelativeTime(source.publishedAt ?? article.publishedAt, referenceTime)}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
           ) : null}
 
           <div

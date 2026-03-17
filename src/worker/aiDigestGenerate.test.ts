@@ -132,4 +132,79 @@ describe('runAiDigestGenerate', () => {
       expect.objectContaining({ targetFeedIds: [] }),
     );
   });
+
+  it('persists selected source article ids with deterministic positions on success', async () => {
+    const replaceAiDigestRunSourcesMock = vi.fn().mockResolvedValue(undefined);
+    const pool = { query: vi.fn() } as unknown as Pool;
+
+    const { runAiDigestGenerate } = await import('./aiDigestGenerate');
+    await runAiDigestGenerate({
+      pool,
+      runId: 'run-3',
+      jobId: null,
+      isFinalAttempt: true,
+      deps: {
+        getAiDigestRunById: vi.fn().mockResolvedValue({
+          id: 'run-3',
+          feedId: 'feed-ai',
+          windowStartAt: '2026-03-17T00:00:00.000Z',
+          windowEndAt: '2026-03-17T01:00:00.000Z',
+          status: 'queued',
+        }),
+        getAiDigestConfigByFeedId: vi.fn().mockResolvedValue({
+          feedId: 'feed-ai',
+          prompt: 'x',
+          intervalMinutes: 60,
+          topN: 2,
+          selectedFeedIds: ['feed-rss-1'],
+          selectedCategoryIds: [],
+        }),
+        listFeeds: vi.fn().mockResolvedValue([
+          { id: 'feed-ai', kind: 'ai_digest', title: 'AI解读', categoryId: null },
+          { id: 'feed-rss-1', kind: 'rss', title: 'RSS 1', categoryId: null },
+        ]) as never,
+        listAiDigestCandidateArticles: vi.fn().mockResolvedValue([
+          {
+            id: 'candidate-1',
+            feedTitle: 'RSS 1',
+            title: '来源1',
+            summary: 's1',
+            link: null,
+            fetchedAt: '2026-03-17T00:30:00.000Z',
+            contentFullHtml: null,
+          },
+          {
+            id: 'candidate-2',
+            feedTitle: 'RSS 1',
+            title: '来源2',
+            summary: 's2',
+            link: null,
+            fetchedAt: '2026-03-17T00:20:00.000Z',
+            contentFullHtml: null,
+          },
+        ]),
+        updateAiDigestRun: vi.fn().mockResolvedValue(undefined),
+        updateAiDigestConfigLastWindowEndAt: vi.fn().mockResolvedValue(undefined),
+        getAiApiKey: vi.fn().mockResolvedValue('k'),
+        getUiSettings: vi.fn().mockResolvedValue({}),
+        aiDigestRerank: vi.fn().mockResolvedValue(['candidate-1', 'candidate-2']),
+        aiDigestCompose: vi.fn().mockResolvedValue({ title: 'Digest', html: '<p>digest</p>' }),
+        sanitizeContent: vi.fn().mockReturnValue('<p>digest</p>'),
+        insertArticleIgnoreDuplicate: vi.fn().mockResolvedValue({ id: 'digest-article-1' }),
+        queryArticleIdByDedupeKey: vi.fn().mockResolvedValue('digest-article-1'),
+        replaceAiDigestRunSources: replaceAiDigestRunSourcesMock,
+      },
+    });
+
+    expect(replaceAiDigestRunSourcesMock).toHaveBeenCalledWith(
+      pool,
+      expect.objectContaining({
+        runId: 'run-3',
+        sources: [
+          { sourceArticleId: 'candidate-1', position: 0 },
+          { sourceArticleId: 'candidate-2', position: 1 },
+        ],
+      }),
+    );
+  });
 });

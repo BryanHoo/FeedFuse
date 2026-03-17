@@ -1458,6 +1458,90 @@ describe('appStore api integration', () => {
     ).toBe(false);
   });
 
+  it('keeps aiDigestSources when snapshot refresh merges selected article details', async () => {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = getFetchCallUrl(input);
+
+      if (url.includes('/api/reader/snapshot')) {
+        return jsonResponse({
+          ok: true,
+          data: {
+            categories: [],
+            feeds: [createSnapshotFeed('feed-1', 'AI解读', 1)],
+            articles: {
+              items: [
+                {
+                  ...createSnapshotArticle('art-1', 'feed-1', 'Digest'),
+                  summary: 'new summary',
+                },
+              ],
+              nextCursor: null,
+            },
+          },
+        });
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    useAppStore.setState({
+      selectedView: 'all',
+      selectedArticleId: 'art-1',
+      feeds: [
+        {
+          id: 'feed-1',
+          kind: 'ai_digest',
+          title: 'AI解读',
+          url: 'https://example.com/feed-1.xml',
+          unreadCount: 1,
+          enabled: true,
+          fullTextOnOpenEnabled: false,
+          aiSummaryOnOpenEnabled: false,
+          aiSummaryOnFetchEnabled: false,
+          bodyTranslateOnFetchEnabled: false,
+          bodyTranslateOnOpenEnabled: false,
+          titleTranslateEnabled: false,
+          bodyTranslateEnabled: false,
+          articleListDisplayMode: 'card',
+          categoryId: null,
+          category: null,
+          fetchStatus: null,
+          fetchError: null,
+        },
+      ],
+      articles: [
+        {
+          id: 'art-1',
+          feedId: 'feed-1',
+          title: 'Digest',
+          content: '<p>loaded</p>',
+          summary: 'old',
+          publishedAt: '2026-03-17T00:00:00.000Z',
+          link: 'https://example.com/digest',
+          isRead: false,
+          isStarred: false,
+          aiDigestSources: [
+            {
+              articleId: 'src-1',
+              feedId: 'feed-rss-1',
+              feedTitle: 'RSS 1',
+              title: '来源1',
+              link: null,
+              publishedAt: null,
+              position: 0,
+            },
+          ],
+        },
+      ],
+      articleSnapshotCache: {},
+      snapshotLoading: false,
+    });
+
+    await useAppStore.getState().loadSnapshot({ view: 'all' });
+    const selected = useAppStore.getState().articles.find((article) => article.id === 'art-1');
+    expect(selected?.aiDigestSources?.[0]?.articleId).toBe('src-1');
+  });
+
   it('refreshArticle keeps hasAiSummary semantics and stores aiSummarySession', async () => {
     useAppStore.setState({
       articles: [

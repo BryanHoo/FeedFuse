@@ -223,6 +223,7 @@ function mergeSnapshotArticleWithExistingDetails(
     aiSummarySession: existingArticle.aiSummarySession,
     aiTranslationZhHtml: existingArticle.aiTranslationZhHtml,
     aiTranslationBilingualHtml: existingArticle.aiTranslationBilingualHtml,
+    aiDigestSources: existingArticle.aiDigestSources,
   };
 }
 

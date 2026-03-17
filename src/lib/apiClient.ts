@@ -665,6 +665,17 @@ export interface ArticleDto {
   starredAt: string | null;
   bodyTranslationEligible?: boolean;
   bodyTranslationBlockedReason?: string | null;
+  aiDigestSources?: ArticleAiDigestSourceDto[] | null;
+}
+
+export interface ArticleAiDigestSourceDto {
+  articleId: string;
+  feedId: string;
+  feedTitle: string;
+  title: string;
+  link: string | null;
+  publishedAt: string | null;
+  position: number;
 }
 
 export async function getArticle(
@@ -944,5 +955,14 @@ export function mapArticleDto(dto: ArticleDto): Article {
     isStarred: dto.isStarred,
     bodyTranslationEligible: dto.bodyTranslationEligible,
     bodyTranslationBlockedReason: dto.bodyTranslationBlockedReason,
+    aiDigestSources: dto.aiDigestSources?.map((source) => ({
+      articleId: source.articleId,
+      feedId: source.feedId,
+      feedTitle: source.feedTitle,
+      title: source.title,
+      link: source.link,
+      publishedAt: source.publishedAt,
+      position: source.position,
+    })) ?? undefined,
   };
 }

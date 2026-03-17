@@ -224,6 +224,50 @@ it('mapArticleDto prefers contentFullHtml', () => {
   expect(mapped.content).toContain('full');
 });
 
+it('mapArticleDto maps aiDigestSources', () => {
+  const mapped = mapArticleDto({
+    id: 'a',
+    feedId: 'f',
+    dedupeKey: 'k',
+    title: 'digest',
+    titleOriginal: 'digest',
+    titleZh: null,
+    link: null,
+    author: null,
+    publishedAt: null,
+    contentHtml: '<p>digest</p>',
+    contentFullHtml: null,
+    contentFullFetchedAt: null,
+    contentFullError: null,
+    contentFullSourceUrl: null,
+    aiSummary: null,
+    aiSummaryModel: null,
+    aiSummarizedAt: null,
+    aiTranslationBilingualHtml: null,
+    aiTranslationZhHtml: null,
+    aiTranslationModel: null,
+    aiTranslatedAt: null,
+    summary: null,
+    isRead: false,
+    readAt: null,
+    isStarred: false,
+    starredAt: null,
+    aiDigestSources: [
+      {
+        articleId: 'a-1',
+        feedId: 'f-1',
+        feedTitle: 'Feed 1',
+        title: 'Source 1',
+        link: 'https://example.com/s1',
+        publishedAt: '2026-03-17T00:00:00.000Z',
+        position: 0,
+      },
+    ],
+  });
+
+  expect(mapped.aiDigestSources?.[0]?.articleId).toBe('a-1');
+});
+
 it('mapArticleDto maps aiTranslationZhHtml', () => {
   const mapped = mapArticleDto({
     id: 'a',

@@ -7,6 +7,7 @@ import {
   getAiDigestConfigByFeedId,
   getAiDigestRunById,
   listAiDigestCandidateArticles,
+  replaceAiDigestRunSources,
   updateAiDigestConfigLastWindowEndAt,
   updateAiDigestRun,
   type AiDigestCandidateArticleRow,
@@ -36,6 +37,7 @@ type AiDigestGenerateDeps = {
   sanitizeContent: typeof sanitizeContent;
   insertArticleIgnoreDuplicate: typeof insertArticleIgnoreDuplicate;
   queryArticleIdByDedupeKey: (pool: Pool, input: { feedId: string; dedupeKey: string }) => Promise<string | null>;
+  replaceAiDigestRunSources: typeof replaceAiDigestRunSources;
 };
 
 const defaultDeps: AiDigestGenerateDeps = {
@@ -51,6 +53,7 @@ const defaultDeps: AiDigestGenerateDeps = {
   aiDigestCompose,
   sanitizeContent,
   insertArticleIgnoreDuplicate,
+  replaceAiDigestRunSources,
   queryArticleIdByDedupeKey: async (pool, input) => {
     const { rows } = await pool.query<{ id: string }>(
       `
@@ -329,6 +332,14 @@ async function executeAiDigestRun(input: {
   if (!articleId) {
     throw new Error('Failed to persist AI digest article');
   }
+
+  await input.deps.replaceAiDigestRunSources(input.pool, {
+    runId: input.run.id,
+    sources: selected.map((candidate, index) => ({
+      sourceArticleId: candidate.id,
+      position: index,
+    })),
+  });
 
   await input.deps.updateAiDigestRun(input.pool, input.run.id, {
     status: 'succeeded',

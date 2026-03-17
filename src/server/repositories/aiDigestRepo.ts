@@ -38,6 +38,23 @@ export interface AiDigestRunRow {
   updatedAt: string;
 }
 
+export interface AiDigestRunSourceRow {
+  runId: string;
+  sourceArticleId: string;
+  position: number;
+  createdAt: string;
+}
+
+export interface AiDigestArticleSourceDetailRow {
+  articleId: string;
+  feedId: string;
+  feedTitle: string;
+  title: string;
+  link: string | null;
+  publishedAt: string | null;
+  position: number;
+}
+
 export async function createAiDigestConfig(
   db: DbClient,
   input: {
@@ -363,6 +380,59 @@ export async function updateAiDigestRun(
     `,
     values,
   );
+}
+
+export async function replaceAiDigestRunSources(
+  db: DbClient,
+  input: {
+    runId: string;
+    sources: Array<{ sourceArticleId: string; position: number }>;
+  },
+): Promise<void> {
+  await db.query('delete from ai_digest_run_sources where run_id = $1', [input.runId]);
+  if (input.sources.length === 0) return;
+
+  const values: Array<string | number> = [input.runId];
+  const placeholders = input.sources.map((source, index) => {
+    const positionParam = index * 2 + 2;
+    const articleParam = index * 2 + 3;
+    values.push(source.position, source.sourceArticleId);
+    return `($1, $${articleParam}::uuid, $${positionParam})`;
+  });
+
+  await db.query(
+    `
+      insert into ai_digest_run_sources(run_id, source_article_id, position)
+      values ${placeholders.join(', ')}
+    `,
+    values,
+  );
+}
+
+export async function listAiDigestRunSourcesByArticleId(
+  db: DbClient,
+  articleId: string,
+): Promise<AiDigestArticleSourceDetailRow[]> {
+  const { rows } = await db.query<AiDigestArticleSourceDetailRow>(
+    `
+      select
+        a.id as "articleId",
+        a.feed_id as "feedId",
+        f.title as "feedTitle",
+        a.title,
+        a.link,
+        a.published_at as "publishedAt",
+        s.position
+      from ai_digest_runs r
+      join ai_digest_run_sources s on s.run_id = r.id
+      join articles a on a.id = s.source_article_id
+      join feeds f on f.id = a.feed_id
+      where r.article_id = $1
+      order by s.position asc
+    `,
+    [articleId],
+  );
+  return rows;
 }
 
 export interface AiDigestCandidateArticleRow {

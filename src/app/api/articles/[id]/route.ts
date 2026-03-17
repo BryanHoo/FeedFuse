@@ -11,6 +11,7 @@ import {
   setArticleStarred,
   type ArticleRow,
 } from '../../../../server/repositories/articlesRepo';
+import { listAiDigestRunSourcesByArticleId } from '../../../../server/repositories/aiDigestRepo';
 import {
   buildImageProxyUrl,
   getOptionalImageProxySecret,
@@ -123,6 +124,7 @@ export async function GET(
 
     const proxiedArticle = rewriteArticleHtmlFields(article);
     const aiSummarySession = await getActiveAiSummarySessionByArticleId(pool, article.id);
+    const aiDigestSources = await listAiDigestRunSourcesByArticleId(pool, article.id);
     const eligibility = evaluateArticleBodyTranslationEligibility({
       sourceLanguage: article.sourceLanguage,
       contentHtml: article.contentHtml,
@@ -133,6 +135,7 @@ export async function GET(
     return ok({
       ...proxiedArticle,
       aiSummarySession: buildAiSummarySessionSnapshot(aiSummarySession),
+      aiDigestSources,
       bodyTranslationEligible: eligibility.bodyTranslationEligible,
       bodyTranslationBlockedReason: eligibility.bodyTranslationBlockedReason,
     });

@@ -51,6 +51,17 @@ export interface Article {
   isStarred: boolean;
   bodyTranslationEligible?: boolean;
   bodyTranslationBlockedReason?: string | null;
+  aiDigestSources?: ArticleAiDigestSource[];
+}
+
+export interface ArticleAiDigestSource {
+  articleId: string;
+  feedId: string;
+  feedTitle: string;
+  title: string;
+  link?: string | null;
+  publishedAt?: string | null;
+  position: number;
 }
 
 export interface ArticleAiSummarySession {
