@@ -1,14 +1,20 @@
-import type { FormEvent, RefObject } from 'react';
-import { Button } from '@/components/ui/button';
-import { DialogFooter } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import type { Category, Feed } from '../../types';
-import AiDigestSourceTreeSelect from './AiDigestSourceTreeSelect';
-import CreatableCategoryField from './CreatableCategoryField';
-import { AI_DIGEST_INTERVAL_OPTIONS_MINUTES } from './useAiDigestDialogForm';
+import type { FormEvent, RefObject } from "react";
+import { Button } from "@/components/ui/button";
+import { DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import type { Category, Feed } from "../../types";
+import AiDigestSourceTreeSelect from "./AiDigestSourceTreeSelect";
+import CreatableCategoryField from "./CreatableCategoryField";
+import { AI_DIGEST_INTERVAL_OPTIONS_MINUTES } from "./useAiDigestDialogForm";
 
 interface AiDigestDialogFormProps {
   fieldIdPrefix: string;
@@ -36,7 +42,7 @@ interface AiDigestDialogFormProps {
 }
 
 function formatIntervalOption(minutes: number): string {
-  if (minutes === 1440) return '每天';
+  if (minutes === 1440) return "每天";
   const hours = Math.round(minutes / 60);
   return `每 ${hours} 小时`;
 }
@@ -72,12 +78,13 @@ export default function AiDigestDialogForm({
   const submitErrorId = `${fieldIdPrefix}-submit-error`;
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4" aria-busy={submitting} noValidate>
+    <form
+      onSubmit={onSubmit}
+      className="space-y-4"
+      aria-busy={submitting}
+      noValidate
+    >
       <div className="space-y-4 border-b border-border pb-4">
-        <div className="mb-3">
-          <p className="text-[11px] font-semibold tracking-[0.12em] text-primary">解读配置</p>
-        </div>
-
         <div className="grid gap-4">
           <div className="grid gap-1.5">
             <Label htmlFor={titleInputId} className="text-xs">
@@ -92,11 +99,17 @@ export default function AiDigestDialogForm({
               value={title}
               onChange={(event) => onTitleChange(event.target.value)}
               placeholder="例如：每日科技解读"
-              aria-invalid={titleFieldError ? 'true' : 'false'}
-              aria-errormessage={titleFieldError ? `${titleInputId}-error` : undefined}
+              aria-invalid={titleFieldError ? "true" : "false"}
+              aria-errormessage={
+                titleFieldError ? `${titleInputId}-error` : undefined
+              }
             />
             {titleFieldError ? (
-              <p id={`${titleInputId}-error`} role="alert" className="text-xs text-destructive">
+              <p
+                id={`${titleInputId}-error`}
+                role="alert"
+                className="text-xs text-destructive"
+              >
                 {titleFieldError}
               </p>
             ) : null}
@@ -113,16 +126,23 @@ export default function AiDigestDialogForm({
               onChange={(event) => onPromptChange(event.target.value)}
               placeholder="例如：请用要点总结这些文章的核心观点，并给出你的解读与建议。"
               className="min-h-24"
-              aria-invalid={promptFieldError ? 'true' : 'false'}
-              aria-errormessage={promptFieldError ? `${promptInputId}-error` : undefined}
+              aria-invalid={promptFieldError ? "true" : "false"}
+              aria-errormessage={
+                promptFieldError ? `${promptInputId}-error` : undefined
+              }
             />
             {promptFieldError ? (
-              <p id={`${promptInputId}-error`} role="alert" className="text-xs text-destructive">
+              <p
+                id={`${promptInputId}-error`}
+                role="alert"
+                className="text-xs text-destructive"
+              >
                 {promptFieldError}
               </p>
             ) : (
               <p className="text-xs text-muted-foreground">
-                只会解读窗口内新增/更新的文章，并最终纳入相关性最高的 Top 10 篇。
+                只会解读窗口内新增/更新的文章，并最终纳入相关性最高的 Top 10
+                篇。
               </p>
             )}
           </div>
@@ -174,7 +194,6 @@ export default function AiDigestDialogForm({
               options={categoryOptions}
               onChange={onCategoryInputChange}
             />
-            <p className="text-xs text-muted-foreground">不填写或选择「未分类」将归入未分类。</p>
           </div>
         </div>
       </div>
@@ -186,7 +205,12 @@ export default function AiDigestDialogForm({
       ) : null}
 
       <DialogFooter className="pt-1">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onCancel}
+          disabled={submitting}
+        >
           取消
         </Button>
         <Button
@@ -194,7 +218,7 @@ export default function AiDigestDialogForm({
           disabled={submitting}
           aria-describedby={submitError ? submitErrorId : undefined}
         >
-          {submitting ? '创建中…' : '创建 AI解读源'}
+          {submitting ? "创建中…" : "创建 AI 解读源"}
         </Button>
       </DialogFooter>
     </form>

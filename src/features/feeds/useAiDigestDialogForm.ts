@@ -1,13 +1,16 @@
-import { useMemo, useRef, useState, type FormEvent } from 'react';
-import { ApiError } from '@/lib/apiClient';
-import { mapApiErrorToUserMessage } from '@/lib/mapApiErrorToUserMessage';
-import type { Category, Feed } from '../../types';
-import { useAppStore } from '../../store/appStore';
-import { toast } from '../toast/toast';
+import { useMemo, useRef, useState, type FormEvent } from "react";
+import { ApiError } from "@/lib/apiClient";
+import { mapApiErrorToUserMessage } from "@/lib/mapApiErrorToUserMessage";
+import type { Category, Feed } from "../../types";
+import { useAppStore } from "../../store/appStore";
+import { toast } from "../toast/toast";
 
-export const AI_DIGEST_INTERVAL_OPTIONS_MINUTES = [60, 120, 240, 480, 1440] as const;
+export const AI_DIGEST_INTERVAL_OPTIONS_MINUTES = [
+  60, 120, 240, 480, 1440,
+] as const;
 
-type AiDigestIntervalMinutes = (typeof AI_DIGEST_INTERVAL_OPTIONS_MINUTES)[number];
+type AiDigestIntervalMinutes =
+  (typeof AI_DIGEST_INTERVAL_OPTIONS_MINUTES)[number];
 
 type CategoryResolutionInput = {
   categoryId?: string | null;
@@ -15,13 +18,13 @@ type CategoryResolutionInput = {
 };
 
 const uncategorizedCategory: Category = {
-  id: 'cat-uncategorized',
-  name: '未分类',
+  id: "cat-uncategorized",
+  name: "未分类",
   expanded: true,
 };
 
 function normalizeCategoryText(value: string | null | undefined): string {
-  return value?.trim() ?? '';
+  return value?.trim() ?? "";
 }
 
 function normalizeCategoryKey(value: string | null | undefined): string {
@@ -36,24 +39,33 @@ function ensureCategoryOptions(categories: Category[]): Category[] {
   return [uncategorizedCategory, ...categories];
 }
 
-function findMatchingCategory(categories: Category[], input: string): Category | undefined {
+function findMatchingCategory(
+  categories: Category[],
+  input: string,
+): Category | undefined {
   const normalizedInput = normalizeCategoryText(input);
   if (!normalizedInput) return undefined;
 
   const normalizedKey = normalizedInput.toLowerCase();
   return categories.find(
-    (item) => item.id === normalizedInput || normalizeCategoryKey(item.name) === normalizedKey,
+    (item) =>
+      item.id === normalizedInput ||
+      normalizeCategoryKey(item.name) === normalizedKey,
   );
 }
 
 function isUncategorizedInput(value: string): boolean {
   return (
     !normalizeCategoryText(value) ||
-    normalizeCategoryKey(value) === normalizeCategoryKey(uncategorizedCategory.name)
+    normalizeCategoryKey(value) ===
+      normalizeCategoryKey(uncategorizedCategory.name)
   );
 }
 
-function resolveCategoryPayload(categories: Category[], input: string): CategoryResolutionInput {
+function resolveCategoryPayload(
+  categories: Category[],
+  input: string,
+): CategoryResolutionInput {
   const matchedCategory = findMatchingCategory(categories, input);
 
   if (isUncategorizedInput(input)) {
@@ -74,18 +86,29 @@ export function useAiDigestDialogForm(input: {
 }) {
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const addAiDigest = useAppStore((state) => state.addAiDigest);
-  const categoryOptions = useMemo(() => ensureCategoryOptions(input.categories), [input.categories]);
+  const categoryOptions = useMemo(
+    () => ensureCategoryOptions(input.categories),
+    [input.categories],
+  );
   const sourceFeedOptions = useMemo(() => input.feeds, [input.feeds]);
-  const sourceCategoryOptions = useMemo(() => ensureCategoryOptions(input.categories), [input.categories]);
+  const sourceCategoryOptions = useMemo(
+    () => ensureCategoryOptions(input.categories),
+    [input.categories],
+  );
 
-  const [title, setTitle] = useState('');
-  const [prompt, setPrompt] = useState('');
-  const [intervalMinutes, setIntervalMinutes] = useState<AiDigestIntervalMinutes>(60);
-  const [categoryInput, setCategoryInput] = useState(uncategorizedCategory.name);
+  const [title, setTitle] = useState("");
+  const [prompt, setPrompt] = useState("");
+  const [intervalMinutes, setIntervalMinutes] =
+    useState<AiDigestIntervalMinutes>(60);
+  const [categoryInput, setCategoryInput] = useState(
+    uncategorizedCategory.name,
+  );
   const [selectedFeedIds, setSelectedFeedIds] = useState<string[]>([]);
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [serverFieldErrors, setServerFieldErrors] = useState<Record<string, string>>({});
+  const [serverFieldErrors, setServerFieldErrors] = useState<
+    Record<string, string>
+  >({});
   const [submitting, setSubmitting] = useState(false);
 
   const trimmedTitle = title.trim();
@@ -93,12 +116,14 @@ export function useAiDigestDialogForm(input: {
   const hasSources = selectedFeedIds.length > 0;
 
   const titleFieldError =
-    serverFieldErrors.title ?? (submitAttempted && !trimmedTitle ? '标题为必填项' : null);
+    serverFieldErrors.title ??
+    (submitAttempted && !trimmedTitle ? "标题为必填项" : null);
   const promptFieldError =
-    serverFieldErrors.prompt ?? (submitAttempted && !trimmedPrompt ? 'AI解读提示词为必填项' : null);
+    serverFieldErrors.prompt ??
+    (submitAttempted && !trimmedPrompt ? "AI解读提示词为必填项" : null);
   const sourcesFieldError =
     serverFieldErrors.selectedFeedIds ??
-    (submitAttempted && !hasSources ? '请至少选择一个来源' : null);
+    (submitAttempted && !hasSources ? "请至少选择一个来源" : null);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -114,7 +139,10 @@ export function useAiDigestDialogForm(input: {
     setSubmitting(true);
 
     try {
-      const categoryPayload = resolveCategoryPayload(categoryOptions, categoryInput);
+      const categoryPayload = resolveCategoryPayload(
+        categoryOptions,
+        categoryInput,
+      );
 
       // Keep payload aligned with server Zod schema keys.
       await addAiDigest({
@@ -125,7 +153,7 @@ export function useAiDigestDialogForm(input: {
         ...categoryPayload,
       });
 
-      toast.success('已创建 AI解读源');
+      toast.success("已创建 AI 解读源");
       input.onOpenChange(false);
     } catch (err) {
       if (err instanceof ApiError) {
@@ -134,7 +162,7 @@ export function useAiDigestDialogForm(input: {
         return;
       }
 
-      setSubmitError('暂时无法创建 AI解读源，请稍后重试');
+      setSubmitError("暂时无法创建 AI 解读源，请稍后重试");
     } finally {
       setSubmitting(false);
     }

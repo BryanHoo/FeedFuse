@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
+import { StrictMode } from 'react';
 
 vi.mock('../../store/appStore', () => ({
   useAppStore: (selector: unknown) => {
@@ -37,32 +38,34 @@ describe('AddAiDigestDialog', () => {
     const { default: AddAiDigestDialog } = await import('./AddAiDigestDialog');
 
     render(
-      <AddAiDigestDialog
-        open
-        onOpenChange={() => {}}
-        categories={[{ id: 'c1', name: 'Tech', expanded: true }]}
-        feeds={[
-          {
-            id: 'f1',
-            kind: 'rss',
-            title: 'RSS 1',
-            url: 'https://example.com/rss.xml',
-            siteUrl: null,
-            unreadCount: 0,
-            enabled: true,
-            fullTextOnOpenEnabled: false,
-            aiSummaryOnOpenEnabled: false,
-            aiSummaryOnFetchEnabled: false,
-            bodyTranslateOnFetchEnabled: false,
-            bodyTranslateOnOpenEnabled: false,
-            titleTranslateEnabled: false,
-            bodyTranslateEnabled: false,
-            articleListDisplayMode: 'card',
-            fetchStatus: null,
-            fetchError: null,
-          },
-        ]}
-      />,
+      <StrictMode>
+        <AddAiDigestDialog
+          open
+          onOpenChange={() => {}}
+          categories={[{ id: 'c1', name: 'Tech', expanded: true }]}
+          feeds={[
+            {
+              id: 'f1',
+              kind: 'rss',
+              title: 'RSS 1',
+              url: 'https://example.com/rss.xml',
+              siteUrl: null,
+              unreadCount: 0,
+              enabled: true,
+              fullTextOnOpenEnabled: false,
+              aiSummaryOnOpenEnabled: false,
+              aiSummaryOnFetchEnabled: false,
+              bodyTranslateOnFetchEnabled: false,
+              bodyTranslateOnOpenEnabled: false,
+              titleTranslateEnabled: false,
+              bodyTranslateEnabled: false,
+              articleListDisplayMode: 'card',
+              fetchStatus: null,
+              fetchError: null,
+            },
+          ]}
+        />
+      </StrictMode>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: '创建 AI解读源' }));
@@ -71,4 +74,3 @@ describe('AddAiDigestDialog', () => {
     expect(screen.getByText('请至少选择一个来源')).toBeInTheDocument();
   });
 });
-

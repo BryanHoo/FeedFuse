@@ -27,11 +27,13 @@
 - 后端 schema 与 service/repo 类型统一为“只接受 RSS 源”。
 
 优点：
+
 - 满足全部交互目标。
 - 业务语义清晰，前后端契约收敛。
 - 可测试性高（映射逻辑与 UI 可独立验证）。
 
 代价：
+
 - 需要新增“联动结果 -> RSS 叶子集合”的归一化逻辑与测试。
 
 ### 方案 B：组件原值直通 + 提交前过滤（不采用）
@@ -49,12 +51,15 @@
 ### 4.1 前端组件边界
 
 新增组件：
+
 - `src/features/feeds/AiDigestSourceTreeSelect.tsx`
 
 职责：
+
 - 封装 `rc-tree-select` 的树数据构建、联动值归一化、搜索、标签渲染与样式适配。
 
 输入：
+
 - `categories: Category[]`
 - `feeds: Feed[]`
 - `selectedFeedIds: string[]`
@@ -62,14 +67,17 @@
 - `error?: string | null`
 
 输出：
+
 - 仅输出 `selectedFeedIds`（不输出分类节点 ID）。
 
 `AiDigestDialogForm` 调整：
+
 - 移除两列 checkbox UI。
 - 接入 `AiDigestSourceTreeSelect` 作为“来源”字段。
 - 来源字段错误展示保持现有文案通道。
 
 `useAiDigestDialogForm` 调整：
+
 - 删除 `selectedCategoryIds` state 与 toggle handler。
 - 提交 payload 仅保留 `selectedFeedIds`。
 - “至少一个来源”校验基于 `selectedFeedIds.length > 0`。
@@ -77,15 +85,18 @@
 ### 4.2 树数据模型与过滤规则
 
 树节点规则：
+
 - 仅显示 `feed.kind === 'rss'` 的叶子节点。
 - `feed.kind === 'ai_digest'` 直接过滤，不进入树。
 - 分类节点显示全部业务分类（含“未分类”）；但若某分类下没有 RSS 子节点，则不渲染该分类节点。
 
 节点结构建议：
+
 - 分类节点：`value = category:<categoryId>`
 - RSS 节点：`value = feed:<feedId>`
 
 归一化策略：
+
 - UI 层可接收含分类节点的勾选反馈。
 - 提交前统一筛选 `feed:` 前缀并去前缀，得到 `selectedFeedIds`。
 - 去重后按字符串稳定排序（便于测试断言与请求可预测性）。
@@ -93,16 +104,19 @@
 ### 4.3 选择行为与展示行为
 
 选择行为：
+
 - 启用树勾选与父子联动（非 `treeCheckStrictly`）。
 - 勾选分类时自动勾选子 RSS；取消分类时自动取消子 RSS。
 - 半选态由组件自动展示。
 
 搜索行为：
+
 - 开启 `showSearch`。
 - 自定义过滤：分类名和 RSS 名称均可命中。
 - 搜索不改变已勾选状态。
 
 标签展示：
+
 - 仅展示 RSS 标签（不展示分类标签）。
 - 每个标签固定宽度（例如 `112px`），文本超出省略。
 - 通过 `ResizeObserver` 计算单行可容纳标签数，动态设置 `maxTagCount`。
@@ -125,10 +139,12 @@
 ### 4.5 API 与后端契约调整
 
 `POST /api/ai-digests` 请求体：
+
 - 保留：`title`, `prompt`, `intervalMinutes`, `selectedFeedIds`, `categoryId|categoryName`
 - 移除：`selectedCategoryIds`
 
 校验策略：
+
 - `selectedFeedIds` 至少 1 个。
 - 对 `selectedCategoryIds` 采用严格拒绝：
   - 若请求体包含该字段，返回 400 与明确错误信息。
@@ -137,6 +153,7 @@
   - 目的：确保 `selectedCategoryIds` 不会被静默丢弃，而是显式报错。
 
 服务与仓储类型：
+
 - `createAiDigestWithCategoryResolution` 入参仅保留 `selectedFeedIds`。
 - `createAiDigestConfig` 入参仅保留 `selectedFeedIds`（`selected_category_ids` 不再参与新写入）。
 - 运行时候选解析链路（tick/generate）统一只读取 `selected_feed_ids`：
@@ -146,6 +163,7 @@
 ### 4.6 旧配置策略（破坏性变更）
 
 明确采用“不迁移、手动重建”：
+
 - 不做历史 `selected_category_ids -> selected_feed_ids` 迁移。
 - 历史仅依赖分类选择的 AI 解读配置将失效（候选为空或不再按分类扩展）。
 - 通过发布说明提示用户重建相关 AI 解读源。
@@ -155,7 +173,7 @@
 
 - 无可选 RSS 时：
   - 来源字段显示空态文案（例如“暂无可选 RSS 源”）。
-  - 禁用“创建 AI解读源”按钮。
+  - 禁用“创建 AI 解读源”按钮。
 - 提交校验失败：
   - 维持“请至少选择一个来源”字段错误提示。
 - 接口拒绝旧字段：
@@ -164,6 +182,7 @@
 ## 6. 测试计划
 
 前端单测：
+
 - 分类勾选联动子 RSS。
 - `ai_digest` feed 不出现在树里。
 - 空分类不显示。
@@ -171,20 +190,24 @@
 - 标签只显示 RSS，且超出显示 `...(+N)`。
 
 表单提交测试：
+
 - payload 仅包含 `selectedFeedIds`。
 - 不再传 `selectedCategoryIds`。
 
 API 路由测试：
+
 - 包含 `selectedCategoryIds` 返回 400。
 - 仅含合法 `selectedFeedIds` 返回 200。
 - `selectedFeedIds` 为空时返回 400。
 - 包含任意未知字段时返回 400（严格对象模式生效）。
 
 服务/仓储测试：
+
 - 类型与入参不再依赖 `selectedCategoryIds`。
 - 新配置写入仅基于 RSS 选择。
 
 worker/运行时测试：
+
 - 历史仅有 `selected_category_ids` 的配置不会再按分类展开候选。
 - 历史同时有 `selected_feed_ids` 与 `selected_category_ids` 时，仅 `selected_feed_ids` 生效。
 

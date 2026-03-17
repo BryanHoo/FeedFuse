@@ -4,11 +4,11 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { DIALOG_FORM_CONTENT_CLASS_NAME } from '@/lib/designSystem';
-import type { Category, Feed } from '../../types';
-import AiDigestDialogForm from './AiDigestDialogForm';
-import { useAiDigestDialogForm } from './useAiDigestDialogForm';
+} from "@/components/ui/dialog";
+import { DIALOG_FORM_CONTENT_CLASS_NAME } from "@/lib/designSystem";
+import type { Category, Feed } from "../../types";
+import AiDigestDialogForm from "./AiDigestDialogForm";
+import { useAiDigestDialogForm } from "./useAiDigestDialogForm";
 
 interface AiDigestDialogProps {
   open: boolean;
@@ -17,8 +17,13 @@ interface AiDigestDialogProps {
   feeds: Feed[];
 }
 
-export default function AiDigestDialog({ open, onOpenChange, categories, feeds }: AiDigestDialogProps) {
-  const fieldIdPrefix = 'add-ai-digest';
+export default function AiDigestDialog({
+  open,
+  onOpenChange,
+  categories,
+  feeds,
+}: AiDigestDialogProps) {
+  const fieldIdPrefix = "add-ai-digest";
   const form = useAiDigestDialogForm({ categories, feeds, onOpenChange });
 
   return (
@@ -32,9 +37,9 @@ export default function AiDigestDialog({ open, onOpenChange, categories, feeds }
         }}
       >
         <DialogHeader>
-          <DialogTitle>添加 AI解读源</DialogTitle>
+          <DialogTitle>添加 AI 解读源</DialogTitle>
           <DialogDescription>
-            选择要解读的来源与重复时间。系统会按时间窗口生成新的解读文章（有更新才会生成）。
+            选择要解读的来源与重复时间。系统会按时间窗口生成新的解读文章。
           </DialogDescription>
         </DialogHeader>
 
