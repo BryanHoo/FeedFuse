@@ -1,4 +1,3 @@
-import crypto from 'node:crypto';
 import type { Pool } from 'pg';
 import {
   createCategory,
@@ -76,17 +75,15 @@ export async function createAiDigestWithCategoryResolution(
   try {
     await client.query('begin');
 
-    const feedId = crypto.randomUUID();
     const categoryId = await resolveCategoryId(client as never, input);
 
     const createdFeed = await createAiDigestFeed(client as never, {
-      id: feedId,
       title: input.title,
       categoryId,
     });
 
     await createAiDigestConfig(client as never, {
-      feedId,
+      feedId: createdFeed.id,
       prompt: input.prompt,
       intervalMinutes: input.intervalMinutes,
       topN: 10,

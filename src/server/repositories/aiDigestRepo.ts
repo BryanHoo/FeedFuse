@@ -77,7 +77,7 @@ export async function createAiDigestConfig(
         selected_category_ids,
         last_window_end_at
       )
-      values ($1, $2, $3, $4, $5::uuid[], '{}'::uuid[], $6::timestamptz)
+      values ($1, $2, $3, $4, $5::bigint[], '{}'::bigint[], $6::timestamptz)
       returning
         feed_id as "feedId",
         prompt,
@@ -149,7 +149,7 @@ export async function updateAiDigestConfig(
     values.push(patch.intervalMinutes);
   }
   if (typeof patch.selectedFeedIds !== 'undefined') {
-    fields.push(`selected_feed_ids = $${paramIndex++}::uuid[]`);
+    fields.push(`selected_feed_ids = $${paramIndex++}::bigint[]`);
     values.push(patch.selectedFeedIds);
   }
   if (typeof patch.lastWindowEndAt !== 'undefined') {
@@ -397,7 +397,7 @@ export async function replaceAiDigestRunSources(
     const positionParam = index * 2 + 2;
     const articleParam = index * 2 + 3;
     values.push(source.position, source.sourceArticleId);
-    return `($1, $${articleParam}::uuid, $${positionParam})`;
+    return `($1, $${articleParam}::bigint, $${positionParam})`;
   });
 
   await db.query(
@@ -471,7 +471,7 @@ export async function listAiDigestCandidateArticles(
       from articles a
       join feeds f on f.id = a.feed_id
       where
-        a.feed_id = any($1::uuid[])
+        a.feed_id = any($1::bigint[])
         and a.fetched_at > $2::timestamptz
         and a.fetched_at <= $3::timestamptz
       order by a.fetched_at desc, a.id desc

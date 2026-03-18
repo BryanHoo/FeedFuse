@@ -99,7 +99,9 @@ describe('articleAiSummaryRepo', () => {
     expect(active?.draftText).toBe('TL;DR');
     expect(events[0]?.eventType).toBe('summary.delta');
 
-    expect(String(query.mock.calls[0]?.[0] ?? '')).toContain('insert into article_ai_summary_sessions');
+    const upsertSql = String(query.mock.calls[0]?.[0] ?? '');
+    expect(upsertSql).toContain('insert into article_ai_summary_sessions');
+    expect(upsertSql).not.toContain('gen_random_uuid');
     expect(String(query.mock.calls[1]?.[0] ?? '')).toContain('insert into article_ai_summary_events');
     expect(String(query.mock.calls[2]?.[0] ?? '')).toContain('superseded_by_session_id is null');
     expect(String(query.mock.calls[3]?.[0] ?? '')).toContain('event_id > $2');

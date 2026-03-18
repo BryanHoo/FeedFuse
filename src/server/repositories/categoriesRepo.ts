@@ -103,7 +103,7 @@ export async function reorderCategories(
     const positions = items.map((item) => item.position);
 
     const existing = await db.query<{ id: string }>(
-      'select id from categories where id = any($1::uuid[])',
+      'select id from categories where id = any($1::bigint[])',
       [ids],
     );
     if (existing.rows.length !== ids.length) {
@@ -116,7 +116,7 @@ export async function reorderCategories(
       set position = v.position,
           updated_at = now()
       from (
-        select unnest($1::uuid[]) as id, unnest($2::int[]) as position
+        select unnest($1::bigint[]) as id, unnest($2::int[]) as position
       ) as v
       where c.id = v.id
       `,

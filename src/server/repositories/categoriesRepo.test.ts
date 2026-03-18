@@ -31,6 +31,10 @@ describe('reorderCategories', () => {
     expect(rows.map((item) => item.id)).toEqual(['c2', 'c1']);
     expect(query).toHaveBeenNthCalledWith(1, 'begin');
     expect(query).toHaveBeenLastCalledWith('commit');
+    const updateSql = String(query.mock.calls[2]?.[0] ?? '');
+    const selectSql = String(query.mock.calls[1]?.[0] ?? '');
+    expect(selectSql).toContain('any($1::bigint[])');
+    expect(updateSql).toContain('unnest($1::bigint[])');
   });
 });
 

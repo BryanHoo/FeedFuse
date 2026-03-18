@@ -29,6 +29,7 @@ describe('aiDigestRepo', () => {
     const sql = String(query.mock.calls[0]?.[0] ?? '');
     expect(sql).toContain('from articles');
     expect(sql).toContain('fetched_at');
+    expect(sql).toContain('any($1::bigint[])');
     expect(sql).toContain('> $');
     expect(sql).toContain('<= $');
   });
@@ -49,6 +50,24 @@ describe('aiDigestRepo', () => {
     const joinedSql = query.mock.calls.map((call) => String(call[0])).join('\n');
     expect(joinedSql).toContain('delete from ai_digest_run_sources');
     expect(joinedSql).toContain('insert into ai_digest_run_sources');
+    expect(joinedSql).toContain('::bigint');
+  });
+
+  it('creates digest run with returning id payload', async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [] });
+    const pool = { query } as unknown as Pool;
+    const mod = (await import('./aiDigestRepo')) as typeof import('./aiDigestRepo');
+
+    await mod.createAiDigestRun(pool, {
+      feedId: '1001',
+      windowStartAt: '2026-03-14T00:00:00.000Z',
+      windowEndAt: '2026-03-14T01:00:00.000Z',
+      status: 'queued',
+    });
+
+    const createRunSql = String(query.mock.calls[0]?.[0] ?? '');
+    expect(createRunSql).toContain('returning');
+    expect(createRunSql).toContain('id');
   });
 
   it('lists run sources by digest article id ordered by position', async () => {

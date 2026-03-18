@@ -100,6 +100,59 @@ export async function upsertAiSummarySession(
   pool: Pool,
   input: UpsertAiSummarySessionInput,
 ): Promise<AiSummarySessionRow> {
+  if (input.sessionId == null) {
+    const { rows } = await pool.query<AiSummarySessionRow>(
+      `
+        insert into article_ai_summary_sessions (
+          article_id,
+          source_text_hash,
+          status,
+          draft_text,
+          final_text,
+          model,
+          job_id,
+          error_code,
+          error_message,
+          superseded_by_session_id,
+          started_at,
+          finished_at,
+          created_at,
+          updated_at
+        )
+        values (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          $6,
+          $7,
+          $8,
+          $9,
+          $10,
+          now(),
+          case when $3 in ('succeeded', 'failed') then now() else null end,
+          now(),
+          now()
+        )
+        returning ${sessionSelectSql()}
+      `,
+      [
+        input.articleId,
+        input.sourceTextHash,
+        input.status,
+        input.draftText,
+        input.finalText ?? null,
+        input.model ?? null,
+        input.jobId ?? null,
+        input.errorCode ?? null,
+        input.errorMessage ?? null,
+        input.supersededBySessionId ?? null,
+      ],
+    );
+    return rows[0] as AiSummarySessionRow;
+  }
+
   const { rows } = await pool.query<AiSummarySessionRow>(
     `
       insert into article_ai_summary_sessions (
@@ -120,7 +173,7 @@ export async function upsertAiSummarySession(
         updated_at
       )
       values (
-        coalesce($1::uuid, gen_random_uuid()),
+        $1::bigint,
         $2,
         $3,
         $4,

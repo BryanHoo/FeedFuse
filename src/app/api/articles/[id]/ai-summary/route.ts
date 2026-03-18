@@ -1,4 +1,4 @@
-import crypto from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { getPool } from '../../../../../server/db/pool';
 import { ok, fail } from '../../../../../server/http/apiResponse';
@@ -36,7 +36,7 @@ function zodIssuesToFields(error: z.ZodError): Record<string, string> {
 }
 
 function sha256(value: string): string {
-  return crypto.createHash('sha256').update(value).digest('hex');
+  return createHash('sha256').update(value).digest('hex');
 }
 
 function normalizeWhitespace(value: string): string {
@@ -157,7 +157,6 @@ export async function POST(
     const sourceTextHash = sha256(sourceText);
 
     const session = await upsertAiSummarySession(pool, {
-      sessionId: crypto.randomUUID(),
       articleId,
       sourceTextHash,
       status: 'queued',

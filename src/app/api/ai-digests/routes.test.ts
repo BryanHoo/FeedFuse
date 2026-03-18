@@ -116,6 +116,10 @@ describe('/api/ai-digests', () => {
     expect(json.ok).toBe(true);
     expect(json.data.unreadCount).toBe(0);
     expect(json.data.kind).toBe('ai_digest');
+    expect(createAiDigestWithCategoryResolutionMock).toHaveBeenCalledWith(
+      pool,
+      expect.not.objectContaining({ feedId: expect.anything() }),
+    );
   });
 
   it('POST rejects selectedCategoryIds', async () => {

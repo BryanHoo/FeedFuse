@@ -1245,6 +1245,11 @@ describe('/api/articles', () => {
         retryLimit: 0,
       }),
     );
+    expect(upsertAiSummarySessionMock).toHaveBeenNthCalledWith(
+      1,
+      pool,
+      expect.not.objectContaining({ sessionId: expect.anything() }),
+    );
     expect(upsertTaskQueuedMock).toHaveBeenCalledWith(pool, {
       articleId,
       type: 'ai_summary',

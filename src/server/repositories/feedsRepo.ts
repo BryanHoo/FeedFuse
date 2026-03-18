@@ -436,13 +436,22 @@ export async function updateAllFeedsFetchIntervalMinutes(
 
 export async function createAiDigestFeed(
   db: DbClient,
-  input: { id: string; title: string; categoryId: string | null },
+  input: { title: string; categoryId: string | null },
 ): Promise<FeedRow> {
-  const url = `http://localhost/__feedfuse_ai_digest__/${input.id}`;
+  // Use one sequence-derived id for both PK and deterministic ai_digest URL suffix.
   const { rows } = await db.query<FeedRow>(
     `
+      with next_feed as (
+        select nextval(pg_get_serial_sequence('feeds', 'id'))::bigint as id
+      )
       insert into feeds(id, kind, title, url, category_id)
-      values ($1, 'ai_digest', $2, $3, $4)
+      select
+        next_feed.id,
+        'ai_digest',
+        $1,
+        'http://localhost/__feedfuse_ai_digest__/' || next_feed.id::text,
+        $2
+      from next_feed
       returning
         id,
         kind,
@@ -464,7 +473,7 @@ export async function createAiDigestFeed(
         last_fetch_status as "lastFetchStatus",
         last_fetch_error as "lastFetchError"
     `,
-    [input.id, input.title, url, input.categoryId],
+    [input.title, input.categoryId],
   );
   return rows[0];
 }
