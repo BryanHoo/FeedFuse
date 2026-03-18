@@ -34,6 +34,7 @@ const defaultApi: StreamingAiSummaryApi = {
   getArticleAiSummarySnapshot,
   createArticleAiSummaryEventSource,
 };
+const SUMMARY_STREAM_TIMEOUT_MS = 60_000;
 
 function getUpdatedAtMs(session: { updatedAt?: string | null } | null): number {
   const updatedAt = session?.updatedAt;
@@ -85,6 +86,7 @@ export function useStreamingAiSummary(
   const requestTokenRef = useRef(0);
   const eventSourceRef = useRef<EventSource | null>(null);
   const streamCleanupRef = useRef<(() => void) | null>(null);
+  const streamTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     onCompletedRef.current = input.onCompleted;
@@ -121,16 +123,67 @@ export function useStreamingAiSummary(
     return currentLocalState?.waitingFulltext ?? false;
   }, [currentLocalState?.waitingFulltext]);
 
+  const clearStreamTimeout = useCallback(() => {
+    if (!streamTimeoutRef.current) return;
+    clearTimeout(streamTimeoutRef.current);
+    streamTimeoutRef.current = null;
+  }, []);
+
   const closeStream = useCallback(() => {
+    clearStreamTimeout();
     streamCleanupRef.current?.();
     streamCleanupRef.current = null;
     eventSourceRef.current?.close();
     eventSourceRef.current = null;
-  }, []);
+  }, [clearStreamTimeout]);
 
   const isCurrentRequest = useCallback((articleId: string, token: number): boolean => {
     return articleIdRef.current === articleId && requestTokenRef.current === token;
   }, []);
+
+  const armStreamTimeout = useCallback(
+    (articleId: string, token: number) => {
+      clearStreamTimeout();
+      streamTimeoutRef.current = setTimeout(() => {
+        if (!isCurrentRequest(articleId, token)) return;
+
+        setLocalStates((current) => {
+          const currentArticleState =
+            current[articleId] ?? createLocalArticleState(initialSessionRef.current);
+          const baseSession = currentArticleState.session ?? initialSessionRef.current;
+          if (!baseSession) {
+            return {
+              ...current,
+              [articleId]: {
+                ...currentArticleState,
+                loading: false,
+              },
+            };
+          }
+
+          const now = new Date().toISOString();
+          return {
+            ...current,
+            [articleId]: {
+              ...currentArticleState,
+              loading: false,
+              session: {
+                ...baseSession,
+                status: 'failed',
+                errorCode: 'ai_timeout',
+                errorMessage: '处理超时，请稍后重试',
+                finishedAt: baseSession.finishedAt ?? now,
+                updatedAt: now,
+              },
+            },
+          };
+        });
+
+        closeStream();
+      }, SUMMARY_STREAM_TIMEOUT_MS);
+    },
+    [clearStreamTimeout, closeStream, isCurrentRequest],
+  );
 
   const connectStream = useCallback(
     (articleId: string, token: number) => {
@@ -139,9 +192,11 @@ export function useStreamingAiSummary(
       closeStream();
       const stream = api.createArticleAiSummaryEventSource(articleId);
       eventSourceRef.current = stream;
+      armStreamTimeout(articleId, token);
 
       const onSummaryDelta: EventListener = (event) => {
         if (!isCurrentRequest(articleId, token)) return;
+        armStreamTimeout(articleId, token);
         const payload = parseEventPayload(event);
         const deltaText = typeof payload.deltaText === 'string' ? payload.deltaText : '';
         if (!deltaText) return;
@@ -170,6 +225,7 @@ export function useStreamingAiSummary(
 
       const onSummarySnapshot: EventListener = (event) => {
         if (!isCurrentRequest(articleId, token)) return;
+        armStreamTimeout(articleId, token);
         const payload = parseEventPayload(event);
         if (typeof payload.draftText !== 'string') return;
         const draftText = payload.draftText;
@@ -277,7 +333,7 @@ export function useStreamingAiSummary(
         stream.removeEventListener('session.failed', onSessionFailed);
       };
     },
-    [api, closeStream, isCurrentRequest],
+    [api, armStreamTimeout, closeStream, isCurrentRequest],
   );
 
   const loadSnapshot = useCallback(

@@ -195,4 +195,99 @@ describe('aiSummaryStreamWorker', () => {
     expect(completeSessionMock).not.toHaveBeenCalled();
     expect(setArticleAiSummaryMock).not.toHaveBeenCalled();
   });
+
+  it('emits session.failed when pre-stream setup fails before streaming starts', async () => {
+    const insertEventMock = vi.fn().mockResolvedValue(undefined);
+    const failSessionMock = vi.fn().mockResolvedValue(undefined);
+
+    const mod = await import('./aiSummaryStreamWorker');
+
+    await expect(
+      mod.runAiSummaryStreamWorker({
+        pool: {} as never,
+        articleId: 'article-1',
+        sessionId: 'session-1',
+        jobId: 'job-1',
+        deps: {
+          getArticleById: async () =>
+            ({
+              id: 'article-1',
+              feedId: 'feed-1',
+              contentHtml: '<p>hello</p>',
+              contentFullHtml: null,
+              contentFullError: null,
+              summary: null,
+              aiSummary: null,
+            }) as never,
+          getAiSummarySessionById: async () =>
+            ({
+              id: 'session-1',
+              articleId: 'article-1',
+              sourceTextHash: 'hash-1',
+              status: 'queued',
+              draftText: '已有草稿',
+              finalText: null,
+              model: null,
+              jobId: 'job-1',
+              errorCode: null,
+              errorMessage: null,
+              supersededBySessionId: null,
+              startedAt: '2026-03-09T00:00:00.000Z',
+              finishedAt: null,
+              createdAt: '2026-03-09T00:00:00.000Z',
+              updatedAt: '2026-03-09T00:00:00.000Z',
+            }) as never,
+          getActiveAiSummarySessionByArticleId: async () => null,
+          upsertAiSummarySession: async () =>
+            ({
+              id: 'session-1',
+              articleId: 'article-1',
+              sourceTextHash: 'hash-1',
+              status: 'queued',
+              draftText: '已有草稿',
+              finalText: null,
+              model: null,
+              jobId: 'job-1',
+              errorCode: null,
+              errorMessage: null,
+              supersededBySessionId: null,
+              startedAt: '2026-03-09T00:00:00.000Z',
+              finishedAt: null,
+              createdAt: '2026-03-09T00:00:00.000Z',
+              updatedAt: '2026-03-09T00:00:00.000Z',
+            }) as never,
+          getAiApiKey: async () => '',
+          getUiSettings: async () => ({} as never),
+          getFeedFullTextOnOpenEnabled: async () => false,
+          runArticleTaskWithStatus: async ({ fn }) => fn(),
+          streamSummarizeText: async function* () {
+            yield '不会执行';
+          },
+          updateAiSummarySessionDraft: vi.fn().mockResolvedValue(undefined),
+          insertAiSummaryEvent: insertEventMock,
+          completeAiSummarySession: vi.fn().mockResolvedValue(undefined),
+          failAiSummarySession: failSessionMock,
+          setArticleAiSummary: vi.fn().mockResolvedValue(undefined),
+        },
+      }),
+    ).rejects.toThrow('Missing AI API key');
+
+    expect(failSessionMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        sessionId: 'session-1',
+        errorCode: 'ai_invalid_config',
+      }),
+    );
+    expect(insertEventMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        eventType: 'session.failed',
+        payload: expect.objectContaining({
+          sessionId: 'session-1',
+          errorCode: 'ai_invalid_config',
+        }),
+      }),
+    );
+  });
 });

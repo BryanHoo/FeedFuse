@@ -254,4 +254,55 @@ describe('useStreamingAiSummary', () => {
       expect(api.createArticleAiSummaryEventSource).toHaveBeenNthCalledWith(3, 'article-1');
     });
   });
+
+  it('marks session failed when stream has no terminal events for a long time', async () => {
+    vi.useFakeTimers();
+    try {
+      const fakeEventSource = new FakeEventSource();
+      const api: StreamingAiSummaryApi = {
+        enqueueArticleAiSummary: vi.fn().mockResolvedValue({
+          enqueued: true,
+          jobId: 'job-1',
+          sessionId: 'session-1',
+        }),
+        getArticleAiSummarySnapshot: vi.fn().mockResolvedValue({
+          session: {
+            id: 'session-1',
+            status: 'running',
+            draftText: 'TL;DR',
+            finalText: null,
+            errorCode: null,
+            errorMessage: null,
+            startedAt: '2026-03-09T00:00:00.000Z',
+            finishedAt: null,
+            updatedAt: '2026-03-09T00:00:00.000Z',
+          },
+        }),
+        createArticleAiSummaryEventSource: vi
+          .fn()
+          .mockReturnValue(fakeEventSource as unknown as EventSource),
+      };
+
+      const { result } = renderHook(() =>
+        useStreamingAiSummary({ articleId: 'article-1', api }),
+      );
+
+      await act(async () => {
+        await result.current.requestSummary();
+      });
+
+      expect(result.current.loading).toBe(true);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000);
+      });
+
+      expect(result.current.loading).toBe(false);
+      expect(result.current.session?.status).toBe('failed');
+      expect(result.current.session?.errorCode).toBe('ai_timeout');
+      expect(fakeEventSource.close).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

@@ -581,15 +581,32 @@ function renderWithNotifications() {
 
     renderWithNotifications();
 
-    const unreadArticlesButton = screen.getByRole('button', { name: '未读文章' });
+    const starredArticlesButton = screen.getByRole('button', { name: '收藏文章' });
     const aiDigestArticlesButton = screen.getByRole('button', { name: '智能解读' });
     const categoryButton = screen.getByRole('button', { name: /未分类/ });
     const feedButton = screen.getByRole('button', { name: /My Feed.*2/ });
 
-    expect(unreadArticlesButton.className).toContain('hover:bg-[var(--reader-pane-hover)]');
+    expect(starredArticlesButton.className).toContain('hover:bg-[var(--reader-pane-hover)]');
     expect(aiDigestArticlesButton.className).toContain('hover:bg-[var(--reader-pane-hover)]');
     expect(categoryButton.className).toContain('hover:bg-[var(--reader-pane-hover)]');
     expect(feedButton.className).toContain('hover:bg-[var(--reader-pane-hover)]');
+    expect(screen.queryByRole('button', { name: '未读文章' })).not.toBeInTheDocument();
+  });
+
+  it('renders smart views in 全部文章、收藏文章、智能解读 order', () => {
+    renderWithNotifications();
+
+    const allArticlesButton = screen.getByRole('button', { name: '全部文章' });
+    const starredArticlesButton = screen.getByRole('button', { name: '收藏文章' });
+    const aiDigestArticlesButton = screen.getByRole('button', { name: '智能解读' });
+
+    expect(screen.queryByRole('button', { name: '未读文章' })).not.toBeInTheDocument();
+    expect(allArticlesButton.compareDocumentPosition(starredArticlesButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(
+      starredArticlesButton.compareDocumentPosition(aiDigestArticlesButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   it('switches to 智能解读 smart view after click', async () => {

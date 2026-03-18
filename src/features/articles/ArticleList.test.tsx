@@ -12,6 +12,8 @@ type LoadSnapshot = (input?: { view?: ViewType }) => Promise<void>;
 const ALL_FEEDS_REFRESH_LABEL = '刷新全部订阅源';
 const FEED_REFRESH_LABEL = '刷新订阅源';
 const TOGGLE_TO_LIST_LABEL = '切换为列表';
+const TOGGLE_UNREAD_ONLY_LABEL = '仅显示未读文章';
+const SHOW_ALL_ARTICLES_LABEL = '显示全部文章';
 const MARK_ALL_AS_READ_LABEL = '标记全部为已读';
 const UNREAD_SIGNAL_DOT_CLASS = 'bg-[color-mix(in_oklab,var(--color-primary)_78%,white)]';
 const UNREAD_SIGNAL_TIME_CLASS =
@@ -993,7 +995,7 @@ describe('ArticleList', () => {
     expect(screen.getByText('0 篇')).toBeInTheDocument();
   });
 
-  it('shows only AI digest articles in 智能解读 smart view', () => {
+  it('shows only AI digest articles and supports unread toggle in 智能解读 smart view', () => {
     useAppStore.setState({
       feeds: [
         {
@@ -1044,6 +1046,17 @@ describe('ArticleList', () => {
           isRead: false,
           isStarred: false,
         },
+        {
+          id: 'digest-article-2',
+          feedId: 'digest-1',
+          title: 'Digest Article Read',
+          content: '',
+          summary: 'Summary',
+          publishedAt: new Date('2026-02-23T00:00:00.000Z').toISOString(),
+          link: 'https://example.com/digest-b',
+          isRead: true,
+          isStarred: false,
+        },
       ],
       selectedView: AI_DIGEST_VIEW_ID,
       selectedArticleId: 'digest-article-1',
@@ -1054,7 +1067,15 @@ describe('ArticleList', () => {
 
     expect(screen.getByRole('heading', { level: 2, name: '智能解读' })).toBeInTheDocument();
     expect(screen.getByText('Digest Article A')).toBeInTheDocument();
+    expect(screen.getByText('Digest Article Read')).toBeInTheDocument();
     expect(screen.queryByText('RSS Article')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: TOGGLE_UNREAD_ONLY_LABEL })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: MARK_ALL_AS_READ_LABEL })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: TOGGLE_UNREAD_ONLY_LABEL }));
+
+    expect(screen.getByRole('button', { name: SHOW_ALL_ARTICLES_LABEL })).toBeInTheDocument();
+    expect(screen.queryByText('Digest Article Read')).not.toBeInTheDocument();
   });
 
   it('shows display mode toggle only in feed view and hides it in all/unread/starred/ai-digest views', () => {

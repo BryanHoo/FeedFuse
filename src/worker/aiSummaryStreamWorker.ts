@@ -199,52 +199,56 @@ export async function runAiSummaryStreamWorker(
     type: 'ai_summary',
     jobId: input.jobId,
     fn: async () => {
-      const article = await deps.getArticleById(input.pool, input.articleId);
-      if (!article) return;
-      if (!input.sessionId && article.aiSummary?.trim()) return;
-
-      const fullTextOnOpenEnabled = await deps.getFeedFullTextOnOpenEnabled(
-        input.pool,
-        article.feedId,
-      );
-      if (
-        fullTextOnOpenEnabled === true &&
-        !article.contentFullHtml &&
-        !article.contentFullError
-      ) {
-        throw new Error('Fulltext pending');
-      }
-
-      const aiApiKey = await deps.getAiApiKey(input.pool);
-      if (!aiApiKey.trim()) throw new Error('Missing AI API key');
-
-      const sourceText = getSummarySource(article);
-      const sourceTextHash = sha256(sourceText);
-      const session = await ensureSummarySession({
-        pool: input.pool,
-        articleId: input.articleId,
-        sessionId: input.sessionId ?? null,
-        jobId: input.jobId,
-        sourceTextHash,
-        deps,
-      });
-
-      const uiSettings = await deps.getUiSettings(input.pool);
-      const normalizedSettings = normalizePersistedSettings(uiSettings);
-      const model = normalizedSettings.ai.model.trim() || DEFAULT_SUMMARY_MODEL;
-      const apiBaseUrl = normalizedSettings.ai.apiBaseUrl.trim() || DEFAULT_SUMMARY_API_BASE_URL;
-
-      let draftText = session.draftText ?? '';
-      await deps.insertAiSummaryEvent(input.pool, {
-        sessionId: session.id,
-        eventType: 'session.started',
-        payload: {
-          articleId: input.articleId,
-          sessionId: session.id,
-        },
-      });
+      let sessionIdForFailure: string | null = input.sessionId ?? null;
+      let draftText = '';
 
       try {
+        const article = await deps.getArticleById(input.pool, input.articleId);
+        if (!article) return;
+        if (!input.sessionId && article.aiSummary?.trim()) return;
+
+        const fullTextOnOpenEnabled = await deps.getFeedFullTextOnOpenEnabled(
+          input.pool,
+          article.feedId,
+        );
+        if (
+          fullTextOnOpenEnabled === true &&
+          !article.contentFullHtml &&
+          !article.contentFullError
+        ) {
+          throw new Error('Fulltext pending');
+        }
+
+        const aiApiKey = await deps.getAiApiKey(input.pool);
+        if (!aiApiKey.trim()) throw new Error('Missing AI API key');
+
+        const sourceText = getSummarySource(article);
+        const sourceTextHash = sha256(sourceText);
+        const session = await ensureSummarySession({
+          pool: input.pool,
+          articleId: input.articleId,
+          sessionId: input.sessionId ?? null,
+          jobId: input.jobId,
+          sourceTextHash,
+          deps,
+        });
+        sessionIdForFailure = session.id;
+
+        const uiSettings = await deps.getUiSettings(input.pool);
+        const normalizedSettings = normalizePersistedSettings(uiSettings);
+        const model = normalizedSettings.ai.model.trim() || DEFAULT_SUMMARY_MODEL;
+        const apiBaseUrl = normalizedSettings.ai.apiBaseUrl.trim() || DEFAULT_SUMMARY_API_BASE_URL;
+
+        draftText = session.draftText ?? '';
+        await deps.insertAiSummaryEvent(input.pool, {
+          sessionId: session.id,
+          eventType: 'session.started',
+          payload: {
+            articleId: input.articleId,
+            sessionId: session.id,
+          },
+        });
+
         for await (const deltaText of await deps.streamSummarizeText({
           apiBaseUrl,
           apiKey: aiApiKey,
@@ -293,26 +297,40 @@ export async function runAiSummaryStreamWorker(
           aiSummaryModel: model,
         });
       } catch (err) {
-        const mapped = mapTaskError({ type: 'ai_summary', err });
+        if (sessionIdForFailure) {
+          const mapped = mapTaskError({ type: 'ai_summary', err });
+          let failureDraftText = draftText;
+          if (!failureDraftText) {
+            try {
+              const existingSession = await deps.getAiSummarySessionById(input.pool, sessionIdForFailure);
+              failureDraftText = existingSession?.draftText ?? '';
+            } catch {
+              // Keep best-effort fallback draft text.
+            }
+          }
 
-        await deps.failAiSummarySession(input.pool, {
-          sessionId: session.id,
-          draftText,
-          errorCode: mapped.errorCode,
-          errorMessage: mapped.errorMessage,
-        });
-        await deps.insertAiSummaryEvent(input.pool, {
-          sessionId: session.id,
-          eventType: 'session.failed',
-          payload: {
-            articleId: input.articleId,
-            sessionId: session.id,
-            draftText,
-            errorCode: mapped.errorCode,
-            errorMessage: mapped.errorMessage,
-          },
-        });
-
+          try {
+            await deps.failAiSummarySession(input.pool, {
+              sessionId: sessionIdForFailure,
+              draftText: failureDraftText,
+              errorCode: mapped.errorCode,
+              errorMessage: mapped.errorMessage,
+            });
+            await deps.insertAiSummaryEvent(input.pool, {
+              sessionId: sessionIdForFailure,
+              eventType: 'session.failed',
+              payload: {
+                articleId: input.articleId,
+                sessionId: sessionIdForFailure,
+                draftText: failureDraftText,
+                errorCode: mapped.errorCode,
+                errorMessage: mapped.errorMessage,
+              },
+            });
+          } catch {
+            // Keep the original worker failure as the thrown error.
+          }
+        }
         throw err;
       }
     },

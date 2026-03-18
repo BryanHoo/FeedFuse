@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { AI_DIGEST_VIEW_ID } from '../lib/view';
 
 type AppStoreModule = typeof import('./appStore');
 let useAppStore: AppStoreModule['useAppStore'];
@@ -1147,6 +1148,29 @@ describe('appStore api integration', () => {
 
     expect(replaceSpy).toHaveBeenCalledTimes(1);
     expect(pushSpy).not.toHaveBeenCalled();
+  });
+
+  it('applies defaultUnreadOnlyInAll when switching to AI digest smart view', async () => {
+    const { useSettingsStore } = await import('./settingsStore');
+
+    useSettingsStore.setState((state) => ({
+      persistedSettings: {
+        ...state.persistedSettings,
+        general: {
+          ...state.persistedSettings.general,
+          defaultUnreadOnlyInAll: true,
+        },
+      },
+    }));
+
+    useAppStore.setState({
+      selectedView: 'all',
+      showUnreadOnly: false,
+    });
+
+    useAppStore.getState().setSelectedView(AI_DIGEST_VIEW_ID);
+
+    expect(useAppStore.getState().showUnreadOnly).toBe(true);
   });
 
   it('popstate: restores selection in view -> snapshot -> article order without writing history', async () => {

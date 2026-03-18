@@ -1407,6 +1407,169 @@ describe('/api/articles', () => {
     expect(upsertTaskQueuedMock).not.toHaveBeenCalled();
   });
 
+  it('POST /:id/ai-summary recreates stale running session when summary task already failed', async () => {
+    getAiApiKeyMock.mockResolvedValue('sk-test');
+    getArticleByIdMock.mockResolvedValue({
+      id: articleId,
+      feedId,
+      dedupeKey: 'guid:1',
+      title: 'Hello',
+      link: 'https://example.com/a',
+      author: null,
+      publishedAt: null,
+      contentHtml: '<p>rss</p>',
+      contentFullHtml: null,
+      contentFullFetchedAt: null,
+      contentFullError: null,
+      contentFullSourceUrl: null,
+      aiSummary: null,
+      aiSummaryModel: null,
+      aiSummarizedAt: null,
+      summary: null,
+      isRead: false,
+      readAt: null,
+      isStarred: false,
+      starredAt: null,
+    });
+    getActiveAiSummarySessionByArticleIdMock.mockResolvedValue({
+      id: 'summary-session-running',
+      articleId,
+      sourceTextHash: 'hash-1',
+      status: 'running',
+      draftText: 'TL;DR',
+      finalText: null,
+      model: 'gpt-4o-mini',
+      jobId: 'job-old',
+      errorCode: null,
+      errorMessage: null,
+      supersededBySessionId: null,
+      startedAt: '2026-03-09T00:00:00.000Z',
+      finishedAt: null,
+      createdAt: '2026-03-09T00:00:00.000Z',
+      updatedAt: '2026-03-09T00:00:10.000Z',
+    });
+    getArticleTasksByArticleIdMock.mockResolvedValue([
+      {
+        id: 'task-summary-1',
+        articleId,
+        type: 'ai_summary',
+        status: 'failed',
+        jobId: 'job-old',
+        requestedAt: '2026-03-09T00:00:00.000Z',
+        startedAt: '2026-03-09T00:00:01.000Z',
+        finishedAt: '2026-03-09T00:00:02.000Z',
+        attempts: 1,
+        errorCode: 'ai_rate_limited',
+        errorMessage: '请求太频繁了，请稍后重试',
+        createdAt: '2026-03-09T00:00:00.000Z',
+        updatedAt: '2026-03-09T00:00:02.000Z',
+      },
+    ]);
+    enqueueWithResultMock.mockResolvedValue({ status: 'enqueued', jobId: 'job-id-2' });
+
+    const mod = await import('./[id]/ai-summary/route');
+    const res = await mod.POST(new Request(`http://localhost/api/articles/${articleId}/ai-summary`), {
+      params: Promise.resolve({ id: articleId }),
+    });
+    const json = await res.json();
+
+    expect(json.ok).toBe(true);
+    expect(json.data.enqueued).toBe(true);
+    expect(json.data.jobId).toBe('job-id-2');
+    expect(upsertTaskQueuedMock).toHaveBeenCalledWith(pool, {
+      articleId,
+      type: 'ai_summary',
+      jobId: 'job-id-2',
+    });
+    expect(markAiSummarySessionSupersededMock).toHaveBeenCalledWith(pool, {
+      sessionId: 'summary-session-running',
+      supersededBySessionId: 'summary-session-id-1',
+    });
+  });
+
+  it('POST /:id/ai-summary recreates stale running session when summary task running is too old', async () => {
+    getAiApiKeyMock.mockResolvedValue('sk-test');
+    getArticleByIdMock.mockResolvedValue({
+      id: articleId,
+      feedId,
+      dedupeKey: 'guid:1',
+      title: 'Hello',
+      link: 'https://example.com/a',
+      author: null,
+      publishedAt: null,
+      contentHtml: '<p>rss</p>',
+      contentFullHtml: null,
+      contentFullFetchedAt: null,
+      contentFullError: null,
+      contentFullSourceUrl: null,
+      aiSummary: null,
+      aiSummaryModel: null,
+      aiSummarizedAt: null,
+      summary: null,
+      isRead: false,
+      readAt: null,
+      isStarred: false,
+      starredAt: null,
+    });
+    getActiveAiSummarySessionByArticleIdMock.mockResolvedValue({
+      id: 'summary-session-running',
+      articleId,
+      sourceTextHash: 'hash-1',
+      status: 'running',
+      draftText: 'TL;DR',
+      finalText: null,
+      model: 'gpt-4o-mini',
+      jobId: 'job-old',
+      errorCode: null,
+      errorMessage: null,
+      supersededBySessionId: null,
+      startedAt: '2026-03-09T00:00:00.000Z',
+      finishedAt: null,
+      createdAt: '2026-03-09T00:00:00.000Z',
+      updatedAt: '2026-03-09T00:00:10.000Z',
+    });
+    getArticleTasksByArticleIdMock.mockResolvedValue([
+      {
+        id: 'task-summary-1',
+        articleId,
+        type: 'ai_summary',
+        status: 'running',
+        jobId: 'job-old',
+        requestedAt: '2026-03-09T00:00:00.000Z',
+        startedAt: '2026-03-09T00:00:01.000Z',
+        finishedAt: null,
+        attempts: 1,
+        errorCode: null,
+        errorMessage: null,
+        createdAt: '2026-03-09T00:00:00.000Z',
+        updatedAt: '2026-03-09T00:00:10.000Z',
+      },
+    ]);
+    enqueueWithResultMock.mockResolvedValue({ status: 'enqueued', jobId: 'job-id-2' });
+
+    const dateNowSpy = vi
+      .spyOn(Date, 'now')
+      .mockReturnValue(new Date('2026-03-09T01:00:00.000Z').getTime());
+
+    try {
+      const mod = await import('./[id]/ai-summary/route');
+      const res = await mod.POST(new Request(`http://localhost/api/articles/${articleId}/ai-summary`), {
+        params: Promise.resolve({ id: articleId }),
+      });
+      const json = await res.json();
+
+      expect(json.ok).toBe(true);
+      expect(json.data.enqueued).toBe(true);
+      expect(json.data.jobId).toBe('job-id-2');
+      expect(markAiSummarySessionSupersededMock).toHaveBeenCalledWith(pool, {
+        sessionId: 'summary-session-running',
+        supersededBySessionId: 'summary-session-id-1',
+      });
+    } finally {
+      dateNowSpy.mockRestore();
+    }
+  });
+
   it('GET /:id/ai-translate returns session snapshot with segments', async () => {
     getArticleByIdMock.mockResolvedValue({
       id: articleId,

@@ -9,5 +9,5 @@ export function isAggregateView(view: string): boolean {
 }
 
 export function shouldUseDefaultUnreadOnly(view: string): boolean {
-  return view !== 'unread' && view !== 'starred' && view !== AI_DIGEST_VIEW_ID;
+  return view !== 'unread' && view !== 'starred';
 }

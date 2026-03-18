@@ -71,6 +71,16 @@ function HookHarness(input: { articleId: string; api: ImmersiveTranslationApi })
         .map((segment) => `${segment.segmentIndex}:${segment.status}:${segment.translatedText ?? '-'}`)
         .join('|'),
     ),
+    React.createElement(
+      'div',
+      { 'data-testid': 'loading' },
+      immersive.loading ? 'true' : 'false',
+    ),
+    React.createElement(
+      'div',
+      { 'data-testid': 'timed-out' },
+      immersive.timedOut ? 'true' : 'false',
+    ),
   );
 }
 
@@ -294,5 +304,68 @@ describe('useImmersiveTranslation', () => {
     await waitFor(() => {
       expect(screen.getByTestId('segments').textContent).toBe('0:succeeded:甲|1:pending:-');
     });
+  });
+
+  it('marks timedOut when stream has no terminal events for a long time', async () => {
+    vi.useFakeTimers();
+    try {
+      const fakeEventSource = new FakeEventSource();
+      const api: ImmersiveTranslationApi = {
+        enqueueArticleAiTranslate: vi.fn().mockResolvedValue({
+          enqueued: true,
+          jobId: 'job-1',
+          sessionId: 'session-1',
+        }),
+        getArticleAiTranslateSnapshot: vi.fn().mockResolvedValue({
+          session: {
+            id: 'session-1',
+            articleId: 'article-1',
+            sourceHtmlHash: 'hash-1',
+            status: 'running',
+            totalSegments: 1,
+            translatedSegments: 0,
+            failedSegments: 0,
+            startedAt: '2026-03-04T00:00:00.000Z',
+            finishedAt: null,
+            updatedAt: '2026-03-04T00:00:00.000Z',
+          },
+          segments: [
+            {
+              id: 'seg-0',
+              segmentIndex: 0,
+              sourceText: 'A',
+              translatedText: null,
+              status: 'pending',
+              errorCode: null,
+              errorMessage: null,
+              updatedAt: '2026-03-04T00:00:00.000Z',
+            },
+          ],
+        }),
+        retryArticleAiTranslateSegment: vi.fn().mockResolvedValue({
+          enqueued: true,
+          jobId: 'job-retry-1',
+        }),
+        createArticleAiTranslateEventSource: vi
+          .fn()
+          .mockReturnValue(fakeEventSource as unknown as EventSource),
+      };
+
+      render(React.createElement(HookHarness, { articleId: 'article-1', api }));
+      fireEvent.click(screen.getByRole('button', { name: 'start' }));
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(screen.getByTestId('loading').textContent).toBe('true');
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000);
+      });
+      expect(screen.getByTestId('loading').textContent).toBe('false');
+      expect(screen.getByTestId('timed-out').textContent).toBe('true');
+      expect(fakeEventSource.close).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

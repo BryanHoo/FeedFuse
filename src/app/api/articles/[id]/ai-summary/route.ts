@@ -10,7 +10,11 @@ import {
   markAiSummarySessionSuperseded,
   upsertAiSummarySession,
 } from '../../../../../server/repositories/articleAiSummaryRepo';
-import { upsertTaskQueued } from '../../../../../server/repositories/articleTasksRepo';
+import {
+  getArticleTasksByArticleId,
+  type ArticleTaskRow,
+  upsertTaskQueued,
+} from '../../../../../server/repositories/articleTasksRepo';
 import { getFeedFullTextOnOpenEnabled } from '../../../../../server/repositories/feedsRepo';
 import { getAiApiKey } from '../../../../../server/repositories/settingsRepo';
 import { getQueueSendOptions } from '../../../../../server/queue/contracts';
@@ -26,6 +30,7 @@ const paramsSchema = z.object({
 const bodySchema = z.object({
   force: z.boolean().optional(),
 });
+const SUMMARY_TASK_STALE_MS = 10 * 60 * 1000;
 
 function zodIssuesToFields(error: z.ZodError): Record<string, string> {
   const fields: Record<string, string> = {};
@@ -81,6 +86,29 @@ function buildSessionSnapshot(
   };
 }
 
+function parseIsoMs(value: string | null): number | null {
+  if (!value) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isAiSummaryTaskActive(
+  task: ArticleTaskRow | undefined,
+  nowMs: number,
+): boolean {
+  if (!task) return true;
+  if (task.status !== 'queued' && task.status !== 'running') return false;
+
+  const referenceMs =
+    parseIsoMs(task.startedAt) ??
+    parseIsoMs(task.requestedAt) ??
+    parseIsoMs(task.updatedAt) ??
+    parseIsoMs(task.createdAt);
+  if (referenceMs === null) return true;
+
+  return nowMs - referenceMs <= SUMMARY_TASK_STALE_MS;
+}
+
 export async function GET(
   _request: Request,
   context: { params: Promise<{ id: string }> },
@@ -133,12 +161,21 @@ export async function POST(
     }
 
     const existingSession = await getActiveAiSummarySessionByArticleId(pool, articleId);
+    let staleExistingSessionIdToSupersede: string | null = null;
     if (existingSession?.status === 'queued' || existingSession?.status === 'running') {
-      return ok({
-        enqueued: false,
-        reason: 'already_enqueued',
-        sessionId: existingSession.id,
-      });
+      const nowMs = Date.now();
+      const taskRows = await getArticleTasksByArticleId(pool, articleId);
+      const aiSummaryTask = taskRows.find((task) => task.type === 'ai_summary');
+      if (isAiSummaryTaskActive(aiSummaryTask, nowMs)) {
+        return ok({
+          enqueued: false,
+          reason: 'already_enqueued',
+          sessionId: existingSession.id,
+        });
+      }
+
+      // Stale running/queued session should not keep hijacking future snapshots.
+      staleExistingSessionIdToSupersede = existingSession.id;
     }
 
     if (!force && article.aiSummary && article.aiSummary.trim()) {
@@ -170,7 +207,11 @@ export async function POST(
       supersededBySessionId: null,
     });
 
-    if (force && existingSession && existingSession.id !== session.id) {
+    if (
+      existingSession &&
+      existingSession.id !== session.id &&
+      (force || staleExistingSessionIdToSupersede === existingSession.id)
+    ) {
       await markAiSummarySessionSuperseded(pool, {
         sessionId: existingSession.id,
         supersededBySessionId: session.id,

@@ -1,5 +1,5 @@
 import dynamic from 'next/dynamic';
-import { AlertCircle, ArrowDown, ArrowUp, ChevronDown, ChevronRight, CircleDot, FileText, FolderTree, Languages, Newspaper, PencilLine, Plus, Power, Sparkles, Star, Trash2 } from 'lucide-react';
+import { AlertCircle, ArrowDown, ArrowUp, ChevronDown, ChevronRight, FileText, FolderTree, Languages, Newspaper, PencilLine, Plus, Power, Sparkles, Star, Trash2 } from 'lucide-react';
 import { type KeyboardEvent, useMemo, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { Badge } from '@/components/ui/badge';
@@ -93,9 +93,8 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
 
   const smartViews = [
     { id: 'all', name: '全部文章', Icon: Newspaper },
-    { id: 'unread', name: '未读文章', Icon: CircleDot },
-    { id: AI_DIGEST_VIEW_ID, name: '智能解读', Icon: Sparkles },
     { id: 'starred', name: '收藏文章', Icon: Star },
+    { id: AI_DIGEST_VIEW_ID, name: '智能解读', Icon: Sparkles },
   ] as const;
 
   const openAddFeedModal = () => setAddFeedOpen(true);

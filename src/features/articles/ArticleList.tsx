@@ -62,10 +62,13 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
   const [refreshing, setRefreshing] = useState(false);
   const [displayModeSaving, setDisplayModeSaving] = useState(false);
 
-  const showHeaderActions = shouldUseDefaultUnreadOnly(selectedView);
+  const showUnreadToggleAction = shouldUseDefaultUnreadOnly(selectedView);
+  // Keep AI smart digest from exposing "mark all read" while allowing unread filter.
+  const showMarkAllAsReadAction =
+    showUnreadToggleAction && selectedView !== AI_DIGEST_VIEW_ID;
 
   const showUnreadFilterActive =
-    selectedView === "unread" || (showUnreadOnly && showHeaderActions);
+    selectedView === "unread" || (showUnreadOnly && showUnreadToggleAction);
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const articleCardRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -654,20 +657,20 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
               onClick={onToggleDisplayMode}
             />
           )}
-          {showHeaderActions && (
-            <>
-              <ReaderToolbarIconButton
-                icon={CircleDot}
-                label={unreadOnlyButtonLabel}
-                pressed={showUnreadOnly}
-                onClick={toggleShowUnreadOnly}
-              />
-              <ReaderToolbarIconButton
-                icon={CheckCheck}
-                label="标记全部为已读"
-                onClick={handleMarkAllAsRead}
-              />
-            </>
+          {showUnreadToggleAction && (
+            <ReaderToolbarIconButton
+              icon={CircleDot}
+              label={unreadOnlyButtonLabel}
+              pressed={showUnreadOnly}
+              onClick={toggleShowUnreadOnly}
+            />
+          )}
+          {showMarkAllAsReadAction && (
+            <ReaderToolbarIconButton
+              icon={CheckCheck}
+              label="标记全部为已读"
+              onClick={handleMarkAllAsRead}
+            />
           )}
           <span className="text-[10px] font-medium text-muted-foreground">{articleCount} 篇</span>
         </div>
