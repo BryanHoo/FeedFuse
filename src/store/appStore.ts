@@ -399,7 +399,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (selectedArticleId) {
         const selectedArticle = get().articles.find((item) => item.id === selectedArticleId);
         if (!selectedArticle?.content) {
-          get().setSelectedArticle(selectedArticleId);
+          get().setSelectedArticle(selectedArticleId, { history: 'none' });
         }
       }
     } catch (err) {
@@ -629,7 +629,24 @@ export const useAppStore = create<AppState>((set, get) => ({
     })),
 }));
 
+async function restoreReaderSelectionFromUrl(): Promise<void> {
+  const { selectedView, selectedArticleId } = readReaderSelectionFromUrl();
+  const store = useAppStore.getState();
+
+  store.setSelectedView(selectedView, { history: 'none' });
+  await store.loadSnapshot({ view: selectedView });
+  store.setSelectedArticle(selectedArticleId, { history: 'none' });
+}
+
 if (typeof window !== 'undefined') {
+  const onPopState = () => {
+    void restoreReaderSelectionFromUrl().catch((err) => {
+      console.error(err);
+    });
+  };
+
+  window.addEventListener('popstate', onPopState);
+
   useAppStore.subscribe((state, previousState) => {
     if (
       state.selectedView === previousState.selectedView &&
