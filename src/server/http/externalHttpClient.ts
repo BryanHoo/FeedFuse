@@ -1,4 +1,6 @@
 import got from 'got';
+import { getPool } from '../db/pool';
+import { writeSystemLog } from '../logging/systemLogger';
 import { getFetchUrlCandidates } from '../rss/fetchUrlCandidates';
 import { isSafeMediaUrl } from '../media/mediaProxyGuard';
 
@@ -22,6 +24,60 @@ export interface FetchHtmlResult {
   html: string;
 }
 
+interface ExternalRequestLogging {
+  source: string;
+  requestLabel: string;
+  context?: Record<string, unknown>;
+}
+
+function getExternalErrorDetails(err: unknown): string {
+  if (err instanceof Error) {
+    return err.message || err.name || 'Unknown error';
+  }
+
+  if (typeof err === 'string') {
+    return err;
+  }
+
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
+}
+
+async function writeExternalRequestLog(input: {
+  logging?: ExternalRequestLogging;
+  url: string;
+  method: 'GET';
+  status?: number;
+  durationMs: number;
+  details: string | null;
+}) {
+  if (!input.logging) {
+    return;
+  }
+
+  const isSuccess =
+    input.status === 304 ||
+    (input.status !== undefined && input.status >= 200 && input.status < 300);
+
+  await writeSystemLog(getPool(), {
+    level: isSuccess ? 'info' : 'error',
+    category: 'external_api',
+    source: input.logging.source,
+    message: `${input.logging.requestLabel} ${isSuccess ? 'completed' : 'failed'}`,
+    details: isSuccess ? null : input.details,
+    context: {
+      url: input.url,
+      method: input.method,
+      status: input.status ?? null,
+      durationMs: input.durationMs,
+      ...input.logging.context,
+    },
+  });
+}
+
 export async function fetchRssXml(
   url: string,
   options: {
@@ -29,10 +85,12 @@ export async function fetchRssXml(
     userAgent: string;
     etag?: string | null;
     lastModified?: string | null;
+    logging?: ExternalRequestLogging;
   },
 ): Promise<FetchRssXmlResult> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs);
+  const startedAt = Date.now();
 
   try {
     const headers: Record<string, string> = {
@@ -72,9 +130,25 @@ export async function fetchRssXml(
               : candidate;
 
         if (status === 304) {
+          await writeExternalRequestLog({
+            logging: options.logging,
+            url: finalUrl,
+            method: 'GET',
+            status,
+            details: null,
+            durationMs: Date.now() - startedAt,
+          });
           return { status, xml: null, etag, lastModified, finalUrl };
         }
 
+        await writeExternalRequestLog({
+          logging: options.logging,
+          url: finalUrl,
+          method: 'GET',
+          status,
+          details: res.body,
+          durationMs: Date.now() - startedAt,
+        });
         return { status, xml: res.body, etag, lastModified, finalUrl };
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') throw err;
@@ -84,6 +158,15 @@ export async function fetchRssXml(
 
     if (lastError instanceof Error) throw lastError;
     throw new Error('Network error');
+  } catch (err) {
+    await writeExternalRequestLog({
+      logging: options.logging,
+      url,
+      method: 'GET',
+      details: getExternalErrorDetails(err),
+      durationMs: Date.now() - startedAt,
+    });
+    throw err;
   } finally {
     clearTimeout(timeout);
   }
@@ -96,10 +179,12 @@ export async function fetchHtml(
     userAgent: string;
     maxBytes: number;
     headers?: Record<string, string>;
+    logging?: ExternalRequestLogging;
   },
 ): Promise<FetchHtmlResult> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs);
+  const startedAt = Date.now();
 
   try {
     const headers: Record<string, string> = {
@@ -150,7 +235,24 @@ export async function fetchHtml(
       req.on('error', reject);
     });
 
+    await writeExternalRequestLog({
+      logging: options.logging,
+      url: finalUrl,
+      method: 'GET',
+      status,
+      details: html,
+      durationMs: Date.now() - startedAt,
+    });
     return { status, finalUrl, contentType, html };
+  } catch (err) {
+    await writeExternalRequestLog({
+      logging: options.logging,
+      url,
+      method: 'GET',
+      details: getExternalErrorDetails(err),
+      durationMs: Date.now() - startedAt,
+    });
+    throw err;
   } finally {
     clearTimeout(timeout);
   }

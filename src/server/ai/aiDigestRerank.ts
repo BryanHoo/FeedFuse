@@ -68,7 +68,12 @@ export async function aiDigestRerank(input: {
   shortlist: AiDigestRerankItem[];
   batch: AiDigestRerankItem[];
 }): Promise<string[]> {
-  const client = createOpenAIClient({ apiBaseUrl: input.apiBaseUrl, apiKey: input.apiKey });
+  const client = createOpenAIClient({
+    apiBaseUrl: input.apiBaseUrl,
+    apiKey: input.apiKey,
+    source: 'server/ai/aiDigestRerank',
+    requestLabel: 'AI digest rerank request',
+  });
   const allowedIds = new Set(
     [...input.shortlist, ...input.batch].map((item) => item.id).filter((id) => Boolean(id)),
   );
@@ -107,4 +112,3 @@ export async function aiDigestRerank(input: {
 
   return ids.slice(0, Math.max(0, input.topN));
 }
-

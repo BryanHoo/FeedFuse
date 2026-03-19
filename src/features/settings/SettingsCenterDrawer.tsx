@@ -1,4 +1,4 @@
-import { Bot, Palette, Rss, type LucideIcon } from 'lucide-react';
+import { Bot, Palette, Rss, ScrollText, type LucideIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
   AlertDialog,
@@ -22,6 +22,7 @@ import { useAppStore } from '../../store/appStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import GeneralSettingsPanel from './panels/GeneralSettingsPanel';
 import AISettingsPanel from './panels/AISettingsPanel';
+import LogsSettingsPanel from './panels/LogsSettingsPanel';
 import RssSettingsPanel from './panels/RssSettingsPanel';
 import type { OpmlTransferResultSummary } from './panels/OpmlTransferSection';
 import { useSettingsAutosave } from './useSettingsAutosave';
@@ -31,7 +32,7 @@ interface SettingsCenterDrawerProps {
   onClose: () => void;
 }
 
-type SettingsSectionKey = 'general' | 'rss' | 'ai';
+type SettingsSectionKey = 'general' | 'rss' | 'ai' | 'logging';
 
 interface SettingsSectionItem {
   key: SettingsSectionKey;
@@ -44,6 +45,7 @@ const sectionItems: SettingsSectionItem[] = [
   { key: 'general', label: '通用', hint: '外观与阅读', icon: Palette },
   { key: 'rss', label: 'RSS', hint: '抓取与过滤', icon: Rss },
   { key: 'ai', label: 'AI', hint: '模型与接口', icon: Bot },
+  { key: 'logging', label: '日志', hint: '开关与查看', icon: ScrollText },
 ];
 
 const autosaveStatusMeta = {
@@ -182,6 +184,7 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
     general: validationErrorKeys.filter((field) => field.startsWith('general.')).length,
     rss: validationErrorKeys.filter((field) => field.startsWith('rss.')).length,
     ai: validationErrorKeys.filter((field) => field.startsWith('ai.')).length,
+    logging: 0,
   };
 
   const requestClose = () => {
@@ -329,6 +332,9 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
                       </TabsContent>
                       <TabsContent value="ai" className="mt-0">
                         <AISettingsPanel draft={draft} onChange={handleDraftChange} errors={validationErrors} />
+                      </TabsContent>
+                      <TabsContent value="logging" className="mt-0">
+                        <LogsSettingsPanel draft={draft} onChange={handleDraftChange} />
                       </TabsContent>
                     </div>
                   </div>

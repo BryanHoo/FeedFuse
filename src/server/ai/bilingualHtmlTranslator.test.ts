@@ -1,20 +1,32 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   extractTranslatableSegments,
   reconstructBilingualHtml,
   translateSegmentsInBatches,
 } from './bilingualHtmlTranslator';
 
-function getFetchUrl(arg: unknown): string {
-  if (typeof arg === 'string') return arg;
-  if (arg && typeof arg === 'object' && 'url' in arg) {
-    const url = (arg as { url?: unknown }).url;
-    if (typeof url === 'string') return url;
-  }
-  return '';
-}
+const createOpenAIClientMock = vi.hoisted(() => vi.fn());
+const createCompletionMock = vi.hoisted(() => vi.fn());
+
+vi.mock('./openaiClient', () => ({
+  createOpenAIClient: (...args: unknown[]) => {
+    createOpenAIClientMock(...args);
+    return {
+      chat: {
+        completions: {
+          create: createCompletionMock,
+        },
+      },
+    };
+  },
+}));
 
 describe('bilingualHtmlTranslator', () => {
+  beforeEach(() => {
+    createOpenAIClientMock.mockReset();
+    createCompletionMock.mockReset();
+  });
+
   it('extracts translatable segments and excludes code/pre text', () => {
     const segments = extractTranslatableSegments(`
       <article>
@@ -36,25 +48,17 @@ describe('bilingualHtmlTranslator', () => {
   });
 
   it('translates segments in batches and keeps segment order', async () => {
-    const fetchMock = vi
-      .fn()
+    createCompletionMock
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            choices: [{ message: { content: '["段落一","段落二"]' } }],
-          }),
-          { status: 200, headers: { 'content-type': 'application/json' } },
-        ),
+        {
+          choices: [{ message: { content: '["段落一","段落二"]' } }],
+        },
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            choices: [{ message: { content: '["段落三"]' } }],
-          }),
-          { status: 200, headers: { 'content-type': 'application/json' } },
-        ),
+        {
+          choices: [{ message: { content: '["段落三"]' } }],
+        },
       );
-    vi.stubGlobal('fetch', fetchMock);
 
     const translated = await translateSegmentsInBatches({
       apiBaseUrl: 'https://api.openai.com/v1',
@@ -68,12 +72,21 @@ describe('bilingualHtmlTranslator', () => {
       ],
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    const urls = fetchMock.mock.calls.map((call) => getFetchUrl(call[0]));
-    expect(urls).toEqual([
-      'https://api.openai.com/v1/chat/completions',
-      'https://api.openai.com/v1/chat/completions',
-    ]);
+    expect(createOpenAIClientMock).toHaveBeenCalledTimes(2);
+    expect(createOpenAIClientMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        source: 'server/ai/bilingualHtmlTranslator',
+        requestLabel: 'AI bilingual translation request',
+      }),
+    );
+    expect(createOpenAIClientMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        source: 'server/ai/bilingualHtmlTranslator',
+        requestLabel: 'AI bilingual translation request',
+      }),
+    );
     expect(translated.map((item) => item.id)).toEqual(['seg-0', 'seg-1', 'seg-2']);
     expect(translated.map((item) => item.translatedText)).toEqual([
       '段落一',

@@ -1,15 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const createOpenAIClientMock = vi.hoisted(() => vi.fn());
 const createCompletionMock = vi.hoisted(() => vi.fn());
 
 vi.mock('./openaiClient', () => ({
-  createOpenAIClient: () => ({
-    chat: {
-      completions: {
-        create: createCompletionMock,
+  createOpenAIClient: (...args: unknown[]) => {
+    createOpenAIClientMock(...args);
+    return {
+      chat: {
+        completions: {
+          create: createCompletionMock,
+        },
       },
-    },
-  }),
+    };
+  },
 }));
 
 function fakeOpenAiStream(chunks: string[]) {
@@ -30,6 +34,7 @@ function fakeOpenAiStream(chunks: string[]) {
 
 describe('streamSummarizeText', () => {
   beforeEach(() => {
+    createOpenAIClientMock.mockReset();
     createCompletionMock.mockReset();
   });
 
@@ -73,6 +78,12 @@ describe('streamSummarizeText', () => {
     const systemPrompt = request?.messages?.[0]?.content;
 
     expect(result).toEqual(['一句话总结', '\n- 第一条']);
+    expect(createOpenAIClientMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'server/ai/streamSummarizeText',
+        requestLabel: 'AI summary request',
+      }),
+    );
     expect(systemPrompt).toContain('不要返回');
     expect(systemPrompt).toContain('TL;DR');
     expect(systemPrompt).not.toContain('先给一行 TL;DR');

@@ -1,4 +1,5 @@
 import type { Pool } from 'pg';
+import type { SystemLogCategory } from '../types';
 import type { ArticleTaskType } from '../server/repositories/articleTasksRepo';
 import {
   upsertTaskFailed,
@@ -9,7 +10,7 @@ import { writeSystemLog } from '../server/logging/systemLogger';
 import { mapTaskError } from '../server/tasks/errorMapping';
 
 interface ArticleTaskLifecycleLog {
-  category: string;
+  category: SystemLogCategory;
   source: string;
   startedMessage: string;
   succeededMessage: string;

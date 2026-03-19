@@ -138,10 +138,28 @@ export interface RssSettings {
 }
 
 export type LoggingRetentionDays = 1 | 3 | 7 | 14 | 30 | 90;
+export type SystemLogLevel = 'error' | 'warning' | 'info';
+export type SystemLogCategory =
+  | 'settings'
+  | 'external_api'
+  | 'ai_summary'
+  | 'ai_translate'
+  | 'ai_digest';
 
 export interface LoggingSettings {
   enabled: boolean;
   retentionDays: LoggingRetentionDays;
+}
+
+export interface SystemLogItem {
+  id: string;
+  level: SystemLogLevel;
+  category: SystemLogCategory;
+  message: string;
+  details: string | null;
+  source: string;
+  context: Record<string, unknown>;
+  createdAt: string;
 }
 
 export interface PersistedSettings {

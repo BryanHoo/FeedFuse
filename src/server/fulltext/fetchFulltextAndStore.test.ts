@@ -71,6 +71,22 @@ describe('fetchFulltextAndStore', () => {
     const mod = (await import('./fetchFulltextAndStore')) as typeof import('./fetchFulltextAndStore');
     await mod.fetchFulltextAndStore(pool as never, 'article-1');
 
+    expect(fetchHtmlMock).toHaveBeenCalledWith(
+      'https://example.com/a',
+      expect.objectContaining({
+        timeoutMs: 1000,
+        userAgent: 'test-agent',
+        maxBytes: 2 * 1024 * 1024,
+        logging: {
+          source: 'server/fulltext/fetchFulltextAndStore',
+          requestLabel: 'Fulltext fetch',
+          context: {
+            articleId: 'article-1',
+            articleLink: 'https://example.com/a',
+          },
+        },
+      }),
+    );
     expect(setArticleFulltextMock).toHaveBeenCalledWith(pool, 'article-1', {
       contentFullHtml: '<p>World</p>',
       sourceUrl: 'https://example.com/a',

@@ -89,8 +89,14 @@ async function callChatJson<T>(input: {
   model: string;
   system: string;
   user: unknown;
+  requestLabel: string;
 }): Promise<T> {
-  const client = createOpenAIClient({ apiBaseUrl: input.apiBaseUrl, apiKey: input.apiKey });
+  const client = createOpenAIClient({
+    apiBaseUrl: input.apiBaseUrl,
+    apiKey: input.apiKey,
+    source: 'server/ai/aiDigestCompose',
+    requestLabel: input.requestLabel,
+  });
   const completion = await client.chat.completions.create({
     model: input.model,
     temperature: 0.2,
@@ -131,6 +137,7 @@ async function mapBatch(input: {
     apiBaseUrl: input.apiBaseUrl,
     apiKey: input.apiKey,
     model: input.model,
+    requestLabel: 'AI digest map request',
     system:
       '你是中文信息提炼助手。根据用户的解读提示词，为每篇文章提炼 2-4 条要点。只输出 JSON 对象：{ "items": [{ "id": "...", "points": ["..."] }] }，不要输出解释或 Markdown。',
     user: {
@@ -177,7 +184,12 @@ async function foldNotesToBudget(input: {
   prompt: string;
   notesText: string;
 }): Promise<string> {
-  const client = createOpenAIClient({ apiBaseUrl: input.apiBaseUrl, apiKey: input.apiKey });
+  const client = createOpenAIClient({
+    apiBaseUrl: input.apiBaseUrl,
+    apiKey: input.apiKey,
+    source: 'server/ai/aiDigestCompose',
+    requestLabel: 'AI digest fold request',
+  });
   const completion = await client.chat.completions.create({
     model: input.model,
     temperature: 0.2,
@@ -224,7 +236,12 @@ export async function aiDigestCompose(input: {
 
   // Fast-path for small inputs: keep a single completion (makes unit tests deterministic).
   if (prepared.length <= MAP_BATCH_SIZE) {
-    const client = createOpenAIClient({ apiBaseUrl: input.apiBaseUrl, apiKey: input.apiKey });
+    const client = createOpenAIClient({
+      apiBaseUrl: input.apiBaseUrl,
+      apiKey: input.apiKey,
+      source: 'server/ai/aiDigestCompose',
+      requestLabel: 'AI digest compose request',
+    });
     const completion = await client.chat.completions.create({
       model: input.model,
       temperature: 0.2,
@@ -277,7 +294,12 @@ export async function aiDigestCompose(input: {
     });
   }
 
-  const client = createOpenAIClient({ apiBaseUrl: input.apiBaseUrl, apiKey: input.apiKey });
+  const client = createOpenAIClient({
+    apiBaseUrl: input.apiBaseUrl,
+    apiKey: input.apiKey,
+    source: 'server/ai/aiDigestCompose',
+    requestLabel: 'AI digest compose request',
+  });
   const completion = await client.chat.completions.create({
     model: input.model,
     temperature: 0.2,
@@ -301,4 +323,3 @@ export async function aiDigestCompose(input: {
   const content = getMessageContent(completion.choices?.[0]?.message?.content);
   return parseTitleHtml(content);
 }
-

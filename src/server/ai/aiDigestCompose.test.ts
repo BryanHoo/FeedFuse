@@ -1,31 +1,37 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-function getFetchUrl(arg: unknown): string {
-  if (typeof arg === 'string') return arg;
-  if (arg && typeof arg === 'object' && 'url' in arg) {
-    const url = (arg as { url?: unknown }).url;
-    if (typeof url === 'string') return url;
-  }
-  return '';
-}
+const createOpenAIClientMock = vi.hoisted(() => vi.fn());
+const createCompletionMock = vi.hoisted(() => vi.fn());
+
+vi.mock('./openaiClient', () => ({
+  createOpenAIClient: (...args: unknown[]) => {
+    createOpenAIClientMock(...args);
+    return {
+      chat: {
+        completions: {
+          create: createCompletionMock,
+        },
+      },
+    };
+  },
+}));
 
 describe('aiDigestCompose', () => {
-  it('returns {title, html} and can parse code-fenced JSON', async () => {
-    const fetchMock = vi.fn(async () => {
-      return new Response(
-        JSON.stringify({
-          choices: [
-            {
-              message: {
-                content: '```json\n{"title":"今日解读","html":"<h1>今日解读</h1><p>内容</p>"}\n```',
-              },
-            },
-          ],
-        }),
-        { status: 200, headers: { 'content-type': 'application/json' } },
-      );
+  beforeEach(() => {
+    createOpenAIClientMock.mockReset();
+    createCompletionMock.mockReset();
+  });
+
+  it('passes source metadata into createOpenAIClient', async () => {
+    createCompletionMock.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: '```json\n{"title":"今日解读","html":"<h1>今日解读</h1><p>内容</p>"}\n```',
+          },
+        },
+      ],
     });
-    vi.stubGlobal('fetch', fetchMock);
 
     const { aiDigestCompose } = await import('./aiDigestCompose');
     const out = await aiDigestCompose({
@@ -48,7 +54,11 @@ describe('aiDigestCompose', () => {
 
     expect(out.title).toBe('今日解读');
     expect(out.html).toContain('<p>内容</p>');
-    expect(fetchMock).toHaveBeenCalled();
-    expect(getFetchUrl(fetchMock.mock.calls[0]?.[0])).toBe('https://api.openai.com/v1/chat/completions');
+    expect(createOpenAIClientMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'server/ai/aiDigestCompose',
+        requestLabel: 'AI digest compose request',
+      }),
+    );
   });
 });

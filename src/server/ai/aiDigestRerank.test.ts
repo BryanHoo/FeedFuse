@@ -1,25 +1,31 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-function getFetchUrl(arg: unknown): string {
-  if (typeof arg === 'string') return arg;
-  if (arg && typeof arg === 'object' && 'url' in arg) {
-    const url = (arg as { url?: unknown }).url;
-    if (typeof url === 'string') return url;
-  }
-  return '';
-}
+const createOpenAIClientMock = vi.hoisted(() => vi.fn());
+const createCompletionMock = vi.hoisted(() => vi.fn());
+
+vi.mock('./openaiClient', () => ({
+  createOpenAIClient: (...args: unknown[]) => {
+    createOpenAIClientMock(...args);
+    return {
+      chat: {
+        completions: {
+          create: createCompletionMock,
+        },
+      },
+    };
+  },
+}));
 
 describe('aiDigestRerank', () => {
-  it('calls chat/completions and parses JSON array ids', async () => {
-    const fetchMock = vi.fn(async () => {
-      return new Response(
-        JSON.stringify({
-          choices: [{ message: { content: '```json\n["a1","a2"]\n```' } }],
-        }),
-        { status: 200, headers: { 'content-type': 'application/json' } },
-      );
+  beforeEach(() => {
+    createOpenAIClientMock.mockReset();
+    createCompletionMock.mockReset();
+  });
+
+  it('passes source metadata into createOpenAIClient', async () => {
+    createCompletionMock.mockResolvedValue({
+      choices: [{ message: { content: '```json\n["a1","a2"]\n```' } }],
     });
-    vi.stubGlobal('fetch', fetchMock);
 
     const { aiDigestRerank } = await import('./aiDigestRerank');
     const out = await aiDigestRerank({
@@ -50,7 +56,11 @@ describe('aiDigestRerank', () => {
     });
 
     expect(out).toEqual(['a1', 'a2']);
-    expect(fetchMock).toHaveBeenCalled();
-    expect(getFetchUrl(fetchMock.mock.calls[0]?.[0])).toBe('https://api.openai.com/v1/chat/completions');
+    expect(createOpenAIClientMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'server/ai/aiDigestRerank',
+        requestLabel: 'AI digest rerank request',
+      }),
+    );
   });
 });

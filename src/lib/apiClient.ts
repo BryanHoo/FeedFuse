@@ -1,5 +1,12 @@
 import ky from 'ky';
-import type { Article, Category, Feed, PersistedSettings } from '../types';
+import type {
+  Article,
+  Category,
+  Feed,
+  PersistedSettings,
+  SystemLogItem,
+  SystemLogLevel,
+} from '../types';
 import { notifyApiError } from './apiErrorNotifier';
 import { isRecord } from './utils';
 
@@ -850,6 +857,29 @@ export async function putSettings(
     },
     options,
   );
+}
+
+export async function getSystemLogs(input: {
+  level?: SystemLogLevel;
+  limit?: number;
+  before?: string | null;
+}): Promise<{ items: SystemLogItem[]; nextCursor: string | null; hasMore: boolean }> {
+  const params = new URLSearchParams();
+
+  if (input.level) {
+    params.set('level', input.level);
+  }
+
+  if (typeof input.limit === 'number') {
+    params.set('limit', String(input.limit));
+  }
+
+  if (input.before) {
+    params.set('before', input.before);
+  }
+
+  const query = params.toString();
+  return requestApi(query ? `/api/logs?${query}` : '/api/logs');
 }
 
 export async function putAiApiKey(input: { apiKey: string }): Promise<{ hasApiKey: boolean }> {

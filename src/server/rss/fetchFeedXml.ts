@@ -18,7 +18,16 @@ export async function fetchFeedXml(
   url: string,
   options: FetchFeedXmlOptions,
 ): Promise<FetchFeedXmlResult> {
-  const res = await fetchRssXml(url, options);
+  const res = await fetchRssXml(url, {
+    ...options,
+    logging: {
+      source: 'server/rss/fetchFeedXml',
+      requestLabel: 'RSS fetch',
+      context: {
+        feedUrl: url,
+      },
+    },
+  });
 
   return {
     status: res.status,

@@ -1,21 +1,11 @@
 import type { Pool, PoolClient } from 'pg';
+import type { SystemLogItem, SystemLogLevel } from '../../types';
 
-export type SystemLogLevel = 'error' | 'warning' | 'info';
+export type { SystemLogItem, SystemLogLevel };
 
 export interface SystemLogCursor {
   createdAt: string;
   id: string;
-}
-
-export interface SystemLogItem {
-  id: string;
-  level: SystemLogLevel;
-  category: string;
-  message: string;
-  details: string | null;
-  source: string;
-  context: Record<string, unknown>;
-  createdAt: string;
 }
 
 type Queryable = Pool | PoolClient;

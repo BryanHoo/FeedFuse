@@ -24,7 +24,12 @@ interface StreamSummarizeTextDeps {
 async function createDefaultStream(
   input: StreamSummarizeTextInput,
 ): Promise<AsyncIterable<StreamChunkShape>> {
-  const client = createOpenAIClient({ apiBaseUrl: input.apiBaseUrl, apiKey: input.apiKey });
+  const client = createOpenAIClient({
+    apiBaseUrl: input.apiBaseUrl,
+    apiKey: input.apiKey,
+    source: 'server/ai/streamSummarizeText',
+    requestLabel: 'AI summary request',
+  });
   return client.chat.completions.create({
     model: input.model,
     temperature: 0.2,

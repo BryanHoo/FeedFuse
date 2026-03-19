@@ -207,6 +207,23 @@ describe('SettingsCenterModal', () => {
           });
         }
 
+        if (url.includes('/api/logs')) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                items: [],
+                nextCursor: null,
+                hasMore: false,
+              },
+            }),
+            {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            },
+          );
+        }
+
         if (!url.includes('/api/settings')) {
           throw new Error(`Unexpected fetch: ${url}`);
         }
@@ -257,6 +274,20 @@ describe('SettingsCenterModal', () => {
     expect(screen.queryByTestId('settings-section-tab-categories')).not.toBeInTheDocument();
     expect(screen.getByTestId('settings-section-tab-rss')).toBeInTheDocument();
     expect(screen.getByText('主题')).toBeInTheDocument();
+  });
+
+  it('renders logging as the fourth settings section', async () => {
+    resetSettingsStore();
+    renderWithNotifications();
+    fireEvent.click(screen.getByLabelText('打开设置'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('settings-center-modal')).toBeInTheDocument();
+    });
+
+    const tabs = screen.getAllByRole('tab');
+    expect(tabs[3]).toHaveAttribute('data-testid', 'settings-section-tab-logging');
+    expect('logs' in (useSettingsStore.getState().draft as Record<string, unknown>)).toBe(false);
   });
 
   it('does not show removed sidebar-collapsed and rss-fulltext settings items', async () => {

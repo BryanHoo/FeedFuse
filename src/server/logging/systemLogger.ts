@@ -1,5 +1,5 @@
 import type { Pool, PoolClient } from 'pg';
-import type { LoggingSettings } from '../../types';
+import type { LoggingSettings, SystemLogCategory } from '../../types';
 import { normalizePersistedSettings } from '../../features/settings/settingsSchema';
 import { getUiSettings } from '../repositories/settingsRepo';
 import {
@@ -11,7 +11,7 @@ type Queryable = Pool | PoolClient;
 
 export interface WriteSystemLogInput {
   level: SystemLogLevel;
-  category: string;
+  category: SystemLogCategory;
   message: string;
   details?: string | null;
   source: string;

@@ -1,25 +1,31 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-function getFetchUrl(arg: unknown): string {
-  if (typeof arg === 'string') return arg;
-  if (arg && typeof arg === 'object' && 'url' in arg) {
-    const url = (arg as { url?: unknown }).url;
-    if (typeof url === 'string') return url;
-  }
-  return '';
-}
+const createOpenAIClientMock = vi.hoisted(() => vi.fn());
+const createCompletionMock = vi.hoisted(() => vi.fn());
+
+vi.mock('./openaiClient', () => ({
+  createOpenAIClient: (...args: unknown[]) => {
+    createOpenAIClientMock(...args);
+    return {
+      chat: {
+        completions: {
+          create: createCompletionMock,
+        },
+      },
+    };
+  },
+}));
 
 describe('translateTitle', () => {
-  it('calls chat/completions and returns content', async () => {
-    const fetchMock = vi.fn(async () =>
-      new Response(
-        JSON.stringify({
-          choices: [{ message: { content: '你好世界' } }],
-        }),
-        { status: 200, headers: { 'content-type': 'application/json' } },
-      ),
-    );
-    vi.stubGlobal('fetch', fetchMock);
+  beforeEach(() => {
+    createOpenAIClientMock.mockReset();
+    createCompletionMock.mockReset();
+  });
+
+  it('passes source metadata into createOpenAIClient', async () => {
+    createCompletionMock.mockResolvedValue({
+      choices: [{ message: { content: '你好世界' } }],
+    });
 
     const { translateTitle } = await import('./translateTitle');
     const out = await translateTitle({
@@ -30,7 +36,11 @@ describe('translateTitle', () => {
     });
 
     expect(out).toBe('你好世界');
-    expect(getFetchUrl(fetchMock.mock.calls[0]?.[0])).toBe('https://api.openai.com/v1/chat/completions');
+    expect(createOpenAIClientMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'server/ai/translateTitle',
+        requestLabel: 'AI title translation request',
+      }),
+    );
   });
 });
-

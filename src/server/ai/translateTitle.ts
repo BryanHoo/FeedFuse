@@ -15,7 +15,12 @@ function getTranslationContent(content: unknown): string {
 }
 
 export async function translateTitle(input: TranslateTitleInput): Promise<string> {
-  const client = createOpenAIClient({ apiBaseUrl: input.apiBaseUrl, apiKey: input.apiKey });
+  const client = createOpenAIClient({
+    apiBaseUrl: input.apiBaseUrl,
+    apiKey: input.apiKey,
+    source: 'server/ai/translateTitle',
+    requestLabel: 'AI title translation request',
+  });
   const completion = await client.chat.completions.create({
     model: input.model,
     temperature: 0.1,

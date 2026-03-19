@@ -48,6 +48,14 @@ export async function fetchFulltextAndStore(pool: Pool, articleId: string): Prom
       timeoutMs: settings.rssTimeoutMs,
       userAgent: settings.rssUserAgent,
       maxBytes: MAX_HTML_BYTES,
+      logging: {
+        source: 'server/fulltext/fetchFulltextAndStore',
+        requestLabel: 'Fulltext fetch',
+        context: {
+          articleId,
+          articleLink: link,
+        },
+      },
     });
 
     sourceUrl = res.finalUrl || sourceUrl;

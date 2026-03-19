@@ -114,7 +114,12 @@ function collectSegmentNodeRefs(document: Document): SegmentNodeRef[] {
 }
 
 async function translateBatch(input: TranslateBatchInput): Promise<string[]> {
-  const client = createOpenAIClient({ apiBaseUrl: input.apiBaseUrl, apiKey: input.apiKey });
+  const client = createOpenAIClient({
+    apiBaseUrl: input.apiBaseUrl,
+    apiKey: input.apiKey,
+    source: 'server/ai/bilingualHtmlTranslator',
+    requestLabel: 'AI bilingual translation request',
+  });
   const completion = await client.chat.completions.create({
     model: input.model,
     temperature: 0.2,

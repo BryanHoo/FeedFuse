@@ -901,3 +901,45 @@ describe('apiClient notification bridge', () => {
     notifier.clearApiErrorNotifier();
   });
 });
+
+it('getSystemLogs builds /api/logs query with level and before cursor', async () => {
+  const fetchMock = vi.fn(async () => {
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        data: {
+          items: [
+            {
+              id: '1',
+              level: 'error',
+              category: 'external_api',
+              message: 'AI summary request failed',
+              details: '{"error":{"message":"429"}}',
+              source: 'server/ai/streamSummarizeText',
+              context: { status: 429 },
+              createdAt: '2026-03-19T10:12:30.000Z',
+            },
+          ],
+          nextCursor: 'cursor-2',
+          hasMore: true,
+        },
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+  });
+  vi.stubGlobal('fetch', fetchMock);
+
+  const { getSystemLogs } = await import('./apiClient');
+  const result = await getSystemLogs({
+    level: 'error',
+    limit: 25,
+    before: 'cursor-1',
+  });
+
+  const firstCall = fetchMock.mock.calls[0] ?? [];
+  expect(getFetchCallUrl(firstCall[0])).toContain('/api/logs?level=error&limit=25&before=cursor-1');
+  expect(getFetchCallMethod(firstCall) ?? 'GET').toBe('GET');
+  expect(result.items[0].context).toEqual({ status: 429 });
+  expect(result.nextCursor).toBe('cursor-2');
+  expect(result.hasMore).toBe(true);
+});

@@ -15,7 +15,12 @@ function getSummaryContent(content: unknown): string {
 }
 
 export async function summarizeText(input: SummarizeTextInput): Promise<string> {
-  const client = createOpenAIClient({ apiBaseUrl: input.apiBaseUrl, apiKey: input.apiKey });
+  const client = createOpenAIClient({
+    apiBaseUrl: input.apiBaseUrl,
+    apiKey: input.apiKey,
+    source: 'server/ai/summarizeText',
+    requestLabel: 'AI summary request',
+  });
 
   const completion = await client.chat.completions.create({
     model: input.model,
