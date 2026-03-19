@@ -2,6 +2,7 @@ import type {
   AIPersistedSettings,
   Category,
   GeneralSettings,
+  LoggingSettings,
   PersistedSettings,
   RssSettings,
   RssSourceSetting,
@@ -51,11 +52,17 @@ const defaultRssSettings: RssSettings = {
   },
 };
 
+const defaultLoggingSettings: LoggingSettings = {
+  enabled: false,
+  retentionDays: 7,
+};
+
 export const defaultPersistedSettings: PersistedSettings = {
   general: defaultGeneralSettings,
   ai: defaultAISettings,
   categories: [],
   rss: defaultRssSettings,
+  logging: defaultLoggingSettings,
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -225,6 +232,19 @@ function normalizeRssSettings(input: Record<string, unknown>): RssSettings {
   };
 }
 
+function normalizeLoggingSettings(input: Record<string, unknown>): LoggingSettings {
+  const loggingInput = isRecord(input.logging) ? input.logging : {};
+
+  return {
+    enabled: readBoolean(loggingInput.enabled, defaultLoggingSettings.enabled),
+    retentionDays: readNumberEnum(
+      loggingInput.retentionDays,
+      [1, 3, 7, 14, 30, 90] as const,
+      defaultLoggingSettings.retentionDays,
+    ),
+  };
+}
+
 function normalizeCategories(input: Record<string, unknown>, rss: RssSettings): Category[] {
   const result: Category[] = [];
   const seen = new Set<string>();
@@ -278,5 +298,6 @@ export function normalizePersistedSettings(input: unknown): PersistedSettings {
     ai: normalizeAISettings(recordInput),
     categories: normalizeCategories(recordInput, normalizedRss),
     rss: normalizedRss,
+    logging: normalizeLoggingSettings(recordInput),
   };
 }

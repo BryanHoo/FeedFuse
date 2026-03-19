@@ -59,12 +59,13 @@ describe('/api/settings', () => {
     expect(json.data.general.theme).toBe('dark');
     expect(json.data.ai).toEqual(defaultPersistedSettings.ai);
     expect(Array.isArray(json.data.categories)).toBe(true);
+    expect(json.data.logging).toEqual(defaultPersistedSettings.logging);
   });
 
   it('PUT updates all feeds when rss.fetchIntervalMinutes changes', async () => {
     getUiSettingsMock.mockResolvedValue({ rss: { fetchIntervalMinutes: 30 } });
 
-    const payload = { rss: { fetchIntervalMinutes: 60 } };
+    const payload = { rss: { fetchIntervalMinutes: 60 }, logging: { enabled: true, retentionDays: 14 } };
     const normalized = normalizePersistedSettings(payload);
     updateUiSettingsMock.mockResolvedValue(normalized);
 
@@ -82,6 +83,7 @@ describe('/api/settings', () => {
     expect(updateAllFeedsFetchIntervalMinutesMock).toHaveBeenCalledWith(client, 60);
     expect(json.ok).toBe(true);
     expect(json.data.rss.fetchIntervalMinutes).toBe(60);
+    expect(json.data.logging).toEqual({ enabled: true, retentionDays: 14 });
   });
 
   it('PUT does not update all feeds when only general.theme changes', async () => {

@@ -66,6 +66,15 @@ describe('settingsSchema normalize', () => {
     expect(normalized.rss.fetchIntervalMinutes).toBe(30);
   });
 
+  it('adds logging defaults and rejects unsupported retention days', () => {
+    const normalized = normalizePersistedSettings({});
+    expect(normalized.logging).toEqual({ enabled: false, retentionDays: 7 });
+
+    expect(
+      normalizePersistedSettings({ logging: { enabled: true, retentionDays: 999 } }).logging,
+    ).toEqual({ enabled: true, retentionDays: 7 });
+  });
+
   it('adds articleKeywordFilter defaults to rss settings', () => {
     const normalized = normalizePersistedSettings({});
 

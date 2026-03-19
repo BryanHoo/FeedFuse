@@ -31,6 +31,7 @@ describe('settingsStore', () => {
   let lastAiApiKeyPutBodyText: string | null = null;
   let lastTranslationApiKeyPutBodyText: string | null = null;
   let lastAiApiKeyDeleteCalled = false;
+  let lastSettingsPutBodyText: string | null = null;
 
   beforeEach(() => {
     remoteHasApiKey = false;
@@ -38,6 +39,7 @@ describe('settingsStore', () => {
     lastAiApiKeyPutBodyText = null;
     lastTranslationApiKeyPutBodyText = null;
     lastAiApiKeyDeleteCalled = false;
+    lastSettingsPutBodyText = null;
 
     useSettingsStore.setState((state) => ({
       ...state,
@@ -75,6 +77,13 @@ describe('settingsStore', () => {
             lastTranslationApiKeyPutBodyText = bodyText ?? null;
             remoteHasTranslationApiKey = Boolean(body.apiKey);
             return new Response(JSON.stringify({ ok: true, data: { hasApiKey: Boolean(body.apiKey) } }), {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            });
+          }
+          if (url.includes('/api/settings')) {
+            lastSettingsPutBodyText = bodyText ?? null;
+            return new Response(JSON.stringify({ ok: true, data: body }), {
               status: 200,
               headers: { 'content-type': 'application/json' },
             });
@@ -170,6 +179,17 @@ describe('settingsStore', () => {
     const result = await useSettingsStore.getState().saveDraft();
     expect(result.ok).toBe(true);
     expect(useSettingsStore.getState().persistedSettings.rss.sources).toHaveLength(1);
+  });
+
+  it('persists logging settings through settingsStore saveDraft', async () => {
+    useSettingsStore.getState().loadDraft();
+    useSettingsStore.getState().updateDraft((draft) => {
+      draft.persisted.logging.enabled = true;
+      draft.persisted.logging.retentionDays = 14;
+    });
+
+    await useSettingsStore.getState().saveDraft();
+    expect(lastSettingsPutBodyText).toContain('"logging":{"enabled":true,"retentionDays":14}');
   });
 
   it('hydrates hasApiKey from backend', async () => {

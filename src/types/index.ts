@@ -137,11 +137,19 @@ export interface RssSettings {
   articleKeywordFilter: ArticleKeywordFilterSettings;
 }
 
+export type LoggingRetentionDays = 1 | 3 | 7 | 14 | 30 | 90;
+
+export interface LoggingSettings {
+  enabled: boolean;
+  retentionDays: LoggingRetentionDays;
+}
+
 export interface PersistedSettings {
   general: GeneralSettings;
   ai: AIPersistedSettings;
   categories: Category[];
   rss: RssSettings;
+  logging: LoggingSettings;
 }
 
 export type ViewType = 'all' | 'unread' | 'starred' | string;
