@@ -1,14 +1,12 @@
 import type { ArticleTaskType } from '../repositories/articleTasksRepo';
-import { toRawErrorMessage } from './rawErrorMessage';
+import { extractErrorText, toRawErrorMessage } from './rawErrorMessage';
 
 function toSafeMessage(value: string): string {
   return value.replace(/\s+/g, ' ').trim().slice(0, 200);
 }
 
 function getErrorText(err: unknown): string {
-  if (typeof err === 'string') return err;
-  if (err instanceof Error) return err.message || err.name || '';
-  return '';
+  return extractErrorText(err) ?? '';
 }
 
 export function mapTaskError(input: {

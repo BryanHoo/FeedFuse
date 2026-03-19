@@ -39,4 +39,21 @@ describe('errorMapping', () => {
       rawErrorMessage: '429 rate limit',
     });
   });
+
+  it('prefers nested provider error message from cause when mapping AI errors', async () => {
+    const mod = await import('./errorMapping');
+    const err = new Error('OpenAI request failed');
+    (err as Error & { cause?: unknown }).cause = {
+      status: 429,
+      error: {
+        message: '429 rate limit',
+      },
+    };
+
+    expect(mod.mapTaskError({ type: 'ai_translate', err })).toEqual({
+      errorCode: 'ai_rate_limited',
+      errorMessage: '请求太频繁了，请稍后重试',
+      rawErrorMessage: '429 rate limit',
+    });
+  });
 });
