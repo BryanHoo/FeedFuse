@@ -46,9 +46,15 @@ const defaultAISettings: AIPersistedSettings = {
 const defaultRssSettings: RssSettings = {
   sources: [],
   fetchIntervalMinutes: 30,
-  articleKeywordFilter: {
-    globalKeywords: [],
-    feedKeywordsByFeedId: {},
+  articleFilter: {
+    keyword: {
+      enabled: false,
+      keywords: [],
+    },
+    ai: {
+      enabled: false,
+      prompt: '',
+    },
   },
 };
 
@@ -198,19 +204,30 @@ function normalizeKeywordList(input: unknown): string[] {
   return result;
 }
 
-function normalizeArticleKeywordFilter(input: Record<string, unknown>): RssSettings['articleKeywordFilter'] {
-  const filterInput = isRecord(input.articleKeywordFilter) ? input.articleKeywordFilter : {};
-  const rawFeedKeywords = isRecord(filterInput.feedKeywordsByFeedId)
-    ? filterInput.feedKeywordsByFeedId
-    : {};
+function normalizeArticleFilter(input: Record<string, unknown>): RssSettings['articleFilter'] {
+  const legacyKeywordFilterInput = isRecord(input.articleKeywordFilter) ? input.articleKeywordFilter : {};
+  const articleFilterInput = isRecord(input.articleFilter) ? input.articleFilter : {};
+  const keywordInput = isRecord(articleFilterInput.keyword) ? articleFilterInput.keyword : {};
+  const aiInput = isRecord(articleFilterInput.ai) ? articleFilterInput.ai : {};
+  const migratedKeywords = normalizeKeywordList(legacyKeywordFilterInput.globalKeywords);
+  const normalizedKeywords = normalizeKeywordList(
+    Array.isArray(keywordInput.keywords)
+      ? keywordInput.keywords
+      : migratedKeywords,
+  );
 
   return {
-    globalKeywords: normalizeKeywordList(filterInput.globalKeywords),
-    feedKeywordsByFeedId: Object.fromEntries(
-      Object.entries(rawFeedKeywords)
-        .map(([feedId, keywords]) => [feedId, normalizeKeywordList(keywords)])
-        .filter(([, keywords]) => keywords.length > 0),
-    ),
+    keyword: {
+      enabled: readBoolean(
+        keywordInput.enabled,
+        normalizedKeywords.length > 0,
+      ),
+      keywords: normalizedKeywords,
+    },
+    ai: {
+      enabled: readBoolean(aiInput.enabled, defaultRssSettings.articleFilter.ai.enabled),
+      prompt: readString(aiInput.prompt, defaultRssSettings.articleFilter.ai.prompt).trim(),
+    },
   };
 }
 
@@ -229,7 +246,7 @@ function normalizeRssSettings(input: Record<string, unknown>): RssSettings {
   return {
     sources,
     fetchIntervalMinutes,
-    articleKeywordFilter: normalizeArticleKeywordFilter(rssInput),
+    articleFilter: normalizeArticleFilter(rssInput),
   };
 }
 

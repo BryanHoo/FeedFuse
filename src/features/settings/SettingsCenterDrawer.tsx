@@ -87,14 +87,8 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
   const [opmlExporting, setOpmlExporting] = useState(false);
   const [lastOpmlImportResult, setLastOpmlImportResult] =
     useState<OpmlTransferResultSummary | null>(null);
-  const selectedView = useAppStore((state) => state.selectedView);
   const lastAutosaveStatusRef = useRef<keyof typeof autosaveStatusMeta>('idle');
   const lastSavedNotifyAtRef = useRef(0);
-  const pendingKeywordReloadRef = useRef(false);
-  const persistedGlobalKeywords = useSettingsStore(
-    (state) => state.persistedSettings.rss.articleKeywordFilter.globalKeywords,
-  );
-  const lastSavedKeywordSignatureRef = useRef(JSON.stringify(persistedGlobalKeywords));
   const draft = useSettingsStore((state) => state.draft);
   const hydratePersistedSettings = useSettingsStore((state) => state.hydratePersistedSettings);
   const loadDraft = useSettingsStore((state) => state.loadDraft);
@@ -133,47 +127,14 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
   }, [hydratePersistedSettings, loadDraft]);
 
 
-  useEffect(() => {
-    if (autosave.status !== 'saved') {
-      return;
-    }
-
-    const persistedKeywordSignature = JSON.stringify(persistedGlobalKeywords);
-    const keywordsChangedSinceLastSave =
-      persistedKeywordSignature !== lastSavedKeywordSignatureRef.current;
-    lastSavedKeywordSignatureRef.current = persistedKeywordSignature;
-
-    if (!pendingKeywordReloadRef.current || !keywordsChangedSinceLastSave) {
-      if (!keywordsChangedSinceLastSave) {
-        pendingKeywordReloadRef.current = false;
-      }
-      return;
-    }
-
-    pendingKeywordReloadRef.current = false;
-    void useAppStore.getState().loadSnapshot({ view: selectedView });
-  }, [autosave.status, persistedGlobalKeywords, selectedView]);
-
   const forceClose = () => {
     discardDraft();
     onClose();
   };
 
   const handleDraftChange = (updater: Parameters<typeof updateDraft>[0]) => {
-    const currentKeywordSignature = JSON.stringify(
-      useSettingsStore.getState().draft?.persisted.rss.articleKeywordFilter.globalKeywords ??
-        useSettingsStore.getState().persistedSettings.rss.articleKeywordFilter.globalKeywords,
-    );
-
     updateDraft((nextDraft) => {
       updater(nextDraft);
-
-      const nextKeywordSignature = JSON.stringify(
-        nextDraft.persisted.rss.articleKeywordFilter.globalKeywords,
-      );
-      if (nextKeywordSignature !== currentKeywordSignature) {
-        pendingKeywordReloadRef.current = true;
-      }
     });
     setDraftVersion((value) => value + 1);
   };
@@ -204,7 +165,7 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
       const result = await importOpml({ content, fileName: file.name });
       setLastOpmlImportResult(result);
       toast.success('OPML 导入完成');
-      await useAppStore.getState().loadSnapshot({ view: selectedView });
+      await useAppStore.getState().loadSnapshot({ view: useAppStore.getState().selectedView });
     } finally {
       setOpmlImporting(false);
     }

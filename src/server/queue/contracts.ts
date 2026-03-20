@@ -55,6 +55,20 @@ export const QUEUE_CONTRACTS: Record<string, QueueContract> = {
     worker: { localConcurrency: 4, batchSize: 2 },
     send: (ctx) => ({ singletonKey: ctx.articleId, singletonSeconds: 600 }),
   },
+  'article.filter': {
+    queue: {
+      retryLimit: 3,
+      retryDelay: 30,
+      retryBackoff: true,
+      retryDelayMax: 900,
+      deadLetter: 'dlq.article.filter',
+      heartbeatSeconds: 60,
+      expireInSeconds: 1200,
+      warningQueueSize: 300,
+    },
+    worker: { localConcurrency: 3, batchSize: 1 },
+    send: (ctx) => ({ singletonKey: ctx.articleId, singletonSeconds: 600 }),
+  },
   'ai.summarize_article': {
     queue: { heartbeatSeconds: 60, expireInSeconds: 1800, warningQueueSize: 300 },
     worker: { localConcurrency: 2, batchSize: 1 },

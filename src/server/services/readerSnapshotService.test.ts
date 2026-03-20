@@ -21,6 +21,8 @@ describe('readerSnapshotService', () => {
   it('filters all view and excludes ai_digest', () => {
     const filter = buildArticleFilter({ view: 'all' });
     expect(filter.whereSql).toContain(RSS_ONLY);
+    expect(filter.whereSql).toContain('filter_status = any');
+    expect(filter.params[0]).toEqual(['passed', 'error']);
   });
 
   it('filters ai-digest smart view and only returns ai_digest feeds', () => {
@@ -34,6 +36,14 @@ describe('readerSnapshotService', () => {
     expect(filter.whereSql).toMatch(/feed_id/);
     expect(filter.whereSql).not.toContain(RSS_ONLY);
     expect(filter.whereSql).not.toContain(AI_DIGEST_ONLY);
+  });
+
+  it('allows filtered articles only for a single feed when includeFiltered=true', () => {
+    const filter = buildArticleFilter({ view: 'feed-id-1', includeFiltered: true });
+    expect(filter.params[1]).toEqual(['passed', 'error', 'filtered']);
+
+    const aggregate = buildArticleFilter({ view: 'all', includeFiltered: true });
+    expect(aggregate.params[0]).toEqual(['passed', 'error']);
   });
 
   it('roundtrips cursor', () => {

@@ -198,6 +198,50 @@ describe('ArticleView title link', () => {
     expect(screen.getByText(longAuthor)).toHaveClass('break-words');
   });
 
+  it('shows filtered badge in article metadata when the article is filtered', async () => {
+    useAppStore.setState({
+      feeds: [
+        {
+          id: 'feed-1',
+          title: 'Feed 1',
+          url: 'https://example.com/rss.xml',
+          unreadCount: 1,
+          enabled: true,
+          fullTextOnOpenEnabled: false,
+          aiSummaryOnOpenEnabled: false,
+          categoryId: 'cat-uncategorized',
+          category: '未分类',
+        },
+      ],
+      articles: [
+        {
+          id: 'article-1',
+          feedId: 'feed-1',
+          title: 'Article 1',
+          content: '<p>content</p>',
+          summary: 'summary',
+          publishedAt: new Date().toISOString(),
+          link: 'https://example.com/a1',
+          filterStatus: 'filtered',
+          isFiltered: true,
+          filteredBy: ['keyword'],
+          isRead: true,
+          isStarred: false,
+        },
+      ],
+      selectedView: 'all',
+      selectedArticleId: 'article-1',
+    });
+
+    await act(async () => {
+      render(<ArticleView />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('article-filter-badge')).toHaveTextContent('已过滤');
+  });
+
   it('uses fixed horizontal padding and adds more left space on wide screens', async () => {
     useAppStore.setState({
       feeds: [

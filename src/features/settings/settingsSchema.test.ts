@@ -77,16 +77,22 @@ describe('settingsSchema normalize', () => {
     ).toEqual({ enabled: true, retentionDays: 7, minLevel: 'info' });
   });
 
-  it('adds articleKeywordFilter defaults to rss settings', () => {
+  it('adds articleFilter defaults to rss settings', () => {
     const normalized = normalizePersistedSettings({});
 
-    expect(normalized.rss.articleKeywordFilter).toEqual({
-      globalKeywords: [],
-      feedKeywordsByFeedId: {},
+    expect(normalized.rss.articleFilter).toEqual({
+      keyword: {
+        enabled: false,
+        keywords: [],
+      },
+      ai: {
+        enabled: false,
+        prompt: '',
+      },
     });
   });
 
-  it('normalizes rss article keyword filters by trimming and de-duplicating values', () => {
+  it('normalizes rss articleFilter fields and migrates legacy global keywords', () => {
     const normalized = normalizePersistedSettings({
       rss: {
         articleKeywordFilter: {
@@ -95,15 +101,26 @@ describe('settingsSchema normalize', () => {
             'feed-1': [' Ads ', '', 'ads', 'Hiring'],
           },
         },
+        articleFilter: {
+          ai: {
+            enabled: true,
+            prompt: '  过滤广告和招聘  ',
+          },
+        },
       },
     });
 
-    expect(normalized.rss.articleKeywordFilter).toEqual({
-      globalKeywords: ['Sponsored', '招聘'],
-      feedKeywordsByFeedId: {
-        'feed-1': ['Ads', 'Hiring'],
+    expect(normalized.rss.articleFilter).toEqual({
+      keyword: {
+        enabled: true,
+        keywords: ['Sponsored', '招聘'],
+      },
+      ai: {
+        enabled: true,
+        prompt: '过滤广告和招聘',
       },
     });
+    expect(JSON.stringify(normalized.rss.articleFilter)).not.toContain('feedKeywordsByFeedId');
   });
 
   it('normalizes ai.translation defaults with shared provider enabled', () => {

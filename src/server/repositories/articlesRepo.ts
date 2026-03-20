@@ -1,5 +1,7 @@
 import type { Pool } from 'pg';
 
+export type ArticleFilterStatus = 'pending' | 'passed' | 'filtered' | 'error';
+
 export interface ArticleRow {
   id: string;
   feedId: string;
@@ -29,6 +31,11 @@ export interface ArticleRow {
   aiTranslatedAt: string | null;
   summary: string | null;
   sourceLanguage: string | null;
+  filterStatus: ArticleFilterStatus;
+  isFiltered: boolean;
+  filteredBy: string[];
+  filterEvaluatedAt: string | null;
+  filterErrorMessage: string | null;
   isRead: boolean;
   readAt: string | null;
   isStarred: boolean;
@@ -48,8 +55,23 @@ export async function insertArticleIgnoreDuplicate(
     previewImageUrl?: string | null;
     summary?: string | null;
     sourceLanguage?: string | null;
+    filterStatus?: ArticleFilterStatus;
+    isFiltered?: boolean;
+    filteredBy?: string[];
+    filterEvaluatedAt?: string | null;
+    filterErrorMessage?: string | null;
   },
 ): Promise<ArticleRow | null> {
+  const filterStatus = input.filterStatus ?? 'passed';
+  const isFiltered = input.isFiltered ?? false;
+  const filteredBy = input.filteredBy ?? [];
+  const filterEvaluatedAt =
+    typeof input.filterEvaluatedAt !== 'undefined'
+      ? input.filterEvaluatedAt
+      : filterStatus === 'pending'
+        ? null
+        : new Date().toISOString();
+
   const { rows } = await pool.query<ArticleRow>(
     `
       insert into articles(
@@ -63,9 +85,14 @@ export async function insertArticleIgnoreDuplicate(
         content_html,
         summary,
         preview_image_url,
-        source_language
+        source_language,
+        filter_status,
+        is_filtered,
+        filtered_by,
+        filter_evaluated_at,
+        filter_error_message
       )
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       on conflict (feed_id, dedupe_key) do nothing
       returning
         id,
@@ -96,6 +123,11 @@ export async function insertArticleIgnoreDuplicate(
         ai_translated_at as "aiTranslatedAt",
         summary,
         source_language as "sourceLanguage",
+        filter_status as "filterStatus",
+        is_filtered as "isFiltered",
+        filtered_by as "filteredBy",
+        filter_evaluated_at as "filterEvaluatedAt",
+        filter_error_message as "filterErrorMessage",
         is_read as "isRead",
         read_at as "readAt",
         is_starred as "isStarred",
@@ -113,6 +145,11 @@ export async function insertArticleIgnoreDuplicate(
       input.summary ?? null,
       input.previewImageUrl ?? null,
       input.sourceLanguage ?? null,
+      filterStatus,
+      isFiltered,
+      filteredBy,
+      filterEvaluatedAt,
+      input.filterErrorMessage ?? null,
     ],
   );
   return rows[0] ?? null;
@@ -153,6 +190,11 @@ export async function getArticleById(
         ai_translated_at as "aiTranslatedAt",
         summary,
         source_language as "sourceLanguage",
+        filter_status as "filterStatus",
+        is_filtered as "isFiltered",
+        filtered_by as "filteredBy",
+        filter_evaluated_at as "filterEvaluatedAt",
+        filter_error_message as "filterErrorMessage",
         is_read as "isRead",
         read_at as "readAt",
         is_starred as "isStarred",
@@ -227,6 +269,53 @@ export async function markAllRead(
     values,
   );
   return rowCount ?? 0;
+}
+
+export async function setArticleFilterPending(pool: Pool, id: string): Promise<void> {
+  await pool.query(
+    `
+      update articles
+      set
+        filter_status = 'pending',
+        is_filtered = false,
+        filtered_by = '{}'::text[],
+        filter_evaluated_at = null,
+        filter_error_message = null
+      where id = $1
+    `,
+    [id],
+  );
+}
+
+export async function setArticleFilterResult(
+  pool: Pool,
+  id: string,
+  input: {
+    filterStatus: Extract<ArticleFilterStatus, 'passed' | 'filtered' | 'error'>;
+    isFiltered: boolean;
+    filteredBy: string[];
+    filterErrorMessage?: string | null;
+  },
+): Promise<void> {
+  await pool.query(
+    `
+      update articles
+      set
+        filter_status = $2,
+        is_filtered = $3,
+        filtered_by = $4,
+        filter_evaluated_at = now(),
+        filter_error_message = $5
+      where id = $1
+    `,
+    [
+      id,
+      input.filterStatus,
+      input.isFiltered,
+      input.filteredBy,
+      input.filterErrorMessage ?? null,
+    ],
+  );
 }
 
 export async function setArticleFulltext(

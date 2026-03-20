@@ -26,6 +26,7 @@ export interface CreateFeedWithCategoryInput extends CategoryResolutionInput {
   iconUrl?: string | null;
   enabled?: boolean;
   fullTextOnOpenEnabled?: boolean;
+  fullTextOnFetchEnabled?: boolean;
   aiSummaryOnOpenEnabled?: boolean;
   aiSummaryOnFetchEnabled?: boolean;
   bodyTranslateOnFetchEnabled?: boolean;
@@ -43,6 +44,7 @@ export interface UpdateFeedWithCategoryInput extends CategoryResolutionInput {
   iconUrl?: string | null;
   enabled?: boolean;
   fullTextOnOpenEnabled?: boolean;
+  fullTextOnFetchEnabled?: boolean;
   aiSummaryOnOpenEnabled?: boolean;
   aiSummaryOnFetchEnabled?: boolean;
   bodyTranslateOnFetchEnabled?: boolean;

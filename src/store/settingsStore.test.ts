@@ -181,6 +181,23 @@ describe('settingsStore', () => {
     expect(useSettingsStore.getState().persistedSettings.rss.sources).toHaveLength(1);
   });
 
+  it('persists rss articleFilter settings through settingsStore saveDraft', async () => {
+    useSettingsStore.getState().loadDraft();
+    useSettingsStore.getState().updateDraft((draft) => {
+      draft.persisted.rss.articleFilter.keyword.enabled = true;
+      draft.persisted.rss.articleFilter.keyword.keywords = ['广告', 'Sponsored'];
+      draft.persisted.rss.articleFilter.ai.enabled = true;
+      draft.persisted.rss.articleFilter.ai.prompt = '过滤广告和招聘';
+    });
+
+    await useSettingsStore.getState().saveDraft();
+
+    expect(lastSettingsPutBodyText).toContain('"articleFilter"');
+    expect(lastSettingsPutBodyText).toContain('"keywords":["广告","Sponsored"]');
+    expect(lastSettingsPutBodyText).toContain('"prompt":"过滤广告和招聘"');
+    expect(lastSettingsPutBodyText).not.toContain('feedKeywordsByFeedId');
+  });
+
   it('persists logging settings through settingsStore saveDraft', async () => {
     useSettingsStore.getState().loadDraft();
     useSettingsStore.getState().updateDraft((draft) => {

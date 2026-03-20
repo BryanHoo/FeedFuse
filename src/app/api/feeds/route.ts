@@ -23,6 +23,7 @@ const createFeedBodySchema = z
   siteUrl: z.string().trim().url().nullable().optional(),
   ...categoryInputShape,
   fullTextOnOpenEnabled: z.boolean().optional(),
+  fullTextOnFetchEnabled: z.boolean().optional(),
   aiSummaryOnOpenEnabled: z.boolean().optional(),
   aiSummaryOnFetchEnabled: z.boolean().optional(),
   bodyTranslateOnFetchEnabled: z.boolean().optional(),
@@ -78,7 +79,7 @@ export async function GET() {
     const { rows } = await pool.query<{ feedId: string; unreadCount: number }>(`
       select feed_id as "feedId", count(*)::int as "unreadCount"
       from articles
-      where is_read = false
+      where is_read = false and filter_status = any('{passed,error}'::text[])
       group by feed_id
     `);
 
@@ -114,6 +115,7 @@ export async function POST(request: Request) {
       siteUrl,
       iconUrl: deriveFeedIconUrl(siteUrl),
       fullTextOnOpenEnabled: parsed.data.fullTextOnOpenEnabled ?? false,
+      fullTextOnFetchEnabled: parsed.data.fullTextOnFetchEnabled ?? false,
       aiSummaryOnOpenEnabled: parsed.data.aiSummaryOnOpenEnabled ?? false,
       aiSummaryOnFetchEnabled: parsed.data.aiSummaryOnFetchEnabled ?? false,
       bodyTranslateOnFetchEnabled: parsed.data.bodyTranslateOnFetchEnabled ?? false,

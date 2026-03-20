@@ -332,6 +332,7 @@ export interface ReaderSnapshotDto {
     iconUrl: string | null;
     enabled: boolean;
     fullTextOnOpenEnabled: boolean;
+    fullTextOnFetchEnabled: boolean;
     aiSummaryOnOpenEnabled: boolean;
     aiSummaryOnFetchEnabled: boolean;
     bodyTranslateOnFetchEnabled: boolean;
@@ -358,6 +359,9 @@ export interface ReaderSnapshotDto {
       author: string | null;
       publishedAt: string | null;
       link: string | null;
+      filterStatus: 'pending' | 'passed' | 'filtered' | 'error';
+      isFiltered: boolean;
+      filteredBy: string[];
       isRead: boolean;
       isStarred: boolean;
       bodyTranslationEligible?: boolean;
@@ -373,6 +377,7 @@ export async function getReaderSnapshot(
     view?: string;
     limit?: number;
     cursor?: string;
+    includeFiltered?: boolean;
   },
   options?: RequestApiOptions,
 ): Promise<ReaderSnapshotDto> {
@@ -380,6 +385,9 @@ export async function getReaderSnapshot(
   if (input?.view) params.set('view', input.view);
   if (typeof input?.limit === 'number') params.set('limit', String(input.limit));
   if (input?.cursor) params.set('cursor', input.cursor);
+  if (typeof input?.includeFiltered === 'boolean') {
+    params.set('includeFiltered', String(input.includeFiltered));
+  }
 
   const suffix = params.size > 0 ? `?${params.toString()}` : '';
   return requestApi<ReaderSnapshotDto>(`/api/reader/snapshot${suffix}`, undefined, options);
@@ -392,6 +400,7 @@ export async function createFeed(input: {
   categoryId?: string | null;
   categoryName?: string | null;
   fullTextOnOpenEnabled?: boolean;
+  fullTextOnFetchEnabled?: boolean;
   aiSummaryOnOpenEnabled?: boolean;
   aiSummaryOnFetchEnabled?: boolean;
   bodyTranslateOnFetchEnabled?: boolean;
@@ -495,6 +504,7 @@ export interface FeedRowDto {
   iconUrl: string | null;
   enabled: boolean;
   fullTextOnOpenEnabled: boolean;
+  fullTextOnFetchEnabled: boolean;
   aiSummaryOnOpenEnabled: boolean;
   aiSummaryOnFetchEnabled: boolean;
   bodyTranslateOnFetchEnabled: boolean;
@@ -525,6 +535,7 @@ export async function patchFeed(
     categoryId?: string | null;
     categoryName?: string | null;
     fullTextOnOpenEnabled?: boolean;
+    fullTextOnFetchEnabled?: boolean;
     aiSummaryOnOpenEnabled?: boolean;
     aiSummaryOnFetchEnabled?: boolean;
     bodyTranslateOnFetchEnabled?: boolean;
@@ -549,22 +560,6 @@ export async function patchFeed(
 export async function deleteFeed(feedId: string): Promise<{ deleted: true }> {
   return requestApi(`/api/feeds/${encodeURIComponent(feedId)}`, {
     method: 'DELETE',
-  });
-}
-
-
-export async function getFeedKeywordFilter(feedId: string): Promise<{ keywords: string[] }> {
-  return requestApi(`/api/feeds/${encodeURIComponent(feedId)}/keyword-filter`);
-}
-
-export async function patchFeedKeywordFilter(
-  feedId: string,
-  input: { keywords: string[] },
-): Promise<{ keywords: string[] }> {
-  return requestApi(`/api/feeds/${encodeURIComponent(feedId)}/keyword-filter`, {
-    method: 'PATCH',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(input),
   });
 }
 
@@ -668,6 +663,9 @@ export interface ArticleDto {
   aiTranslationModel: string | null;
   aiTranslatedAt: string | null;
   summary: string | null;
+  filterStatus: 'pending' | 'passed' | 'filtered' | 'error';
+  isFiltered: boolean;
+  filteredBy: string[];
   isRead: boolean;
   readAt: string | null;
   isStarred: boolean;
@@ -939,6 +937,7 @@ export function mapFeedDto(dto: FeedDtoLike, categories: Category[]): Feed {
     unreadCount: 'unreadCount' in dto ? dto.unreadCount ?? 0 : 0,
     enabled: dto.enabled,
     fullTextOnOpenEnabled: dto.fullTextOnOpenEnabled,
+    fullTextOnFetchEnabled: dto.fullTextOnFetchEnabled,
     aiSummaryOnOpenEnabled: dto.aiSummaryOnOpenEnabled,
     aiSummaryOnFetchEnabled: Boolean(dto.aiSummaryOnFetchEnabled),
     bodyTranslateOnFetchEnabled: Boolean(dto.bodyTranslateOnFetchEnabled),
@@ -971,6 +970,9 @@ export function mapSnapshotArticleItem(dto: ReaderSnapshotDto['articles']['items
     author: dto.author ?? undefined,
     publishedAt: dto.publishedAt ?? new Date().toISOString(),
     link: dto.link ?? '',
+    filterStatus: dto.filterStatus,
+    isFiltered: dto.isFiltered,
+    filteredBy: dto.filteredBy,
     isRead: dto.isRead,
     isStarred: dto.isStarred,
     bodyTranslationEligible: dto.bodyTranslationEligible,
@@ -995,6 +997,9 @@ export function mapArticleDto(dto: ArticleDto): Article {
     author: dto.author ?? undefined,
     publishedAt: dto.publishedAt ?? new Date().toISOString(),
     link: dto.link ?? '',
+    filterStatus: dto.filterStatus,
+    isFiltered: dto.isFiltered,
+    filteredBy: dto.filteredBy,
     isRead: dto.isRead,
     isStarred: dto.isStarred,
     bodyTranslationEligible: dto.bodyTranslationEligible,

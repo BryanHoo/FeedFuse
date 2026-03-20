@@ -87,6 +87,7 @@ interface AppState {
   categories: Category[];
   articles: Article[];
   articleSnapshotCache: Record<string, Article[]>;
+  showFilteredByFeedId: Record<string, boolean>;
   selectedView: ViewType;
   selectedArticleId: string | null;
   sidebarCollapsed: boolean;
@@ -96,6 +97,7 @@ interface AppState {
   setSelectedView: (view: ViewType, options?: { history?: ReaderSelectionHistoryMode }) => void;
   setSelectedArticle: (id: string | null, options?: { history?: ReaderSelectionHistoryMode }) => void;
   toggleShowUnreadOnly: () => void;
+  toggleShowFilteredForFeed: (feedId: string) => void;
   refreshArticle: (
     articleId: string,
   ) => Promise<{
@@ -115,6 +117,7 @@ interface AppState {
     categoryId?: string | null;
     categoryName?: string | null;
     fullTextOnOpenEnabled?: boolean;
+    fullTextOnFetchEnabled?: boolean;
     aiSummaryOnOpenEnabled?: boolean;
     aiSummaryOnFetchEnabled?: boolean;
     bodyTranslateOnFetchEnabled?: boolean;
@@ -157,6 +160,7 @@ interface AppState {
       categoryId?: string | null;
       categoryName?: string | null;
       fullTextOnOpenEnabled?: boolean;
+      fullTextOnFetchEnabled?: boolean;
       aiSummaryOnOpenEnabled?: boolean;
       aiSummaryOnFetchEnabled?: boolean;
       bodyTranslateOnFetchEnabled?: boolean;
@@ -258,6 +262,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   categories: [uncategorizedCategory],
   articles: [],
   articleSnapshotCache: {},
+  showFilteredByFeedId: {},
   selectedView: initialReaderSelection.selectedView,
   selectedArticleId: initialReaderSelection.selectedArticleId,
   sidebarCollapsed: false,
@@ -313,6 +318,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     })();
   },
   toggleShowUnreadOnly: () => set((state) => ({ showUnreadOnly: !state.showUnreadOnly })),
+  toggleShowFilteredForFeed: (feedId) =>
+    set((state) => ({
+      showFilteredByFeedId: {
+        ...state.showFilteredByFeedId,
+        [feedId]: !state.showFilteredByFeedId[feedId],
+      },
+    })),
   refreshArticle: async (articleId) => {
     try {
       const dto = await getArticle(articleId, { notifyOnError: false });
@@ -351,7 +363,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
 
     try {
-      const snapshot = await getReaderSnapshot({ view }, { notifyOnError: false });
+      const includeFiltered =
+        typeof view === 'string' &&
+        !['all', 'unread', 'starred'].includes(view) &&
+        view !== 'ai_digest' &&
+        Boolean(get().showFilteredByFeedId[view])
+          ? true
+          : undefined;
+      const snapshot = await getReaderSnapshot(
+        { view, includeFiltered },
+        { notifyOnError: false },
+      );
 
       if (latestSnapshotRequestIdByView.get(view) !== requestId) return;
 
@@ -519,6 +541,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             icon: updated.iconUrl ?? undefined,
             enabled: updated.enabled,
             fullTextOnOpenEnabled: updated.fullTextOnOpenEnabled,
+            fullTextOnFetchEnabled: updated.fullTextOnFetchEnabled,
             aiSummaryOnOpenEnabled: updated.aiSummaryOnOpenEnabled,
             aiSummaryOnFetchEnabled: updated.aiSummaryOnFetchEnabled,
             bodyTranslateOnFetchEnabled: updated.bodyTranslateOnFetchEnabled,
@@ -553,6 +576,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             icon: updated.iconUrl ?? undefined,
             enabled: updated.enabled,
             fullTextOnOpenEnabled: updated.fullTextOnOpenEnabled,
+            fullTextOnFetchEnabled: updated.fullTextOnFetchEnabled,
             aiSummaryOnOpenEnabled: updated.aiSummaryOnOpenEnabled,
             aiSummaryOnFetchEnabled: updated.aiSummaryOnFetchEnabled,
             bodyTranslateOnFetchEnabled: updated.bodyTranslateOnFetchEnabled,

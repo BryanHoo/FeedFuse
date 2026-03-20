@@ -53,10 +53,6 @@ const FeedTranslationPolicyDialog = dynamic(() => import('./FeedTranslationPolic
   ssr: false,
   loading: () => null,
 });
-const FeedKeywordFilterDialog = dynamic(() => import('./FeedKeywordFilterDialog'), {
-  ssr: false,
-  loading: () => null,
-});
 const RenameCategoryDialog = dynamic(() => import('./RenameCategoryDialog'), {
   ssr: false,
   loading: () => null,
@@ -71,9 +67,11 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
   const appCategories = useAppStore((state) => state.categories);
   const feeds = useAppStore((state) => state.feeds);
   const loadSnapshot = useAppStore((state) => state.loadSnapshot);
+  const showFilteredByFeedId = useAppStore((state) => state.showFilteredByFeedId);
   const selectedView = useAppStore((state) => state.selectedView);
   const setSelectedView = useAppStore((state) => state.setSelectedView);
   const toggleCategory = useAppStore((state) => state.toggleCategory);
+  const toggleShowFilteredForFeed = useAppStore((state) => state.toggleShowFilteredForFeed);
   const addFeed = useAppStore((state) => state.addFeed);
   const updateFeed = useAppStore((state) => state.updateFeed);
   const removeFeed = useAppStore((state) => state.removeFeed);
@@ -86,7 +84,6 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
   const [fulltextPolicyFeedId, setFulltextPolicyFeedId] = useState<string | null>(null);
   const [summaryPolicyFeedId, setSummaryPolicyFeedId] = useState<string | null>(null);
   const [translationPolicyFeedId, setTranslationPolicyFeedId] = useState<string | null>(null);
-  const [keywordFilterFeedId, setKeywordFilterFeedId] = useState<string | null>(null);
   const [renameCategoryId, setRenameCategoryId] = useState<string | null>(null);
   const [deleteCategoryId, setDeleteCategoryId] = useState<string | null>(null);
   const [hoveredFeedErrorId, setHoveredFeedErrorId] = useState<string | null>(null);
@@ -243,11 +240,6 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
     [translationPolicyFeedId, feeds],
   );
 
-  const activeKeywordFilterFeed = useMemo(
-    () => (keywordFilterFeedId ? feeds.find((feed) => feed.id === keywordFilterFeedId) ?? null : null),
-    [keywordFilterFeedId, feeds],
-  );
-
   const moveCategory = async (categoryId: string, direction: 'up' | 'down') => {
     const categoryIndex = categoryMaster.findIndex((category) => category.id === categoryId);
     if (categoryIndex < 0) return;
@@ -291,6 +283,19 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
     try {
       await updateFeed(feedId, { categoryId });
       toast.success(`已移动到「${categoryName}」`);
+    } catch {
+      // apiClient handles failure notifications globally
+    }
+  };
+
+  const toggleFilteredArticlesVisibility = async (feedId: string) => {
+    toggleShowFilteredForFeed(feedId);
+    if (selectedView !== feedId) {
+      return;
+    }
+
+    try {
+      await loadSnapshot({ view: feedId });
     } catch {
       // apiClient handles failure notifications globally
     }
@@ -455,6 +460,7 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
                       const fetchErrorText = feed.fetchRawError || feed.fetchError;
                       const isFeedErrored = Boolean(fetchErrorText);
                       const isRssFeed = (feed.kind ?? 'rss') === 'rss';
+                      const showFilteredArticles = Boolean(showFilteredByFeedId[feed.id]);
                       const errorDescriptionId = `feed-error-${feed.id}`;
                       const feedButton = (
                         <button
@@ -665,13 +671,15 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
                               </ContextMenuItem>
                               <ContextMenuItem
                                 onSelect={() => {
-                                  setKeywordFilterFeedId(feed.id);
+                                  void toggleFilteredArticlesVisibility(feed.id);
                                 }}
                               >
                                 <ContextMenuItemIcon aria-hidden="true">
                                   <AlertCircle className="h-3.5 w-3.5" />
                                 </ContextMenuItemIcon>
-                                <ContextMenuItemLabel>配置关键词过滤</ContextMenuItemLabel>
+                                <ContextMenuItemLabel>
+                                  {showFilteredArticles ? '隐藏已过滤文章' : '查看已过滤文章'}
+                                </ContextMenuItemLabel>
                               </ContextMenuItem>
                             </>
                           ) : null}
@@ -811,16 +819,6 @@ export default function FeedList({ reserveCloseButtonSpace = false }: FeedListPr
         onSubmit={async (patch) => {
           if (!activeTranslationPolicyFeed) return;
           await updateFeed(activeTranslationPolicyFeed.id, patch);
-        }}
-      />
-
-      <FeedKeywordFilterDialog
-        open={Boolean(activeKeywordFilterFeed)}
-        feed={activeKeywordFilterFeed}
-        onOpenChange={(open) => {
-          if (!open) {
-            setKeywordFilterFeedId(null);
-          }
         }}
       />
 

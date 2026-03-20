@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { normalizePersistedSettings } from '../../../../features/settings/settingsSchema';
 import { getPool } from '../../../../server/db/pool';
 import { ok, fail } from '../../../../server/http/apiResponse';
 import { numericIdSchema } from '../../../../server/http/idSchemas';
@@ -8,7 +7,6 @@ import {
   NotFoundError,
   ValidationError,
 } from '../../../../server/http/errors';
-import { getUiSettings, updateUiSettings } from '../../../../server/repositories/settingsRepo';
 import { deriveFeedIconUrl } from '../../../../server/rss/deriveFeedIconUrl';
 import { isSafeExternalUrl } from '../../../../server/rss/ssrfGuard';
 import {
@@ -36,6 +34,7 @@ const patchBodySchema = z
     enabled: z.boolean().optional(),
     ...categoryInputShape,
     fullTextOnOpenEnabled: z.boolean().optional(),
+    fullTextOnFetchEnabled: z.boolean().optional(),
     aiSummaryOnOpenEnabled: z.boolean().optional(),
     aiSummaryOnFetchEnabled: z.boolean().optional(),
     bodyTranslateOnFetchEnabled: z.boolean().optional(),
@@ -151,10 +150,6 @@ export async function DELETE(
     const pool = getPool();
     const deleted = await deleteFeedAndCleanupCategory(pool, paramsParsed.data.id);
     if (!deleted) return fail(new NotFoundError('Feed not found'));
-
-    const settings = normalizePersistedSettings(await getUiSettings(pool));
-    delete settings.rss.articleKeywordFilter.feedKeywordsByFeedId[paramsParsed.data.id];
-    await updateUiSettings(pool, settings);
 
     return ok({ deleted: true });
   } catch (err) {

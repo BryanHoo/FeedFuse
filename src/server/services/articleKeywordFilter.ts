@@ -1,4 +1,4 @@
-import type { ArticleKeywordFilterSettings } from '../../types';
+import type { ArticleFilterKeywordSettings } from '../../types';
 
 function dedupeKeywords(input: string[]): string[] {
   const result: string[] = [];
@@ -18,13 +18,14 @@ function dedupeKeywords(input: string[]): string[] {
 }
 
 export function getArticleKeywordsForFeed(
-  filter: ArticleKeywordFilterSettings,
-  feedId: string,
+  filter: ArticleFilterKeywordSettings,
+  _feedId: string,
 ): string[] {
-  return dedupeKeywords([
-    ...filter.globalKeywords,
-    ...(filter.feedKeywordsByFeedId[feedId] ?? []),
-  ]);
+  if (!filter.enabled) {
+    return [];
+  }
+
+  return dedupeKeywords(filter.keywords);
 }
 
 export function matchesArticleKeywordFilter(

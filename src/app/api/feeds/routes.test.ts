@@ -101,6 +101,7 @@ describe('/api/feeds', () => {
         iconUrl: null,
         enabled: true,
         fullTextOnOpenEnabled: false,
+        fullTextOnFetchEnabled: false,
         aiSummaryOnOpenEnabled: false,
         categoryId: null,
         fetchIntervalMinutes: 30,
@@ -117,6 +118,7 @@ describe('/api/feeds', () => {
 
     expect(json.ok).toBe(true);
     expect(json.data[0].unreadCount).toBe(3);
+    expect(json.data[0].fullTextOnFetchEnabled).toBe(false);
   });
 
   it('POST creates a feed', async () => {
@@ -128,6 +130,7 @@ describe('/api/feeds', () => {
       iconUrl: null,
       enabled: true,
       fullTextOnOpenEnabled: true,
+      fullTextOnFetchEnabled: true,
       aiSummaryOnOpenEnabled: true,
       categoryId,
       fetchIntervalMinutes: 30,
@@ -143,6 +146,7 @@ describe('/api/feeds', () => {
           url: 'https://1.1.1.1/rss.xml',
           categoryId,
           fullTextOnOpenEnabled: true,
+          fullTextOnFetchEnabled: true,
           aiSummaryOnOpenEnabled: true,
         }),
       }),
@@ -151,10 +155,15 @@ describe('/api/feeds', () => {
 
     expect(createFeedWithCategoryResolutionMock).toHaveBeenCalledWith(
       pool,
-      expect.objectContaining({ fullTextOnOpenEnabled: true, aiSummaryOnOpenEnabled: true }),
+      expect.objectContaining({
+        fullTextOnOpenEnabled: true,
+        fullTextOnFetchEnabled: true,
+        aiSummaryOnOpenEnabled: true,
+      }),
     );
     expect(json.ok).toBe(true);
     expect(json.data.url).toBe('https://1.1.1.1/rss.xml');
+    expect(json.data.fullTextOnFetchEnabled).toBe(true);
   });
 
   it('POST /api/feeds accepts categoryName and delegates to lifecycle service', async () => {
@@ -352,6 +361,7 @@ describe('/api/feeds', () => {
       iconUrl: null,
       enabled: false,
       fullTextOnOpenEnabled: true,
+      fullTextOnFetchEnabled: true,
       aiSummaryOnOpenEnabled: true,
       articleListDisplayMode: 'list',
       categoryId: null,
@@ -367,6 +377,7 @@ describe('/api/feeds', () => {
           enabled: false,
           title: 'Updated',
           fullTextOnOpenEnabled: true,
+          fullTextOnFetchEnabled: true,
           aiSummaryOnOpenEnabled: true,
           articleListDisplayMode: 'list',
         }),
@@ -380,6 +391,7 @@ describe('/api/feeds', () => {
       feedId,
       expect.objectContaining({
         fullTextOnOpenEnabled: true,
+        fullTextOnFetchEnabled: true,
         aiSummaryOnOpenEnabled: true,
         articleListDisplayMode: 'list',
       }),
@@ -387,6 +399,7 @@ describe('/api/feeds', () => {
     expect(json.ok).toBe(true);
     expect(json.data.enabled).toBe(false);
     expect(json.data.title).toBe('Updated');
+    expect(json.data.fullTextOnFetchEnabled).toBe(true);
   });
 
   it('PATCH accepts numeric route id', async () => {
@@ -606,26 +619,16 @@ describe('/api/feeds', () => {
   });
 
 
-  it('DELETE clears the deleted feed keyword filter settings', async () => {
+  it('DELETE no longer rewrites deprecated feed keyword filter settings', async () => {
     deleteFeedAndCleanupCategoryMock.mockResolvedValue(true);
-    getUiSettingsMock.mockResolvedValue({
-      rss: {
-        articleKeywordFilter: {
-          globalKeywords: [],
-          feedKeywordsByFeedId: { [feedId]: ['Sponsored'] },
-        },
-      },
-    });
-    updateUiSettingsMock.mockResolvedValue({
-      rss: { articleKeywordFilter: { globalKeywords: [], feedKeywordsByFeedId: {} } },
-    });
 
     const mod = await import('./[id]/route');
     await mod.DELETE(new Request(`http://localhost/api/feeds/${feedId}`), {
       params: Promise.resolve({ id: feedId }),
     });
 
-    expect(updateUiSettingsMock).toHaveBeenCalled();
+    expect(getUiSettingsMock).not.toHaveBeenCalled();
+    expect(updateUiSettingsMock).not.toHaveBeenCalled();
   });
 
   it('POST /refresh enqueues feed.fetch', async () => {

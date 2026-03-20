@@ -6,6 +6,7 @@ import { generateAiDigest, patchFeed, refreshAllFeeds, refreshFeed } from "../..
 import { useRenderTimeSnapshot } from "../../hooks/useRenderTimeSnapshot";
 import { READER_PANE_HOVER_BACKGROUND_CLASS_NAME } from "@/lib/designSystem";
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 import {
   AI_DIGEST_VIEW_ID,
   isAggregateView as isAggregateReaderView,
@@ -41,6 +42,10 @@ function areSetsEqual(left: Set<string>, right: Set<string>) {
     if (!right.has(value)) return false;
   }
   return true;
+}
+
+function shouldShowFilteredBadge(input: { filterStatus?: string; isFiltered?: boolean }) {
+  return input.isFiltered || input.filterStatus === "filtered";
 }
 
 interface ArticleListProps {
@@ -428,6 +433,9 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
       }
 
       labelParts.push(formatRelativeTime(article.publishedAt, referenceTime));
+      if (shouldShowFilteredBadge(article)) {
+        labelParts.push("已过滤");
+      }
       labelParts.push(article.isRead ? "已读" : "未读");
 
       return labelParts.join("，");
@@ -700,6 +708,7 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
                   : undefined;
                 const showPreviewImage = previewImageStatus === "ready";
                 const displayTitle = article.titleZh?.trim() || article.title;
+                const articleFiltered = shouldShowFilteredBadge(article);
 
                 if (effectiveDisplayMode === "list") {
                   return (
@@ -733,12 +742,19 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
                           {displayTitle}
                         </span>
                         <div className="mt-1 flex items-center justify-between gap-3 text-[11px]">
-                          <span
-                            data-testid={`article-list-row-${article.id}-feed`}
-                            className="min-w-0 max-w-[10.5rem] truncate font-medium text-muted-foreground"
-                          >
-                            {getFeedTitle(article.feedId)}
-                          </span>
+                          <div className="min-w-0 flex items-center gap-2">
+                            <span
+                              data-testid={`article-list-row-${article.id}-feed`}
+                              className="min-w-0 max-w-[10.5rem] truncate font-medium text-muted-foreground"
+                            >
+                              {getFeedTitle(article.feedId)}
+                            </span>
+                            {articleFiltered ? (
+                              <Badge variant="secondary" className="h-5 shrink-0 px-1.5 text-[10px] font-medium">
+                                已过滤
+                              </Badge>
+                            ) : null}
+                          </div>
                           <div className="shrink-0 flex items-center gap-1.5">
                             {!article.isRead && (
                               <span
@@ -818,9 +834,16 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
                         </p>
 
                         <div className="mt-auto flex items-center justify-between gap-3 pt-1.5 text-[11px]">
-                          <span className="max-w-[10.5rem] truncate font-medium text-muted-foreground">
-                            {getFeedTitle(article.feedId)}
-                          </span>
+                          <div className="min-w-0 flex items-center gap-2">
+                            <span className="max-w-[10.5rem] truncate font-medium text-muted-foreground">
+                              {getFeedTitle(article.feedId)}
+                            </span>
+                            {articleFiltered ? (
+                              <Badge variant="secondary" className="h-5 shrink-0 px-1.5 text-[10px] font-medium">
+                                已过滤
+                              </Badge>
+                            ) : null}
+                          </div>
                           <div className="shrink-0 flex items-center gap-1.5">
                             {!article.isRead && (
                               <span

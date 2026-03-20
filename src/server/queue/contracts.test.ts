@@ -19,13 +19,22 @@ describe('queue contracts', () => {
 
   it('enables retry+dlq for fulltext/feed', () => {
     expect(getQueueCreateOptions('article.fetch_fulltext').deadLetter).toBe('dlq.article.fulltext');
+    expect(getQueueCreateOptions('article.filter').deadLetter).toBe('dlq.article.filter');
     expect(getQueueCreateOptions('feed.fetch').retryLimit).toBeGreaterThan(0);
   });
 
   it('provides worker concurrency defaults', () => {
     expect(getWorkerOptions('feed.fetch').localConcurrency).toBeGreaterThanOrEqual(1);
     expect(Object.keys(QUEUE_CONTRACTS)).toContain('ai.translate_title_zh');
+    expect(Object.keys(QUEUE_CONTRACTS)).toContain('article.filter');
     expect(getWorkerOptions('system_logs.cleanup').localConcurrency).toBe(1);
     expect(getQueueSendOptions('system_logs.cleanup', {}).singletonKey).toBe('system_logs.cleanup');
+  });
+
+  it('dedupes article.filter jobs by article id', () => {
+    expect(getQueueSendOptions('article.filter', { articleId: 'a1' }).singletonKey).toBe('a1');
+    expect(getWorkerOptions('article.filter')).toEqual(
+      expect.objectContaining({ localConcurrency: 3, batchSize: 1 }),
+    );
   });
 });

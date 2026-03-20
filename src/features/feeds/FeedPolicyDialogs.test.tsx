@@ -14,6 +14,7 @@ function buildFeed(overrides: Partial<Feed> = {}): Feed {
     unreadCount: 0,
     enabled: true,
     fullTextOnOpenEnabled: false,
+    fullTextOnFetchEnabled: false,
     aiSummaryOnOpenEnabled: false,
     aiSummaryOnFetchEnabled: false,
     bodyTranslateOnFetchEnabled: false,
@@ -97,23 +98,27 @@ describe('FeedPolicyDialogs', () => {
     );
   });
 
-  it('fulltext policy dialog saves fullTextOnOpenEnabled', async () => {
+  it('fulltext policy dialog saves fullTextOnOpenEnabled and fullTextOnFetchEnabled', async () => {
     const onSubmit = vi.fn(async () => undefined);
 
     render(
       <FeedFulltextPolicyDialog
         open
-        feed={buildFeed({ fullTextOnOpenEnabled: false })}
+        feed={buildFeed({ fullTextOnOpenEnabled: false, fullTextOnFetchEnabled: false })}
         onOpenChange={() => {}}
         onSubmit={onSubmit}
       />,
     );
 
     fireEvent.click(screen.getByRole('switch', { name: '打开文章时自动抓取全文' }));
+    fireEvent.click(screen.getByRole('switch', { name: '入库时自动抓取全文' }));
     fireEvent.click(screen.getByRole('button', { name: '保存配置' }));
 
     await waitFor(() => {
-      expect(onSubmit).toHaveBeenCalledWith({ fullTextOnOpenEnabled: true });
+      expect(onSubmit).toHaveBeenCalledWith({
+        fullTextOnOpenEnabled: true,
+        fullTextOnFetchEnabled: true,
+      });
     });
   });
 });

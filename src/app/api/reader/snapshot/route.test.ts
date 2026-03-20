@@ -35,6 +35,7 @@ describe('/api/reader/snapshot', () => {
           iconUrl: null,
           enabled: true,
           fullTextOnOpenEnabled: false,
+          fullTextOnFetchEnabled: false,
           aiSummaryOnOpenEnabled: false,
           aiSummaryOnFetchEnabled: false,
           bodyTranslateOnFetchEnabled: false,
@@ -63,6 +64,9 @@ describe('/api/reader/snapshot', () => {
             author: null,
             publishedAt: null,
             link: null,
+            filterStatus: 'filtered',
+            isFiltered: true,
+            filteredBy: ['keyword'],
             isRead: false,
             isStarred: false,
           },
@@ -82,6 +86,26 @@ describe('/api/reader/snapshot', () => {
     expect(json.data.feeds[0].lastFetchRawError).toBe('HTTP 403 from upstream');
     expect(json.data.articles.items).toBeTruthy();
     expect(json.data.articles.items[0].titleZh).toBe('译文标题');
+    expect(json.data.articles.items[0].filterStatus).toBe('filtered');
     expect(json.data.articles.nextCursor).toBeNull();
+  });
+
+  it('forwards includeFiltered query param', async () => {
+    getReaderSnapshotMock.mockResolvedValue({
+      categories: [],
+      feeds: [],
+      articles: { items: [], nextCursor: null },
+    });
+
+    const mod = await import('./route');
+    await mod.GET(new Request('http://localhost/api/reader/snapshot?view=1001&includeFiltered=true'));
+
+    expect(getReaderSnapshotMock).toHaveBeenCalledWith(
+      pool,
+      expect.objectContaining({
+        view: '1001',
+        includeFiltered: true,
+      }),
+    );
   });
 });

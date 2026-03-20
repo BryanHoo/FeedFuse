@@ -11,6 +11,10 @@ const querySchema = z.object({
   view: z.string().optional().default('all'),
   limit: z.coerce.number().int().min(1).max(200).optional(),
   cursor: z.string().optional(),
+  includeFiltered: z
+    .enum(['true', 'false'])
+    .transform((value) => value === 'true')
+    .optional(),
 });
 
 function zodIssuesToFields(error: z.ZodError): Record<string, string> {
@@ -29,6 +33,7 @@ export async function GET(request: Request) {
       view: url.searchParams.get('view') ?? undefined,
       limit: url.searchParams.get('limit') ?? undefined,
       cursor: url.searchParams.get('cursor') ?? undefined,
+      includeFiltered: url.searchParams.get('includeFiltered') ?? undefined,
     });
     if (!parsed.success) {
       return fail(new ValidationError('Invalid query', zodIssuesToFields(parsed.error)));
@@ -41,4 +46,3 @@ export async function GET(request: Request) {
     return fail(err);
   }
 }
-

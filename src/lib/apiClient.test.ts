@@ -823,9 +823,9 @@ it('getArticleTasks GETs /api/articles/:id/tasks', async () => {
 });
 
 
-it('requests feed keyword filter endpoints', async () => {
+it('includes includeFiltered in reader snapshot query when requested', async () => {
   const fetchMock = vi.fn(async () => {
-    return new Response(JSON.stringify({ ok: true, data: { keywords: ['Sponsored'] } }), {
+    return new Response(JSON.stringify({ ok: true, data: { categories: [], feeds: [], articles: { items: [], nextCursor: null } } }), {
       status: 200,
       headers: { 'content-type': 'application/json' },
     });
@@ -833,17 +833,12 @@ it('requests feed keyword filter endpoints', async () => {
   vi.stubGlobal('fetch', fetchMock);
 
   const mod = await import('./apiClient');
-  await mod.getFeedKeywordFilter('feed-1');
-  await mod.patchFeedKeywordFilter('feed-1', { keywords: ['Sponsored'] });
+  await mod.getReaderSnapshot({ view: 'feed-1', includeFiltered: true });
 
-  const getCall = fetchMock.mock.calls[0] ?? [];
-  const patchCall = fetchMock.mock.calls[1] ?? [];
+  const call = fetchMock.mock.calls[0] ?? [];
 
-  expect(getFetchCallUrl(getCall[0])).toContain('/api/feeds/feed-1/keyword-filter');
-  expect(getFetchCallMethod(getCall) ?? 'GET').toBe('GET');
-
-  expect(getFetchCallUrl(patchCall[0])).toContain('/api/feeds/feed-1/keyword-filter');
-  expect(getFetchCallMethod(patchCall)).toBe('PATCH');
+  expect(getFetchCallUrl(call[0])).toContain('/api/reader/snapshot?view=feed-1&includeFiltered=true');
+  expect(getFetchCallMethod(call) ?? 'GET').toBe('GET');
 });
 
 

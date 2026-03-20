@@ -144,6 +144,7 @@ describe('runAiDigestGenerate', () => {
   it('persists selected source article ids with deterministic positions on success', async () => {
     writeSystemLogMock.mockReset();
     const replaceAiDigestRunSourcesMock = vi.fn().mockResolvedValue(undefined);
+    const insertArticleIgnoreDuplicateMock = vi.fn().mockResolvedValue({ id: 'digest-article-1' });
     const pool = { query: vi.fn() } as unknown as Pool;
 
     const { runAiDigestGenerate } = await import('./aiDigestGenerate');
@@ -199,7 +200,7 @@ describe('runAiDigestGenerate', () => {
         aiDigestRerank: vi.fn().mockResolvedValue(['candidate-1', 'candidate-2']),
         aiDigestCompose: vi.fn().mockResolvedValue({ title: 'Digest', html: '<p>digest</p>' }),
         sanitizeContent: vi.fn().mockReturnValue('<p>digest</p>'),
-        insertArticleIgnoreDuplicate: vi.fn().mockResolvedValue({ id: 'digest-article-1' }),
+        insertArticleIgnoreDuplicate: insertArticleIgnoreDuplicateMock,
         queryArticleIdByDedupeKey: vi.fn().mockResolvedValue('digest-article-1'),
         replaceAiDigestRunSources: replaceAiDigestRunSourcesMock,
       },
@@ -213,6 +214,15 @@ describe('runAiDigestGenerate', () => {
           { sourceArticleId: 'candidate-1', position: 0 },
           { sourceArticleId: 'candidate-2', position: 1 },
         ],
+      }),
+    );
+    expect(insertArticleIgnoreDuplicateMock).toHaveBeenCalledWith(
+      pool,
+      expect.objectContaining({
+        filterStatus: 'passed',
+        isFiltered: false,
+        filteredBy: [],
+        filterErrorMessage: null,
       }),
     );
     expect(writeSystemLogMock).toHaveBeenNthCalledWith(

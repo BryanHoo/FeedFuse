@@ -77,7 +77,6 @@ async function getFetchCallJsonBody(
 describe('FeedList manage', () => {
   let lastPatchBody: Record<string, unknown> | null = null;
   let lastReorderBody: Record<string, unknown> | null = null;
-  let feedKeywordFilterKeywords: string[] = [];
 
   function snapshotResponseFromStore() {
     const state = useAppStore.getState();
@@ -130,14 +129,24 @@ describe('FeedList manage', () => {
     });
   }
 
-function renderWithNotifications() {
-  return render(
-    <>
-      <ReaderLayout />
-      <ToastHost />
-    </>,
-  );
-}
+  function renderWithNotifications() {
+    return render(
+      <>
+        <ReaderLayout />
+        <ToastHost />
+      </>,
+    );
+  }
+
+  function getSnapshotRequestUrls(): string[] {
+    return (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls
+      .filter(([input, init]) => {
+        const url = getFetchCallUrl(input);
+        const method = getFetchCallMethod(input, init);
+        return url.includes('/api/reader/snapshot') && method === 'GET';
+      })
+      .map(([input]) => getFetchCallUrl(input));
+  }
 
   async function openMoveToCategorySubmenu() {
     fireEvent.contextMenu(screen.getByRole('button', { name: /My Feed.*2/ }));
@@ -149,7 +158,6 @@ function renderWithNotifications() {
   beforeEach(() => {
     lastPatchBody = null;
     lastReorderBody = null;
-    feedKeywordFilterKeywords = [];
     useAppStore.setState({
       feeds: [
         {
@@ -200,19 +208,6 @@ function renderWithNotifications() {
 
         if (url.includes('/api/reader/snapshot') && method === 'GET') {
           return snapshotResponseFromStore();
-        }
-
-        if (url.includes('/api/feeds/feed-1/keyword-filter') && method === 'GET') {
-          return jsonResponse({ ok: true, data: { keywords: feedKeywordFilterKeywords } });
-        }
-
-        if (url.includes('/api/feeds/feed-1/keyword-filter') && method === 'PATCH') {
-          const body = await getFetchCallJsonBody(input, init);
-          feedKeywordFilterKeywords = Array.isArray(body.keywords)
-            ? body.keywords.map((item: unknown) => String(item))
-            : [];
-
-          return jsonResponse({ ok: true, data: { keywords: feedKeywordFilterKeywords } });
         }
 
         if (url.includes('/api/feeds/feed-1') && method === 'PATCH') {
@@ -659,7 +654,8 @@ function renderWithNotifications() {
     expect(screen.queryByRole('menuitem', { name: '全文抓取配置' })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'AI摘要配置' })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: '翻译配置' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('menuitem', { name: '配置关键词过滤' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: '查看已过滤文章' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: '隐藏已过滤文章' })).not.toBeInTheDocument();
 
     expect(screen.getByRole('menuitem', { name: '编辑' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: '移动到分类' })).toBeInTheDocument();
@@ -1030,20 +1026,29 @@ function renderWithNotifications() {
   });
 
 
-  it('opens keyword filter dialog from feed context menu and saves changes', async () => {
+  it('toggles filtered article visibility from feed context menu and refreshes current snapshot', async () => {
     renderWithNotifications();
+    expect(getSnapshotRequestUrls()).toEqual([]);
+    const feedPane = screen.getByTestId('reader-feed-pane');
 
-    fireEvent.contextMenu(screen.getByRole('button', { name: /My Feed.*2/ }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: '配置关键词过滤' }));
-
-    const textarea = await screen.findByLabelText('文章关键词过滤规则');
-    fireEvent.change(textarea, { target: { value: 'Sponsored' } });
-    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    fireEvent.contextMenu(within(feedPane).getByRole('button', { name: /My Feed.*2/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: '查看已过滤文章' }));
 
     await waitFor(() => {
-      const calls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
-      expect(calls.some(([input]) => getFetchCallUrl(input).includes('/api/feeds/feed-1/keyword-filter'))).toBe(true);
-      expect(calls.filter(([input]) => getFetchCallUrl(input).includes('/api/reader/snapshot')).length).toBeGreaterThan(0);
+      expect(useAppStore.getState().showFilteredByFeedId['feed-1']).toBe(true);
+      const lastSnapshotUrl = getSnapshotRequestUrls().at(-1) ?? '';
+      expect(lastSnapshotUrl).toContain('/api/reader/snapshot?view=feed-1');
+      expect(lastSnapshotUrl).toContain('includeFiltered=true');
+    });
+
+    fireEvent.contextMenu(within(feedPane).getByRole('button', { name: /My Feed.*2/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: '隐藏已过滤文章' }));
+
+    await waitFor(() => {
+      expect(useAppStore.getState().showFilteredByFeedId['feed-1']).toBe(false);
+      const lastSnapshotUrl = getSnapshotRequestUrls().at(-1) ?? '';
+      expect(lastSnapshotUrl).toContain('/api/reader/snapshot?view=feed-1');
+      expect(lastSnapshotUrl).not.toContain('includeFiltered=true');
     });
   });
 

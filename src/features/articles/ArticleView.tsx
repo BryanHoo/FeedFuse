@@ -21,6 +21,7 @@ import {
 import { pollWithBackoff } from '../../lib/polling';
 import { useRenderTimeSnapshot } from '../../hooks/useRenderTimeSnapshot';
 import { formatRelativeTime } from '../../utils/date';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useImmersiveTranslation } from './useImmersiveTranslation';
@@ -679,6 +680,7 @@ export default function ArticleView({
     !aiTranslationWaitingFulltext &&
     (aiSummaryFailed || aiTranslateFailed);
   const showScrollAssist = isDesktop && !effectiveArticleTitleVisible && effectiveHasScrollableContent;
+  const articleFiltered = article.isFiltered || article.filterStatus === 'filtered';
 
   return (
     <div className="flex h-full flex-col bg-background text-foreground">
@@ -755,6 +757,11 @@ export default function ArticleView({
                   ·
                 </span>
                 <span className="shrink-0">{formatRelativeTime(article.publishedAt, referenceTime)}</span>
+                {articleFiltered ? (
+                  <Badge variant="secondary" className="h-5 shrink-0 px-1.5 text-[10px] font-medium" data-testid="article-filter-badge">
+                    已过滤
+                  </Badge>
+                ) : null}
                 {article.author && (
                   <>
                     <span aria-hidden="true" className="shrink-0">

@@ -32,6 +32,7 @@ describe('aiDigestRepo', () => {
     expect(sql).toContain('any($1::bigint[])');
     expect(sql).toContain('> $');
     expect(sql).toContain('<= $');
+    expect(sql).toContain("filter_status = any('{passed,error}'::text[])");
   });
 
   it('replaces run sources by run id and preserves position order', async () => {

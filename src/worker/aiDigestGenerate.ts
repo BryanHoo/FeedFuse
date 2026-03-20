@@ -362,6 +362,10 @@ async function executeAiDigestRun(input: {
     publishedAt: input.now.toISOString(),
     contentHtml: sanitized,
     summary: null,
+    filterStatus: 'passed',
+    isFiltered: false,
+    filteredBy: [],
+    filterErrorMessage: null,
   });
 
   const articleId =

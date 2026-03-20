@@ -474,6 +474,7 @@ export async function listAiDigestCandidateArticles(
         a.feed_id = any($1::bigint[])
         and a.fetched_at > $2::timestamptz
         and a.fetched_at <= $3::timestamptz
+        and a.filter_status = any('{passed,error}'::text[])
       order by a.fetched_at desc, a.id desc
       limit $4
     `,

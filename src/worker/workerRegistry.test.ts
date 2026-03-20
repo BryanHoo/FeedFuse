@@ -11,13 +11,13 @@ describe('registerWorkers', () => {
         work,
       } as unknown as Pick<PgBoss, 'work'>,
       {
-        'article.fetch_fulltext': async () => undefined,
+        'article.filter': async () => undefined,
       },
     );
 
     expect(work).toHaveBeenCalledWith(
-      'article.fetch_fulltext',
-      expect.objectContaining({ localConcurrency: 4, batchSize: 2 }),
+      'article.filter',
+      expect.objectContaining({ localConcurrency: 3, batchSize: 1 }),
       expect.any(Function),
     );
   });

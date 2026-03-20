@@ -13,6 +13,7 @@ export interface FeedRow {
   iconUrl: string | null;
   enabled: boolean;
   fullTextOnOpenEnabled: boolean;
+  fullTextOnFetchEnabled: boolean;
   aiSummaryOnOpenEnabled: boolean;
   aiSummaryOnFetchEnabled: boolean;
   bodyTranslateOnFetchEnabled: boolean;
@@ -38,6 +39,7 @@ export async function listFeeds(db: DbClient): Promise<FeedRow[]> {
       icon_url as "iconUrl",
       enabled,
       full_text_on_open_enabled as "fullTextOnOpenEnabled",
+      full_text_on_fetch_enabled as "fullTextOnFetchEnabled",
       ai_summary_on_open_enabled as "aiSummaryOnOpenEnabled",
       ai_summary_on_fetch_enabled as "aiSummaryOnFetchEnabled",
       body_translate_on_fetch_enabled as "bodyTranslateOnFetchEnabled",
@@ -65,6 +67,7 @@ export async function createFeed(
     iconUrl?: string | null;
     enabled?: boolean;
     fullTextOnOpenEnabled?: boolean;
+    fullTextOnFetchEnabled?: boolean;
     aiSummaryOnOpenEnabled?: boolean;
     aiSummaryOnFetchEnabled?: boolean;
     bodyTranslateOnFetchEnabled?: boolean;
@@ -85,6 +88,7 @@ export async function createFeed(
         icon_url,
         enabled,
         full_text_on_open_enabled,
+        full_text_on_fetch_enabled,
         ai_summary_on_open_enabled,
         ai_summary_on_fetch_enabled,
         body_translate_on_fetch_enabled,
@@ -95,7 +99,7 @@ export async function createFeed(
         category_id,
         fetch_interval_minutes
       )
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       returning
         id,
         kind,
@@ -105,6 +109,7 @@ export async function createFeed(
         icon_url as "iconUrl",
         enabled,
         full_text_on_open_enabled as "fullTextOnOpenEnabled",
+        full_text_on_fetch_enabled as "fullTextOnFetchEnabled",
         ai_summary_on_open_enabled as "aiSummaryOnOpenEnabled",
         ai_summary_on_fetch_enabled as "aiSummaryOnFetchEnabled",
         body_translate_on_fetch_enabled as "bodyTranslateOnFetchEnabled",
@@ -122,6 +127,7 @@ export async function createFeed(
       input.iconUrl ?? null,
       input.enabled ?? true,
       input.fullTextOnOpenEnabled ?? false,
+      input.fullTextOnFetchEnabled ?? false,
       input.aiSummaryOnOpenEnabled ?? false,
       input.aiSummaryOnFetchEnabled ?? false,
       input.bodyTranslateOnFetchEnabled ?? false,
@@ -146,6 +152,7 @@ export async function updateFeed(
     iconUrl?: string | null;
     enabled?: boolean;
     fullTextOnOpenEnabled?: boolean;
+    fullTextOnFetchEnabled?: boolean;
     aiSummaryOnOpenEnabled?: boolean;
     aiSummaryOnFetchEnabled?: boolean;
     bodyTranslateOnFetchEnabled?: boolean;
@@ -184,6 +191,10 @@ export async function updateFeed(
   if (typeof input.fullTextOnOpenEnabled !== 'undefined') {
     fields.push(`full_text_on_open_enabled = $${paramIndex++}`);
     values.push(Boolean(input.fullTextOnOpenEnabled));
+  }
+  if (typeof input.fullTextOnFetchEnabled !== 'undefined') {
+    fields.push(`full_text_on_fetch_enabled = $${paramIndex++}`);
+    values.push(Boolean(input.fullTextOnFetchEnabled));
   }
   if (typeof input.aiSummaryOnOpenEnabled !== 'undefined') {
     fields.push(`ai_summary_on_open_enabled = $${paramIndex++}`);
@@ -240,6 +251,7 @@ export async function updateFeed(
         icon_url as "iconUrl",
         enabled,
         full_text_on_open_enabled as "fullTextOnOpenEnabled",
+        full_text_on_fetch_enabled as "fullTextOnFetchEnabled",
         ai_summary_on_open_enabled as "aiSummaryOnOpenEnabled",
         ai_summary_on_fetch_enabled as "aiSummaryOnFetchEnabled",
         body_translate_on_fetch_enabled as "bodyTranslateOnFetchEnabled",
@@ -331,6 +343,7 @@ export interface FeedFetchRow {
   id: string;
   url: string;
   enabled: boolean;
+  fullTextOnFetchEnabled: boolean;
   titleTranslateEnabled: boolean;
   aiSummaryOnFetchEnabled: boolean;
   bodyTranslateOnFetchEnabled: boolean;
@@ -346,6 +359,7 @@ export async function listEnabledFeedsForFetch(db: DbClient): Promise<FeedFetchR
       id,
       url,
       enabled,
+      full_text_on_fetch_enabled as "fullTextOnFetchEnabled",
       title_translate_enabled as "titleTranslateEnabled",
       ai_summary_on_fetch_enabled as "aiSummaryOnFetchEnabled",
       body_translate_on_fetch_enabled as "bodyTranslateOnFetchEnabled",
@@ -370,6 +384,7 @@ export async function getFeedForFetch(
         id,
         url,
         enabled,
+        full_text_on_fetch_enabled as "fullTextOnFetchEnabled",
         title_translate_enabled as "titleTranslateEnabled",
         ai_summary_on_fetch_enabled as "aiSummaryOnFetchEnabled",
         body_translate_on_fetch_enabled as "bodyTranslateOnFetchEnabled",
@@ -466,6 +481,7 @@ export async function createAiDigestFeed(
         icon_url as "iconUrl",
         enabled,
         full_text_on_open_enabled as "fullTextOnOpenEnabled",
+        full_text_on_fetch_enabled as "fullTextOnFetchEnabled",
         ai_summary_on_open_enabled as "aiSummaryOnOpenEnabled",
         ai_summary_on_fetch_enabled as "aiSummaryOnFetchEnabled",
         body_translate_on_fetch_enabled as "bodyTranslateOnFetchEnabled",

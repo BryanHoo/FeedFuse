@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ViewType } from '../../types';
 import { AI_DIGEST_VIEW_ID } from '../../lib/view';
@@ -1129,6 +1129,63 @@ describe('ArticleList', () => {
     expect(screen.getByTestId('article-list-row-art-1-feed')).toHaveTextContent('Example Feed');
     expect(screen.getByTestId('article-list-row-art-1-time')).toBeInTheDocument();
     expect(screen.getByTestId('article-list-row-art-1-unread-dot')).toBeInTheDocument();
+  });
+
+  it('renders 已过滤 badge in card and list modes while keeping the article clickable', async () => {
+    useAppStore.setState((state) => ({
+      ...state,
+      selectedView: 'feed-1',
+      selectedArticleId: 'art-1',
+      articles: state.articles.map((article) =>
+        article.id === 'art-2'
+          ? {
+              ...article,
+              filterStatus: 'filtered',
+              isFiltered: true,
+              filteredBy: ['keyword'],
+            }
+          : article,
+      ),
+    }));
+
+    renderWithNotifications();
+
+    const filteredCardButton = screen.getByTestId('article-card-art-2-title').closest('button');
+    expect(filteredCardButton).not.toBeNull();
+    expect(within(filteredCardButton as HTMLButtonElement).getByText('已过滤')).toBeInTheDocument();
+
+    fireEvent.click(filteredCardButton as HTMLButtonElement);
+
+    await waitFor(() => {
+      expect(useAppStore.getState().selectedArticleId).toBe('art-2');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: TOGGLE_TO_LIST_LABEL }));
+
+    const filteredRowButton = (await screen.findByTestId('article-list-row-art-2-title')).closest('button');
+    expect(filteredRowButton).not.toBeNull();
+    expect(within(filteredRowButton as HTMLButtonElement).getByText('已过滤')).toBeInTheDocument();
+  });
+
+  it('keeps backend-provided filtered articles visible in aggregate views', () => {
+    useAppStore.setState((state) => ({
+      ...state,
+      selectedView: 'all',
+      articles: state.articles.map((article) =>
+        article.id === 'art-2'
+          ? {
+              ...article,
+              filterStatus: 'filtered',
+              isFiltered: true,
+            }
+          : article,
+      ),
+    }));
+
+    renderWithNotifications();
+
+    expect(screen.getByText('Other Article')).toBeInTheDocument();
+    expect(screen.getByText('已过滤')).toBeInTheDocument();
   });
 
   it('renders brighter unread signals consistently in card and list modes', async () => {

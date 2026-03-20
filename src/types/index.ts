@@ -10,6 +10,7 @@ export interface Feed {
   unreadCount: number;
   enabled: boolean;
   fullTextOnOpenEnabled: boolean;
+  fullTextOnFetchEnabled: boolean;
   aiSummaryOnOpenEnabled: boolean;
   aiSummaryOnFetchEnabled: boolean;
   bodyTranslateOnFetchEnabled: boolean;
@@ -48,6 +49,9 @@ export interface Article {
   author?: string;
   publishedAt: string;
   link: string;
+  filterStatus?: 'pending' | 'passed' | 'filtered' | 'error';
+  isFiltered?: boolean;
+  filteredBy?: string[];
   isRead: boolean;
   isStarred: boolean;
   bodyTranslationEligible?: boolean;
@@ -126,15 +130,25 @@ export interface RssSourceSetting {
   enabled: boolean;
 }
 
-export interface ArticleKeywordFilterSettings {
-  globalKeywords: string[];
-  feedKeywordsByFeedId: Record<string, string[]>;
+export interface ArticleFilterKeywordSettings {
+  enabled: boolean;
+  keywords: string[];
+}
+
+export interface ArticleFilterAiSettings {
+  enabled: boolean;
+  prompt: string;
+}
+
+export interface ArticleFilterSettings {
+  keyword: ArticleFilterKeywordSettings;
+  ai: ArticleFilterAiSettings;
 }
 
 export interface RssSettings {
   sources: RssSourceSetting[];
   fetchIntervalMinutes: 5 | 15 | 30 | 60 | 120;
-  articleKeywordFilter: ArticleKeywordFilterSettings;
+  articleFilter: ArticleFilterSettings;
 }
 
 export type LoggingRetentionDays = 1 | 3 | 7 | 14 | 30 | 90;

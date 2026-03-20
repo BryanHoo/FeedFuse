@@ -1,16 +1,10 @@
 import type { Pool } from 'pg';
-import { normalizePersistedSettings } from '../../features/settings/settingsSchema';
 import { AI_DIGEST_VIEW_ID, isRssSmartView } from '../../lib/view';
 import { getServerEnv } from '../env';
 import { buildImageProxyUrl, getOptionalImageProxySecret } from '../media/imageProxyUrl';
 import { evaluateArticleBodyTranslationEligibility } from '../ai/articleTranslationEligibility';
 import { listCategories } from '../repositories/categoriesRepo';
 import { listFeeds } from '../repositories/feedsRepo';
-import { getUiSettings } from '../repositories/settingsRepo';
-import {
-  getArticleKeywordsForFeed,
-  matchesArticleKeywordFilter,
-} from './articleKeywordFilter';
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
@@ -43,6 +37,7 @@ export function buildArticleFilter(input: {
   view: string;
   cursor?: string | null;
   limit?: number;
+  includeFiltered?: boolean;
 }): { whereSql: string; params: unknown[]; limit: number } {
   const whereParts: string[] = [];
   const params: unknown[] = [];
@@ -62,6 +57,19 @@ export function buildArticleFilter(input: {
   if (isRssSmartView(input.view)) {
     whereParts.push("feed_id in (select id from feeds where kind = 'rss')");
   }
+
+  const isSpecificFeedView =
+    input.view !== 'all' &&
+    input.view !== 'unread' &&
+    input.view !== 'starred' &&
+    input.view !== AI_DIGEST_VIEW_ID &&
+    !isRssSmartView(input.view);
+  const visibleStatuses =
+    isSpecificFeedView && input.includeFiltered
+      ? ['passed', 'error', 'filtered']
+      : ['passed', 'error'];
+  whereParts.push(`filter_status = any($${paramIndex++}::text[])`);
+  params.push(visibleStatuses);
 
   const decodedCursor = decodeCursor(input.cursor);
   if (decodedCursor) {
@@ -94,6 +102,9 @@ export interface ReaderSnapshotArticleItem {
   author: string | null;
   publishedAt: string | null;
   link: string | null;
+  filterStatus: 'pending' | 'passed' | 'filtered' | 'error';
+  isFiltered: boolean;
+  filteredBy: string[];
   isRead: boolean;
   isStarred: boolean;
   bodyTranslationEligible: boolean;
@@ -121,6 +132,7 @@ export interface ReaderSnapshotFeed {
   iconUrl: string | null;
   enabled: boolean;
   fullTextOnOpenEnabled: boolean;
+  fullTextOnFetchEnabled: boolean;
   aiSummaryOnOpenEnabled: boolean;
   aiSummaryOnFetchEnabled: boolean;
   bodyTranslateOnFetchEnabled: boolean;
@@ -158,8 +170,6 @@ const HTML_ENTITY_MAP: Record<string, string> = {
   apos: "'",
   nbsp: '\u00A0',
 };
-
-type ArticleKeywordFilter = ReturnType<typeof normalizePersistedSettings>['rss']['articleKeywordFilter'];
 
 function decodeHtmlEntities(value: string): string {
   return value.replace(/&(?:#(\d+)|#x([\da-f]+)|([a-z]+));/gi, (match, decimal, hex, named) => {
@@ -244,7 +254,7 @@ type ArticleQueryRow = ReaderSnapshotArticleItem & {
 
 async function queryArticleRows(
   pool: Pool,
-  input: { view: string; limit: number; cursor?: string | null },
+  input: { view: string; limit: number; cursor?: string | null; includeFiltered?: boolean },
 ): Promise<ArticleQueryRow[]> {
   const { whereSql, params, limit } = buildArticleFilter(input);
   const queryParams = [...params, limit + 1];
@@ -267,6 +277,9 @@ async function queryArticleRows(
         articles.author,
         articles.published_at as "publishedAt",
         articles.link,
+        articles.filter_status as "filterStatus",
+        articles.is_filtered as "isFiltered",
+        articles.filtered_by as "filteredBy",
         articles.source_language as "sourceLanguage",
         articles.content_html as "contentHtml",
         articles.content_full_html as "contentFullHtml",
@@ -313,69 +326,14 @@ async function queryArticleRows(
 
   return rows;
 }
-
-async function listVisibleArticleRows(
-  pool: Pool,
-  input: { view: string; limit: number; cursor?: string | null },
-  filterSettings: ArticleKeywordFilter,
-): Promise<{ rows: ArticleQueryRow[]; nextCursor: string | null }> {
-  const visible: ArticleQueryRow[] = [];
-  const batchLimit = Math.max(input.limit * 2, DEFAULT_LIMIT);
-  let cursor = input.cursor ?? null;
-  let nextCursor: string | null = null;
-  let iterations = 0;
-
-  while (visible.length < input.limit + 1 && iterations < 5) {
-    iterations += 1;
-    const batch = await queryArticleRows(pool, {
-      ...input,
-      cursor,
-      limit: batchLimit,
-    });
-
-    if (batch.length === 0) {
-      break;
-    }
-
-    for (const row of batch) {
-      cursor = encodeCursor({
-        publishedAt: String(row.sortPublishedAt),
-        id: row.id,
-      });
-
-      const keywords = getArticleKeywordsForFeed(filterSettings, row.feedId);
-      if (matchesArticleKeywordFilter({ title: row.title, summary: row.summary }, keywords)) {
-        continue;
-      }
-
-      visible.push(row);
-      if (visible.length === input.limit + 1) {
-        nextCursor = cursor;
-        break;
-      }
-    }
-
-    if (batch.length < batchLimit || nextCursor) {
-      break;
-    }
-  }
-
-  return {
-    rows: visible.slice(0, input.limit),
-    nextCursor,
-  };
-}
-
 export async function getReaderSnapshot(
   pool: Pool,
-  input: { view: string; limit?: number; cursor?: string | null },
+  input: { view: string; limit?: number; cursor?: string | null; includeFiltered?: boolean },
 ): Promise<ReaderSnapshot> {
-  const [categories, feeds, rawSettings] = await Promise.all([
+  const [categories, feeds] = await Promise.all([
     listCategories(pool),
     listFeeds(pool),
-    getUiSettings(pool),
   ]);
-  const settings = normalizePersistedSettings(rawSettings);
 
   const { rows: unreadRows } = await pool.query<{
     feedId: string;
@@ -383,7 +341,7 @@ export async function getReaderSnapshot(
   }>(`
     select feed_id as "feedId", count(*)::int as "unreadCount"
     from articles
-    where is_read = false
+    where is_read = false and filter_status = any('{passed,error}'::text[])
     group by feed_id
   `);
 
@@ -399,15 +357,20 @@ export async function getReaderSnapshot(
   }));
 
   const { limit } = buildArticleFilter(input);
-  const { rows, nextCursor } = await listVisibleArticleRows(
-    pool,
-    {
-      view: input.view,
-      limit,
-      cursor: input.cursor,
-    },
-    settings.rss.articleKeywordFilter,
-  );
+  const queriedRows = await queryArticleRows(pool, {
+    view: input.view,
+    limit,
+    cursor: input.cursor,
+    includeFiltered: input.includeFiltered,
+  });
+  const nextCursor =
+    queriedRows.length > limit
+      ? encodeCursor({
+          publishedAt: String(queriedRows[limit].sortPublishedAt),
+          id: queriedRows[limit].id,
+        })
+      : null;
+  const rows = queriedRows.slice(0, limit);
 
   return {
     categories,

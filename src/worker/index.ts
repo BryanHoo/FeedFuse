@@ -25,17 +25,19 @@ import { sanitizeContent } from '../server/rss/sanitizeContent';
 import { isSafeExternalUrl } from '../server/rss/ssrfGuard';
 import { fetchFulltextAndStore } from '../server/fulltext/fetchFulltextAndStore';
 import { translateSegmentsInBatches } from '../server/ai/bilingualHtmlTranslator';
+import { articleFilterJudge } from '../server/ai/articleFilterJudge';
 import { translateTitle } from '../server/ai/translateTitle';
 import { resolveTranslationConfig } from '../server/ai/translationConfig';
 import { startBoss } from '../server/queue/boss';
 import { bootstrapQueues } from '../server/queue/bootstrap';
-import { QUEUE_CONTRACTS } from '../server/queue/contracts';
+import { getQueueSendOptions, QUEUE_CONTRACTS } from '../server/queue/contracts';
 import {
   JOB_AI_DIGEST_GENERATE,
   JOB_AI_DIGEST_TICK,
   JOB_AI_SUMMARIZE,
   JOB_AI_TRANSLATE,
   JOB_AI_TRANSLATE_TITLE,
+  JOB_ARTICLE_FILTER,
   JOB_ARTICLE_FULLTEXT_FETCH,
   JOB_FEED_FETCH,
   JOB_REFRESH_ALL,
@@ -53,6 +55,7 @@ import { enqueueAutoAiTriggersOnFetch } from './autoAiTriggers';
 import { runAiSummaryStreamWorker } from './aiSummaryStreamWorker';
 import { runAiDigestTick } from './aiDigestTick';
 import { runAiDigestGenerate } from './aiDigestGenerate';
+import { runArticleFilterWorker, type ArticleFilterJobData } from './articleFilterWorker';
 import { runSystemLogCleanup } from './systemLogCleanup';
 
 const DEFAULT_TRANSLATION_MODEL = 'gpt-4o-mini';
@@ -115,6 +118,7 @@ async function fetchAndIngestFeed(boss: PgBoss, feedId: string, input?: { force?
   }
 
   const settings = await getAppSettings(pool);
+  const uiSettings = normalizePersistedSettings(await getUiSettings(pool));
   const fetchedAt = new Date();
 
   let status: number | null = null;
@@ -158,29 +162,31 @@ async function fetchAndIngestFeed(boss: PgBoss, feedId: string, input?: { force?
         previewImageUrl: item.previewImage,
         summary: item.summary,
         sourceLanguage: parsed.language,
+        filterStatus: 'pending',
+        isFiltered: false,
+        filteredBy: [],
+        filterEvaluatedAt: null,
+        filterErrorMessage: null,
       });
       if (!created) continue;
       inserted += 1;
 
-      if (feed.titleTranslateEnabled === true) {
-        await boss.send(
-          JOB_AI_TRANSLATE_TITLE,
-          { articleId: created.id },
-          {
-            singletonKey: created.id,
-            singletonSeconds: 600,
-            retryLimit: 0,
-          },
-        );
-      }
-
-      await enqueueAutoAiTriggersOnFetch(boss, {
+      const filterJob: ArticleFilterJobData = {
+        articleId: created.id,
+        articleFilter: uiSettings.rss.articleFilter,
         feed: {
+          fullTextOnFetchEnabled: feed.fullTextOnFetchEnabled,
           aiSummaryOnFetchEnabled: feed.aiSummaryOnFetchEnabled,
           bodyTranslateOnFetchEnabled: feed.bodyTranslateOnFetchEnabled,
+          titleTranslateEnabled: feed.titleTranslateEnabled,
         },
-        created,
-      });
+      };
+
+      await boss.send(
+        JOB_ARTICLE_FILTER,
+        filterJob,
+        getQueueSendOptions(JOB_ARTICLE_FILTER, { articleId: created.id }),
+      );
     }
 
     return { inserted };
@@ -286,6 +292,60 @@ async function main() {
           if (after?.contentFullError) {
             throw new Error(after.contentFullError);
           }
+        },
+      });
+    }
+  };
+
+  const articleFilterHandler = async (jobs: unknown[]) => {
+    const pool = getPool();
+    for (const job of jobs) {
+      const data =
+        typeof job === 'object' && job !== null && 'data' in job
+          ? (job as { data?: unknown }).data
+          : null;
+
+      if (typeof data !== 'object' || data === null) {
+        throw new Error('Missing article.filter job data');
+      }
+
+      const articleId =
+        'articleId' in data && typeof (data as { articleId?: unknown }).articleId === 'string'
+          ? (data as { articleId: string }).articleId
+          : null;
+      const articleFilter =
+        'articleFilter' in data && typeof (data as { articleFilter?: unknown }).articleFilter === 'object'
+          ? (data as { articleFilter: ArticleFilterJobData['articleFilter'] }).articleFilter
+          : null;
+      const feed =
+        'feed' in data && typeof (data as { feed?: unknown }).feed === 'object'
+          ? (data as { feed: ArticleFilterJobData['feed'] }).feed
+          : null;
+
+      if (!articleId || !articleFilter || !feed) {
+        throw new Error('Invalid article.filter job data');
+      }
+
+      await runArticleFilterWorker({
+        pool,
+        boss,
+        job: { articleId, articleFilter, feed },
+        judgeAi: async ({ prompt, articleText }) => {
+          const uiSettings = normalizePersistedSettings(await getUiSettings(pool));
+          const apiKey = (await getAiApiKey(pool)).trim();
+          if (!apiKey) {
+            return { ok: false, matched: false, errorMessage: 'Missing AI API key' };
+          }
+
+          const model = uiSettings.ai.model.trim() || DEFAULT_TRANSLATION_MODEL;
+          const apiBaseUrl = uiSettings.ai.apiBaseUrl.trim() || DEFAULT_TRANSLATION_API_BASE_URL;
+          return articleFilterJudge({
+            apiBaseUrl,
+            apiKey,
+            model,
+            prompt,
+            articleText,
+          });
         },
       });
     }
@@ -611,6 +671,7 @@ async function main() {
     [JOB_AI_DIGEST_TICK]: aiDigestTickHandler,
     [JOB_AI_DIGEST_GENERATE]: aiDigestGenerateHandler,
     [JOB_FEED_FETCH]: feedFetchHandler,
+    [JOB_ARTICLE_FILTER]: articleFilterHandler,
     [JOB_ARTICLE_FULLTEXT_FETCH]: fulltextHandler,
     [JOB_AI_SUMMARIZE]: aiSummaryHandler,
     [JOB_AI_TRANSLATE]: aiTranslateHandler,

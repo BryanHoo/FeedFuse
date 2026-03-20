@@ -309,6 +309,9 @@ describe('/api/articles', () => {
       publishedAt: null,
       contentHtml: null,
       summary: null,
+      filterStatus: 'filtered',
+      isFiltered: true,
+      filteredBy: ['keyword'],
       isRead: false,
       readAt: null,
       isStarred: false,
@@ -322,6 +325,9 @@ describe('/api/articles', () => {
     const json = await res.json();
     expect(json.ok).toBe(true);
     expect(json.data.id).toBe(articleId);
+    expect(json.data.filterStatus).toBe('filtered');
+    expect(json.data.isFiltered).toBe(true);
+    expect(json.data.filteredBy).toEqual(['keyword']);
   });
 
   it('GET accepts numeric route id', async () => {

@@ -1,17 +1,26 @@
 import { describe, expect, it } from 'vitest';
 
 describe('articleKeywordFilter', () => {
-  it('merges global and feed keywords for a feed', async () => {
+  it('returns global keywords only when keyword filtering is enabled', async () => {
     const mod = await import('./articleKeywordFilter');
     expect(
       mod.getArticleKeywordsForFeed(
         {
-          globalKeywords: ['Sponsored'],
-          feedKeywordsByFeedId: { 'feed-1': ['招聘'] },
+          enabled: true,
+          keywords: ['Sponsored', '招聘'],
         },
         'feed-1',
       ),
     ).toEqual(['Sponsored', '招聘']);
+    expect(
+      mod.getArticleKeywordsForFeed(
+        {
+          enabled: false,
+          keywords: ['Sponsored'],
+        },
+        'feed-1',
+      ),
+    ).toEqual([]);
   });
 
   it('matches keywords against title and summary case-insensitively', async () => {

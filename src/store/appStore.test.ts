@@ -64,6 +64,7 @@ function createSnapshotFeed(id: string, title: string, unreadCount = 1) {
     iconUrl: null,
     enabled: true,
     fullTextOnOpenEnabled: false,
+    fullTextOnFetchEnabled: false,
     aiSummaryOnOpenEnabled: false,
     aiSummaryOnFetchEnabled: false,
     bodyTranslateOnFetchEnabled: false,
@@ -91,6 +92,9 @@ function createSnapshotArticle(id: string, feedId: string, title: string) {
     author: null,
     publishedAt: '2026-03-09T10:00:00.000Z',
     link: `https://example.com/articles/${id}`,
+    filterStatus: 'passed' as const,
+    isFiltered: false,
+    filteredBy: [],
     isRead: false,
     isStarred: false,
     bodyTranslationEligible: false,
@@ -1380,6 +1384,52 @@ describe('appStore api integration', () => {
 
     expect(useAppStore.getState().selectedView).toBe('feed-2');
     expect(useAppStore.getState().articles.map((article) => article.id)).toEqual(['art-feed-2']);
+  });
+
+  it('passes includeFiltered only for the toggled feed view', async () => {
+    const snapshot = {
+      categories: [],
+      feeds: [
+        createSnapshotFeed('feed-1', 'Feed One', 2),
+        createSnapshotFeed('feed-2', 'Feed Two', 3),
+      ],
+      articles: {
+        items: [createSnapshotArticle('art-1', 'feed-1', 'Feed One Article')],
+        nextCursor: null,
+      },
+    };
+
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(getFetchCallUrl(input), 'https://example.com');
+      const method = getFetchCallMethod(input, init);
+
+      if (url.pathname === '/api/reader/snapshot' && method === 'GET') {
+        return jsonResponse({ ok: true, data: snapshot });
+      }
+
+      throw new Error(`Unexpected fetch: ${method} ${url.pathname}`);
+    });
+
+    useAppStore.setState({ selectedView: 'feed-1', selectedArticleId: null });
+    await useAppStore.getState().loadSnapshot({ view: 'feed-1' });
+
+    const firstSnapshotUrl = new URL(getFetchCallUrl(fetchMock.mock.calls[0][0]));
+    expect(firstSnapshotUrl.searchParams.get('includeFiltered')).toBeNull();
+
+    useAppStore.getState().toggleShowFilteredForFeed('feed-1');
+    await useAppStore.getState().loadSnapshot({ view: 'feed-1' });
+
+    const secondSnapshotUrl = new URL(getFetchCallUrl(fetchMock.mock.calls[1][0]));
+    expect(secondSnapshotUrl.searchParams.get('includeFiltered')).toBe('true');
+    expect(useAppStore.getState().showFilteredByFeedId['feed-1']).toBe(true);
+
+    useAppStore.getState().setSelectedView('feed-2');
+    await useAppStore.getState().loadSnapshot({ view: 'feed-2' });
+
+    const thirdSnapshotUrl = new URL(getFetchCallUrl(fetchMock.mock.calls[2][0]));
+    expect(thirdSnapshotUrl.searchParams.get('includeFiltered')).toBeNull();
+    expect(useAppStore.getState().showFilteredByFeedId['feed-1']).toBe(true);
+    expect(useAppStore.getState().showFilteredByFeedId['feed-2']).toBeUndefined();
   });
 
   it('keeps foreground articles stable when loading a background view snapshot', async () => {
