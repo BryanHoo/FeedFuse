@@ -1,131 +1,115 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { getSystemLogs } from '@/lib/apiClient';
 import type { SettingsDraft } from '../../../store/settingsStore';
-import type { LoggingRetentionDays, SystemLogItem, SystemLogLevel } from '../../../types';
+import type { LoggingRetentionDays, SystemLogLevel, SystemLogsPage } from '../../../types';
+import { LogList } from './logs/LogList';
+import { LogSearchBar } from './logs/LogSearchBar';
+import { LogsPagination } from './logs/LogsPagination';
 
 interface LogsSettingsPanelProps {
   draft: SettingsDraft;
   onChange: (updater: (draft: SettingsDraft) => void) => void;
-  initialLogs?: SystemLogItem[];
-  initialNextCursor?: string | null;
-  initialHasMore?: boolean;
+  initialLogsPage?: SystemLogsPage;
 }
 
-type LogFilterLevel = 'all' | SystemLogLevel;
-
+const LOGS_PAGE_SIZE = 20;
 const retentionDayOptions: LoggingRetentionDays[] = [1, 3, 7, 14, 30, 90];
-const levelOptions: LogFilterLevel[] = ['all', 'info', 'warning', 'error'];
+const minLevelOptions: Array<{ value: SystemLogLevel; label: string }> = [
+  { value: 'info', label: '记录全部（info 及以上）' },
+  { value: 'warning', label: '仅警告和错误（warning 及以上）' },
+  { value: 'error', label: '仅错误（error）' },
+];
 
-function formatLogTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toLocaleString('zh-CN', {
-    hour12: false,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-}
-
-function renderLogDetails(details: string | null) {
-  if (!details) {
-    return null;
-  }
-
-  return (
-    <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-md bg-muted/40 p-3 text-xs text-foreground/80">
-      {details}
-    </pre>
-  );
+function createEmptyLogsPage(page = 1, pageSize = LOGS_PAGE_SIZE): SystemLogsPage {
+  return {
+    items: [],
+    page,
+    pageSize,
+    total: 0,
+    hasPreviousPage: page > 1,
+    hasNextPage: false,
+  };
 }
 
 export default function LogsSettingsPanel({
   draft,
   onChange,
-  initialLogs,
-  initialNextCursor = null,
-  initialHasMore = false,
+  initialLogsPage,
 }: LogsSettingsPanelProps) {
   const logging = draft.persisted.logging;
-  const [level, setLevel] = useState<LogFilterLevel>('all');
-  const [items, setItems] = useState<SystemLogItem[]>(() => initialLogs ?? []);
-  const [nextCursor, setNextCursor] = useState<string | null>(initialNextCursor);
-  const [hasMore, setHasMore] = useState(initialHasMore);
-  const [loading, setLoading] = useState(initialLogs === undefined);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [logsPage, setLogsPage] = useState<SystemLogsPage>(() => initialLogsPage ?? createEmptyLogsPage());
+  const [keywordInput, setKeywordInput] = useState('');
+  const [keyword, setKeyword] = useState('');
+  const [page, setPage] = useState(initialLogsPage?.page ?? 1);
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(initialLogsPage === undefined);
   const [loadError, setLoadError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
+  const skipInitialLoadRef = useRef(initialLogsPage !== undefined);
 
-  async function loadLogs(input: {
-    level: LogFilterLevel;
-    before: string | null;
-    append: boolean;
-  }) {
+  async function loadLogs(input: { keyword?: string; page: number }) {
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
-
-    if (input.append) {
-      setLoadingMore(true);
-    } else {
-      setLoading(true);
-      setItems([]);
-      setNextCursor(null);
-      setHasMore(false);
-    }
+    setLoading(true);
     setLoadError(null);
+    setLogsPage(createEmptyLogsPage(input.page));
 
     try {
       const data = await getSystemLogs({
-        level: input.level === 'all' ? undefined : input.level,
-        before: input.before,
-        limit: 50,
+        keyword: input.keyword,
+        page: input.page,
+        pageSize: LOGS_PAGE_SIZE,
       });
 
       if (requestId !== requestIdRef.current) {
         return;
       }
 
-      setItems((current) => (input.append ? [...current, ...data.items] : data.items));
-      setNextCursor(data.nextCursor);
-      setHasMore(data.hasMore);
+      setLogsPage(data);
     } catch (err) {
       if (requestId !== requestIdRef.current) {
         return;
       }
 
       setLoadError(err instanceof Error ? err.message : '加载日志失败');
-      if (!input.append) {
-        setItems([]);
-        setNextCursor(null);
-        setHasMore(false);
-      }
+      setLogsPage(createEmptyLogsPage(input.page));
     } finally {
       if (requestId === requestIdRef.current) {
         setLoading(false);
-        setLoadingMore(false);
       }
     }
   }
 
   useEffect(() => {
-    if (initialLogs !== undefined) {
+    const nextKeyword = keywordInput.trim();
+    if (nextKeyword === keyword) {
       return;
     }
 
-    void loadLogs({ level: 'all', before: null, append: false });
-  }, [initialLogs]);
+    const timer = window.setTimeout(() => {
+      setKeyword(nextKeyword);
+      setPage(1);
+      setExpandedLogId(null);
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [keywordInput, keyword]);
+
+  useEffect(() => {
+    if (skipInitialLoadRef.current) {
+      skipInitialLoadRef.current = false;
+      return;
+    }
+
+    void loadLogs({ keyword: keyword || undefined, page });
+  }, [keyword, page]);
+
+  const totalPages = logsPage.total > 0 ? Math.ceil(logsPage.total / logsPage.pageSize) : 0;
 
   return (
-    <section className="space-y-4">
+    <section className="flex h-full min-h-0 flex-col gap-4">
       <div className="overflow-hidden rounded-lg border border-border bg-background">
         <div className="flex flex-col divide-y divide-border">
           <div className="flex items-center justify-between gap-4 px-4 py-3.5">
@@ -176,96 +160,95 @@ export default function LogsSettingsPanel({
               </Select>
             </div>
           </div>
-        </div>
-      </div>
 
-      <div className="overflow-hidden rounded-lg border border-border bg-background">
-        <div className="border-b border-border px-4 py-3.5">
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center justify-between gap-4 px-4 py-3.5">
             <div>
-              <p className="text-sm font-medium text-foreground">日志记录</p>
-              <p className="text-xs text-muted-foreground">按等级筛选最近的系统日志</p>
+              <p className="text-sm font-medium text-foreground">记录类型</p>
+              <p className="text-xs text-muted-foreground">控制写入数据库的最低日志等级</p>
             </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {levelOptions.map((option) => (
-                <Button
-                  key={option}
-                  type="button"
-                  size="compact"
-                  variant={level === option ? 'default' : 'outline'}
-                  className="min-w-14 px-3 lowercase"
-                  onClick={() => {
-                    setLevel(option);
-                    void loadLogs({ level: option, before: null, append: false });
-                  }}
-                >
-                  {option}
-                </Button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-3 px-4 py-3.5">
-          {loading ? (
-            <p className="text-sm text-muted-foreground">日志加载中…</p>
-          ) : null}
-
-          {!loading && loadError ? (
-            <p className="text-sm text-destructive">{loadError}</p>
-          ) : null}
-
-          {!loading && !loadError && items.length === 0 ? (
-            <p className="text-sm text-muted-foreground">暂无日志</p>
-          ) : null}
-
-          {items.map((item) => (
-            <article
-              key={item.id}
-              className="rounded-lg border border-border/70 bg-muted/20 p-3.5"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-foreground">{item.message}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {item.level} · {item.category} · {item.source}
-                  </p>
-                </div>
-                <time className="shrink-0 text-xs text-muted-foreground">
-                  {formatLogTime(item.createdAt)}
-                </time>
-              </div>
-
-              {Object.keys(item.context).length > 0 ? (
-                <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-all rounded-md bg-muted/40 p-3 text-xs text-foreground/80">
-                  {JSON.stringify(item.context, null, 2)}
-                </pre>
-              ) : null}
-
-              {item.details ? <div className="mt-3">{renderLogDetails(item.details)}</div> : null}
-            </article>
-          ))}
-
-          {!loading && hasMore ? (
-            <div className="flex justify-center pt-1">
-              <Button
-                type="button"
-                variant="outline"
-                size="compact"
-                disabled={loadingMore || !nextCursor}
-                onClick={() => {
-                  if (!nextCursor) {
+            <div className="w-[220px]">
+              <Select
+                value={logging.minLevel}
+                onValueChange={(value) => {
+                  const next = value as SystemLogLevel;
+                  if (!minLevelOptions.some((option) => option.value === next)) {
                     return;
                   }
 
-                  void loadLogs({ level, before: nextCursor, append: true });
+                  onChange((nextDraft) => {
+                    nextDraft.persisted.logging.minLevel = next;
+                  });
                 }}
               >
-                {loadingMore ? '加载中…' : '加载更多'}
-              </Button>
+                <SelectTrigger className="h-8" aria-label="日志记录类型">
+                  <SelectValue placeholder="选择记录类型" />
+                </SelectTrigger>
+                <SelectContent>
+                  {minLevelOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          ) : null}
+          </div>
         </div>
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-background">
+        <div className="border-b border-border px-4 py-3.5">
+          <div className="space-y-1.5">
+            <p className="text-sm font-medium text-foreground">日志记录</p>
+            <p className="text-xs text-muted-foreground">按关键词搜索摘要字段，并在固定页中浏览日志详情</p>
+          </div>
+        </div>
+
+        <div className="border-b border-border px-4 py-3.5">
+          <LogSearchBar
+            keyword={keywordInput}
+            total={logsPage.total}
+            page={logsPage.page}
+            totalPages={totalPages}
+            onKeywordChange={setKeywordInput}
+          />
+        </div>
+
+        <LogList
+          items={logsPage.items}
+          keyword={keyword}
+          loading={loading}
+          loadError={loadError}
+          expandedLogId={expandedLogId}
+          onToggleExpand={(id) => {
+            setExpandedLogId((current) => (current === id ? null : id));
+          }}
+        />
+
+        {!loading && !loadError && logsPage.total > 0 ? (
+          <div className="border-t border-border px-4 py-3.5">
+            <LogsPagination
+              page={logsPage.page}
+              totalPages={totalPages}
+              onPrevious={() => {
+                if (!logsPage.hasPreviousPage) {
+                  return;
+                }
+
+                setExpandedLogId(null);
+                setPage((current) => Math.max(1, current - 1));
+              }}
+              onNext={() => {
+                if (!logsPage.hasNextPage) {
+                  return;
+                }
+
+                setExpandedLogId(null);
+                setPage((current) => current + 1);
+              }}
+            />
+          </div>
+        ) : null}
       </div>
     </section>
   );

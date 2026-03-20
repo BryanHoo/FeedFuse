@@ -314,12 +314,12 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
                     </TabsList>
                   </aside>
 
-                  <div className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-5 md:px-6 md:py-6">
-                    <div className="w-full">
-                      <TabsContent value="general" className="mt-0">
+                  <div className="min-h-0 min-w-0 flex-1 px-4 py-5 md:px-6 md:py-6">
+                    <div className="flex h-full min-h-0 w-full flex-col">
+                      <TabsContent value="general" className="mt-0 h-full overflow-y-auto">
                         <GeneralSettingsPanel draft={draft} onChange={handleDraftChange} />
                       </TabsContent>
-                      <TabsContent value="rss" className="mt-0">
+                      <TabsContent value="rss" className="mt-0 h-full overflow-y-auto">
                         <RssSettingsPanel
                           draft={draft}
                           onChange={handleDraftChange}
@@ -330,10 +330,10 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
                           onOpmlExport={handleOpmlExport}
                         />
                       </TabsContent>
-                      <TabsContent value="ai" className="mt-0">
+                      <TabsContent value="ai" className="mt-0 h-full overflow-y-auto">
                         <AISettingsPanel draft={draft} onChange={handleDraftChange} errors={validationErrors} />
                       </TabsContent>
-                      <TabsContent value="logging" className="mt-0">
+                      <TabsContent value="logging" className="mt-0 h-full min-h-0">
                         <LogsSettingsPanel draft={draft} onChange={handleDraftChange} />
                       </TabsContent>
                     </div>

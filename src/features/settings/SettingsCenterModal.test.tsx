@@ -213,8 +213,11 @@ describe('SettingsCenterModal', () => {
               ok: true,
               data: {
                 items: [],
-                nextCursor: null,
-                hasMore: false,
+                page: 1,
+                pageSize: 20,
+                total: 0,
+                hasPreviousPage: false,
+                hasNextPage: false,
               },
             }),
             {
