@@ -55,6 +55,7 @@ const defaultRssSettings: RssSettings = {
 const defaultLoggingSettings: LoggingSettings = {
   enabled: false,
   retentionDays: 7,
+  minLevel: 'info',
 };
 
 export const defaultPersistedSettings: PersistedSettings = {
@@ -241,6 +242,11 @@ function normalizeLoggingSettings(input: Record<string, unknown>): LoggingSettin
       loggingInput.retentionDays,
       [1, 3, 7, 14, 30, 90] as const,
       defaultLoggingSettings.retentionDays,
+    ),
+    minLevel: readEnum(
+      loggingInput.minLevel,
+      ['info', 'warning', 'error'] as const,
+      defaultLoggingSettings.minLevel,
     ),
   };
 }

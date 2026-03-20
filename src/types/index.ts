@@ -149,6 +149,7 @@ export type SystemLogCategory =
 export interface LoggingSettings {
   enabled: boolean;
   retentionDays: LoggingRetentionDays;
+  minLevel: SystemLogLevel;
 }
 
 export interface SystemLogItem {

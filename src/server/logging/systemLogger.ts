@@ -9,6 +9,16 @@ import {
 
 type Queryable = Pool | PoolClient;
 
+const logLevelWeight: Record<SystemLogLevel, number> = {
+  info: 1,
+  warning: 2,
+  error: 3,
+};
+
+function meetsMinimumLevel(minLevel: SystemLogLevel, level: SystemLogLevel) {
+  return logLevelWeight[level] >= logLevelWeight[minLevel];
+}
+
 export interface WriteSystemLogInput {
   level: SystemLogLevel;
   category: SystemLogCategory;
@@ -28,6 +38,10 @@ export async function writeSystemLog(
     normalizePersistedSettings(await getUiSettings(pool)).logging;
 
   if (!logging.enabled && !options?.forceWrite) {
+    return { written: false };
+  }
+
+  if (!options?.forceWrite && !meetsMinimumLevel(logging.minLevel, input.level)) {
     return { written: false };
   }
 

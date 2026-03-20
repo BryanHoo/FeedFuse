@@ -74,7 +74,10 @@ describe('/api/settings', () => {
   it('PUT updates all feeds when rss.fetchIntervalMinutes changes', async () => {
     getUiSettingsMock.mockResolvedValue({ rss: { fetchIntervalMinutes: 30 } });
 
-    const payload = { rss: { fetchIntervalMinutes: 60 }, logging: { enabled: true, retentionDays: 14 } };
+    const payload = {
+      rss: { fetchIntervalMinutes: 60 },
+      logging: { enabled: true, retentionDays: 14, minLevel: 'warning' },
+    };
     const normalized = normalizePersistedSettings(payload);
     updateUiSettingsMock.mockResolvedValue(normalized);
 
@@ -92,7 +95,7 @@ describe('/api/settings', () => {
     expect(updateAllFeedsFetchIntervalMinutesMock).toHaveBeenCalledWith(client, 60);
     expect(json.ok).toBe(true);
     expect(json.data.rss.fetchIntervalMinutes).toBe(60);
-    expect(json.data.logging).toEqual({ enabled: true, retentionDays: 14 });
+    expect(json.data.logging).toEqual({ enabled: true, retentionDays: 14, minLevel: 'warning' });
   });
 
   it('PUT does not update all feeds when only general.theme changes', async () => {
@@ -119,9 +122,9 @@ describe('/api/settings', () => {
   });
 
   it('writes Logging enabled when settings save turns logging on', async () => {
-    getUiSettingsMock.mockResolvedValue({ logging: { enabled: false, retentionDays: 7 } });
+    getUiSettingsMock.mockResolvedValue({ logging: { enabled: false, retentionDays: 7, minLevel: 'info' } });
     updateUiSettingsMock.mockResolvedValue(
-      normalizePersistedSettings({ logging: { enabled: true, retentionDays: 7 } }),
+      normalizePersistedSettings({ logging: { enabled: true, retentionDays: 7, minLevel: 'info' } }),
     );
 
     const mod = await import('./route');
@@ -129,7 +132,7 @@ describe('/api/settings', () => {
       new Request('http://localhost/api/settings', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ logging: { enabled: true, retentionDays: 7 } }),
+        body: JSON.stringify({ logging: { enabled: true, retentionDays: 7, minLevel: 'info' } }),
       }),
     );
 
@@ -141,9 +144,9 @@ describe('/api/settings', () => {
   });
 
   it('writes Logging disabled as the last forced boundary log when settings save turns logging off', async () => {
-    getUiSettingsMock.mockResolvedValue({ logging: { enabled: true, retentionDays: 7 } });
+    getUiSettingsMock.mockResolvedValue({ logging: { enabled: true, retentionDays: 7, minLevel: 'info' } });
     updateUiSettingsMock.mockResolvedValue(
-      normalizePersistedSettings({ logging: { enabled: false, retentionDays: 7 } }),
+      normalizePersistedSettings({ logging: { enabled: false, retentionDays: 7, minLevel: 'info' } }),
     );
 
     const mod = await import('./route');
@@ -151,7 +154,7 @@ describe('/api/settings', () => {
       new Request('http://localhost/api/settings', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ logging: { enabled: false, retentionDays: 7 } }),
+        body: JSON.stringify({ logging: { enabled: false, retentionDays: 7, minLevel: 'info' } }),
       }),
     );
 
@@ -163,9 +166,9 @@ describe('/api/settings', () => {
   });
 
   it('records retentionDays changes only while logging stays enabled', async () => {
-    getUiSettingsMock.mockResolvedValue({ logging: { enabled: true, retentionDays: 7 } });
+    getUiSettingsMock.mockResolvedValue({ logging: { enabled: true, retentionDays: 7, minLevel: 'info' } });
     updateUiSettingsMock.mockResolvedValue(
-      normalizePersistedSettings({ logging: { enabled: true, retentionDays: 30 } }),
+      normalizePersistedSettings({ logging: { enabled: true, retentionDays: 30, minLevel: 'info' } }),
     );
 
     const mod = await import('./route');
@@ -173,7 +176,7 @@ describe('/api/settings', () => {
       new Request('http://localhost/api/settings', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ logging: { enabled: true, retentionDays: 30 } }),
+        body: JSON.stringify({ logging: { enabled: true, retentionDays: 30, minLevel: 'info' } }),
       }),
     );
 
@@ -188,9 +191,9 @@ describe('/api/settings', () => {
   });
 
   it('does not write retentionDays change logs while logging remains disabled', async () => {
-    getUiSettingsMock.mockResolvedValue({ logging: { enabled: false, retentionDays: 7 } });
+    getUiSettingsMock.mockResolvedValue({ logging: { enabled: false, retentionDays: 7, minLevel: 'info' } });
     updateUiSettingsMock.mockResolvedValue(
-      normalizePersistedSettings({ logging: { enabled: false, retentionDays: 30 } }),
+      normalizePersistedSettings({ logging: { enabled: false, retentionDays: 30, minLevel: 'info' } }),
     );
 
     const mod = await import('./route');
@@ -198,7 +201,7 @@ describe('/api/settings', () => {
       new Request('http://localhost/api/settings', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ logging: { enabled: false, retentionDays: 30 } }),
+        body: JSON.stringify({ logging: { enabled: false, retentionDays: 30, minLevel: 'info' } }),
       }),
     );
 

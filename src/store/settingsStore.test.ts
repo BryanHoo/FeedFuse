@@ -186,10 +186,13 @@ describe('settingsStore', () => {
     useSettingsStore.getState().updateDraft((draft) => {
       draft.persisted.logging.enabled = true;
       draft.persisted.logging.retentionDays = 14;
+      draft.persisted.logging.minLevel = 'warning';
     });
 
     await useSettingsStore.getState().saveDraft();
-    expect(lastSettingsPutBodyText).toContain('"logging":{"enabled":true,"retentionDays":14}');
+    expect(lastSettingsPutBodyText).toContain(
+      '"logging":{"enabled":true,"retentionDays":14,"minLevel":"warning"}',
+    );
   });
 
   it('hydrates hasApiKey from backend', async () => {
