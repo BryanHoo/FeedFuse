@@ -12,7 +12,7 @@ export function LogSearchBar(props: LogSearchBarProps) {
         aria-label="搜索日志"
         value={props.keyword}
         onChange={(event) => props.onKeywordChange(event.target.value)}
-        placeholder="搜索 message、source、category"
+        placeholder="例如：message、source 或 category…"
       />
     </div>
   );

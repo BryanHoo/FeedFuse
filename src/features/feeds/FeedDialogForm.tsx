@@ -104,7 +104,7 @@ export default function FeedDialogForm({
               value={url}
               onChange={(event) => onUrlChange(event.target.value)}
               onBlur={(event) => onUrlBlur(event.currentTarget.value)}
-              placeholder="https://example.com/feed.xml"
+              placeholder="例如：https://example.com/feed.xml…"
               aria-invalid={urlFieldError ? 'true' : 'false'}
               aria-describedby={urlMessageId}
               aria-errormessage={urlFieldError ? urlMessageId : undefined}
@@ -139,7 +139,7 @@ export default function FeedDialogForm({
               value={title}
               onChange={(event) => onTitleChange(event.target.value)}
               onBlur={onTitleBlur}
-              placeholder="例如：The Verge"
+              placeholder="例如：The Verge…"
               aria-invalid={titleFieldError ? 'true' : 'false'}
               aria-describedby={titleFieldError ? titleMessageId : undefined}
               aria-errormessage={titleFieldError ? titleMessageId : undefined}

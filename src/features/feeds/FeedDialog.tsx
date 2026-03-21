@@ -79,8 +79,8 @@ const MODE_META: Record<FeedDialogMode, ModeMeta> = {
     dialogTitle: '添加 RSS 源',
     dialogDescription: '输入 RSS 地址后，我们会自动验证链接，并尽量补全订阅名称。',
     sectionLabel: '订阅信息',
-    submitLabel: '添加',
-    submittingLabel: '添加中…',
+    submitLabel: '添加订阅源',
+    submittingLabel: '正在添加订阅源…',
     successMessage: '已添加订阅源',
   },
   edit: {
@@ -88,8 +88,8 @@ const MODE_META: Record<FeedDialogMode, ModeMeta> = {
     dialogTitle: '编辑 RSS 源',
     dialogDescription: '修改订阅地址、名称或分类。保存后不会影响已有文章。',
     sectionLabel: '订阅信息',
-    submitLabel: '保存',
-    submittingLabel: '保存中…',
+    submitLabel: '保存订阅源',
+    submittingLabel: '正在保存订阅源…',
     successMessage: '订阅源已更新',
   },
 };

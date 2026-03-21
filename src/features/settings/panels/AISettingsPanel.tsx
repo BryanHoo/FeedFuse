@@ -61,7 +61,7 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
                   nextDraft.persisted.ai.model = event.target.value;
                 })
               }
-              placeholder="例如：gpt-4o-mini"
+              placeholder="例如：gpt-4o-mini…"
             />
           </div>
 
@@ -82,7 +82,7 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
                   nextDraft.persisted.ai.apiBaseUrl = event.target.value;
                 })
               }
-              placeholder="https://api.openai.com/v1"
+              placeholder="例如：https://api.openai.com/v1…"
             />
             {errors['ai.apiBaseUrl'] ? (
               <p className="mt-1.5 text-xs text-destructive">{errors['ai.apiBaseUrl']}</p>
@@ -113,13 +113,13 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
                   nextDraft.session.ai.clearApiKey = false;
                 })
               }
-              placeholder="sk-…"
+              placeholder="例如：sk-…"
             />
             <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs text-muted-foreground">
                 {hasApiKey
-                  ? '不修改可留空；如需删除已保存的密钥，请点右侧按钮。'
-                  : '如果暂时不设置，可以先留空。'}
+                  ? '保留当前密钥可留空；如需删除，请点击“删除已保存的密钥”。'
+                  : '暂不设置可留空，稍后再补充。'}
               </p>
               {hasApiKey ? (
                 <Button
@@ -137,7 +137,7 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
                     })
                   }
                 >
-                  {clearApiKey ? '撤销清除' : '清除已保存密钥'}
+                  {clearApiKey ? '保留已保存的密钥' : '删除已保存的密钥'}
                 </Button>
               ) : null}
             </div>
@@ -209,7 +209,7 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
                       nextDraft.persisted.ai.translation.model = event.target.value;
                     })
                   }
-                  placeholder="例如：gpt-4o-mini"
+                  placeholder="例如：gpt-4o-mini…"
                 />
               </div>
 
@@ -230,7 +230,7 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
                       nextDraft.persisted.ai.translation.apiBaseUrl = event.target.value;
                     })
                   }
-                  placeholder="https://api.openai.com/v1"
+                  placeholder="例如：https://api.openai.com/v1…"
                 />
                 {errors['ai.translation.apiBaseUrl'] ? (
                   <p className="mt-1.5 text-xs text-destructive">{errors['ai.translation.apiBaseUrl']}</p>
@@ -261,13 +261,13 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
                       nextDraft.session.ai.clearTranslationApiKey = false;
                     })
                   }
-                  placeholder="sk-…"
+                  placeholder="例如：sk-…"
                 />
                 <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-xs text-muted-foreground">
                     {hasTranslationApiKey
-                      ? '不修改可留空；如需删除已保存的翻译密钥，请点右侧按钮。'
-                      : '如果暂时不设置，可以先留空。'}
+                      ? '保留当前翻译密钥可留空；如需删除，请点击“删除已保存的翻译密钥”。'
+                      : '暂不设置可留空，稍后再补充。'}
                   </p>
                   {hasTranslationApiKey ? (
                     <Button
@@ -285,7 +285,7 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
                         })
                       }
                     >
-                      {clearTranslationApiKey ? '撤销清除' : '清除已保存密钥'}
+                      {clearTranslationApiKey ? '保留已保存的翻译密钥' : '删除已保存的翻译密钥'}
                     </Button>
                   ) : null}
                 </div>

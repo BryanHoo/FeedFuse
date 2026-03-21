@@ -501,7 +501,7 @@ describe('FeedList manage', () => {
     expect(await screen.findByRole('dialog', { name: '编辑 RSS 源' })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('名称'), { target: { value: 'My Feed Updated' } });
-    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存订阅源' }));
 
     await waitFor(() => {
       expect(useAppStore.getState().feeds[0]?.title).toBe('My Feed Updated');
@@ -1412,7 +1412,7 @@ describe('FeedList manage', () => {
     fireEvent.click(await screen.findByRole('menuitem', { name: '编辑' }));
     expect(await screen.findByRole('dialog', { name: '编辑 RSS 源' })).toBeInTheDocument();
 
-    const saveButton = screen.getByRole('button', { name: '保存' });
+    const saveButton = screen.getByRole('button', { name: '保存订阅源' });
     const urlInput = screen.getByLabelText('URL');
     fireEvent.change(urlInput, {
       target: { value: 'https://changed.example.com/rss.xml' },
@@ -1445,7 +1445,7 @@ describe('FeedList manage', () => {
       expect(titleInput).toHaveValue('Validated Feed Title');
     });
 
-    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存订阅源' }));
 
     await waitFor(() => {
       expect(useAppStore.getState().feeds[0].title).toBe('Validated Feed Title');

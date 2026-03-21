@@ -230,7 +230,7 @@ describe('AddFeedDialog', () => {
   it('disables submit until title and url are filled', async () => {
     renderWithNotifications();
     await openAddFeedDialog();
-    expect(screen.getByRole('button', { name: '添加' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '添加订阅源' })).toBeDisabled();
   });
 
   it('autofocuses url input on open', async () => {
@@ -297,18 +297,18 @@ describe('AddFeedDialog', () => {
     renderWithNotifications();
     await openAddFeedDialog();
 
-    fireEvent.change(screen.getByPlaceholderText('例如：The Verge'), { target: { value: 'My Feed' } });
-    const urlInput = screen.getByPlaceholderText('https://example.com/feed.xml');
+    fireEvent.change(screen.getByLabelText('名称'), { target: { value: 'My Feed' } });
+    const urlInput = screen.getByLabelText('URL');
     fireEvent.change(urlInput, {
       target: { value: 'https://example.com/success.xml' },
     });
     fireEvent.blur(urlInput);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: '添加' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: '添加订阅源' })).toBeEnabled();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: '添加' }));
+    fireEvent.click(screen.getByRole('button', { name: '添加订阅源' }));
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: '添加 RSS 源' })).not.toBeInTheDocument();
     });
@@ -327,18 +327,18 @@ describe('AddFeedDialog', () => {
     renderWithNotifications();
     await openAddFeedDialog();
 
-    fireEvent.change(screen.getByPlaceholderText('例如：The Verge'), { target: { value: 'My Feed' } });
-    const urlInput = screen.getByPlaceholderText('https://example.com/feed.xml');
+    fireEvent.change(screen.getByLabelText('名称'), { target: { value: 'My Feed' } });
+    const urlInput = screen.getByLabelText('URL');
     fireEvent.change(urlInput, {
       target: { value: 'https://example.com/success.xml' },
     });
     fireEvent.blur(urlInput);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: '添加' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: '添加订阅源' })).toBeEnabled();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: '添加' }));
+    fireEvent.click(screen.getByRole('button', { name: '添加订阅源' }));
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: '添加 RSS 源' })).not.toBeInTheDocument();
     });
@@ -351,16 +351,16 @@ describe('AddFeedDialog', () => {
     renderWithNotifications();
     await openAddFeedDialog();
 
-    fireEvent.change(screen.getByPlaceholderText('例如：The Verge'), { target: { value: 'Base Feed' } });
-    const urlInput = screen.getByPlaceholderText('https://example.com/feed.xml');
+    fireEvent.change(screen.getByLabelText('名称'), { target: { value: 'Base Feed' } });
+    const urlInput = screen.getByLabelText('URL');
     fireEvent.change(urlInput, { target: { value: 'https://example.com/success.xml' } });
     fireEvent.blur(urlInput);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: '添加' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: '添加订阅源' })).toBeEnabled();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: '添加' }));
+    fireEvent.click(screen.getByRole('button', { name: '添加订阅源' }));
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: '添加 RSS 源' })).not.toBeInTheDocument();
     });
@@ -377,13 +377,13 @@ describe('AddFeedDialog', () => {
     renderWithNotifications();
     await openAddFeedDialog();
 
-    fireEvent.change(screen.getByPlaceholderText('例如：The Verge'), { target: { value: 'My Feed' } });
-    const urlInput = screen.getByPlaceholderText('https://example.com/feed.xml');
+    fireEvent.change(screen.getByLabelText('名称'), { target: { value: 'My Feed' } });
+    const urlInput = screen.getByLabelText('URL');
     fireEvent.change(urlInput, {
       target: { value: 'https://example.com/success.xml' },
     });
 
-    const submitButton = screen.getByRole('button', { name: '添加' });
+    const submitButton = screen.getByRole('button', { name: '添加订阅源' });
     expect(submitButton).toBeDisabled();
 
     fireEvent.blur(urlInput);
@@ -415,7 +415,7 @@ describe('AddFeedDialog', () => {
       expect(screen.getByText('验证失败')).toBeInTheDocument();
       expect(screen.getByText('暂时无法验证该链接，请检查后重试。')).toBeInTheDocument();
       expect(screen.getByLabelText('URL')).toHaveAttribute('aria-invalid', 'true');
-      expect(screen.getByRole('button', { name: '添加' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: '添加订阅源' })).toBeDisabled();
     });
   });
 
@@ -451,10 +451,10 @@ describe('AddFeedDialog', () => {
     fireEvent.blur(urlInput);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: '添加' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: '添加订阅源' })).toBeEnabled();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: '添加' }));
+    fireEvent.click(screen.getByRole('button', { name: '添加订阅源' }));
 
     const dialog = screen.getByRole('dialog', { name: '添加 RSS 源' });
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('订阅源已存在');
@@ -465,8 +465,8 @@ describe('AddFeedDialog', () => {
     renderWithNotifications();
     await openAddFeedDialog();
 
-    fireEvent.change(screen.getByPlaceholderText('例如：The Verge'), { target: { value: 'Category Id Feed' } });
-    const urlInput = screen.getByPlaceholderText('https://example.com/feed.xml');
+    fireEvent.change(screen.getByLabelText('名称'), { target: { value: 'Category Id Feed' } });
+    const urlInput = screen.getByLabelText('URL');
     fireEvent.change(urlInput, {
       target: { value: 'https://example.com/success.xml' },
     });
@@ -479,11 +479,11 @@ describe('AddFeedDialog', () => {
     fireEvent.blur(urlInput);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: '添加' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: '添加订阅源' })).toBeEnabled();
     });
 
     const feedCountBefore = useAppStore.getState().feeds.length;
-    fireEvent.click(screen.getByRole('button', { name: '添加' }));
+    fireEvent.click(screen.getByRole('button', { name: '添加订阅源' }));
 
     await waitFor(() => {
       expect(useAppStore.getState().feeds.length).toBe(feedCountBefore + 1);
@@ -508,10 +508,10 @@ describe('AddFeedDialog', () => {
     fireEvent.blur(urlInput);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: '添加' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: '添加订阅源' })).toBeEnabled();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: '添加' }));
+    fireEvent.click(screen.getByRole('button', { name: '添加订阅源' }));
 
     await waitFor(() => {
       expect(lastCreateFeedBody).toMatchObject({ categoryName: '新分类' });
@@ -532,10 +532,10 @@ describe('AddFeedDialog', () => {
     fireEvent.blur(urlInput);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: '添加' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: '添加订阅源' })).toBeEnabled();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: '添加' }));
+    fireEvent.click(screen.getByRole('button', { name: '添加订阅源' }));
 
     await waitFor(() => {
       expect(lastCreateFeedBody).toMatchObject({ categoryId: 'cat-tech' });
@@ -572,18 +572,18 @@ describe('AddFeedDialog', () => {
     renderWithNotifications();
     await openAddFeedDialog();
 
-    fireEvent.change(screen.getByPlaceholderText('例如：The Verge'), { target: { value: 'Notify Feed' } });
-    const urlInput = screen.getByPlaceholderText('https://example.com/feed.xml');
+    fireEvent.change(screen.getByLabelText('名称'), { target: { value: 'Notify Feed' } });
+    const urlInput = screen.getByLabelText('URL');
     fireEvent.change(urlInput, {
       target: { value: 'https://example.com/success.xml' },
     });
     fireEvent.blur(urlInput);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: '添加' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: '添加订阅源' })).toBeEnabled();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: '添加' }));
+    fireEvent.click(screen.getByRole('button', { name: '添加订阅源' }));
 
     await waitFor(() => {
       expect(screen.getByText('已添加订阅源')).toBeInTheDocument();
@@ -614,18 +614,18 @@ describe('AddFeedDialog', () => {
     renderWithNotifications();
     await openAddFeedDialog();
 
-    fireEvent.change(screen.getByPlaceholderText('例如：The Verge'), { target: { value: 'Notify Feed' } });
-    const urlInput = screen.getByPlaceholderText('https://example.com/feed.xml');
+    fireEvent.change(screen.getByLabelText('名称'), { target: { value: 'Notify Feed' } });
+    const urlInput = screen.getByLabelText('URL');
     fireEvent.change(urlInput, {
       target: { value: 'https://example.com/success.xml' },
     });
     fireEvent.blur(urlInput);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: '添加' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: '添加订阅源' })).toBeEnabled();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: '添加' }));
+    fireEvent.click(screen.getByRole('button', { name: '添加订阅源' }));
 
     expect(await within(screen.getByTestId('notification-viewport')).findByText('订阅源已存在')).toBeInTheDocument();
     expect(screen.queryByText('操作失败：数据已存在。')).not.toBeInTheDocument();
