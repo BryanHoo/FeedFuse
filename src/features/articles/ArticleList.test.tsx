@@ -142,6 +142,29 @@ describe('ArticleList', () => {
     );
   }
 
+  function getScrollContainer(container: HTMLElement) {
+    const element = container.querySelector('.overflow-y-auto');
+    if (!(element instanceof HTMLDivElement)) {
+      throw new Error('Scroll container not found');
+    }
+    return element;
+  }
+
+  function createSeedArticles(count: number) {
+    return Array.from({ length: count }, (_, index) => ({
+      id: `article-${index}`,
+      feedId: 'feed-1',
+      title: `Article ${index}`,
+      content: '',
+      summary: `Summary ${index}`,
+      previewImage: `https://example.com/${index}.jpg`,
+      publishedAt: new Date(Date.UTC(2026, 1, 25, 0, count - index, 0)).toISOString(),
+      link: `https://example.com/${index}`,
+      isRead: false,
+      isStarred: false,
+    }));
+  }
+
   beforeEach(async () => {
     vi.resetModules();
     fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -425,6 +448,170 @@ describe('ArticleList', () => {
 
     expect(firstButton).toHaveFocus();
     expect(useAppStore.getState().selectedArticleId).toBe('art-1');
+  });
+
+  it('loads next page when scrolling near the bottom', async () => {
+    const loadMoreSnapshotMock = vi.fn().mockResolvedValue(undefined);
+    useAppStore.setState({
+      selectedView: 'feed-1',
+      showUnreadOnly: false,
+      selectedArticleId: 'art-1',
+      articleListHasMore: true,
+      articleListLoadingMore: false,
+      articleListLoadMoreError: false,
+      articleListNextCursor: 'cursor-1',
+      loadMoreSnapshot: loadMoreSnapshotMock,
+    });
+
+    const { container } = renderWithNotifications();
+    const scrollContainer = getScrollContainer(container);
+
+    Object.defineProperty(scrollContainer, 'clientHeight', {
+      configurable: true,
+      value: 400,
+    });
+    Object.defineProperty(scrollContainer, 'scrollHeight', {
+      configurable: true,
+      value: 1200,
+    });
+
+    fireEvent.scroll(scrollContainer, { target: { scrollTop: 900 } });
+
+    await waitFor(() => {
+      expect(loadMoreSnapshotMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('renders only the visible virtual card rows instead of the full article set', () => {
+    useAppStore.setState({
+      selectedView: 'feed-1',
+      showUnreadOnly: false,
+      selectedArticleId: 'article-0',
+      articles: createSeedArticles(120),
+    });
+
+    const { container } = renderWithNotifications();
+    const scrollContainer = getScrollContainer(container);
+
+    Object.defineProperty(scrollContainer, 'clientHeight', {
+      configurable: true,
+      value: 520,
+    });
+
+    expect(screen.getByTestId('article-card-article-0-title')).toBeInTheDocument();
+    expect(screen.queryByTestId('article-card-article-119-title')).not.toBeInTheDocument();
+  });
+
+  it('renders only the visible virtual list rows in list mode', async () => {
+    useAppStore.setState({
+      selectedView: 'feed-1',
+      showUnreadOnly: false,
+      selectedArticleId: 'article-0',
+      articles: createSeedArticles(120),
+      feeds: [
+        {
+          id: 'feed-1',
+          title: 'Example Feed',
+          url: 'https://example.com/rss.xml',
+          unreadCount: 120,
+          enabled: true,
+          fullTextOnOpenEnabled: false,
+          aiSummaryOnOpenEnabled: false,
+          articleListDisplayMode: 'list',
+          categoryId: null,
+        },
+      ],
+    });
+
+    const { container } = renderWithNotifications();
+    const scrollContainer = getScrollContainer(container);
+
+    Object.defineProperty(scrollContainer, 'clientHeight', {
+      configurable: true,
+      value: 520,
+    });
+
+    expect(await screen.findByTestId('article-list-row-article-0-title')).toBeInTheDocument();
+    expect(screen.queryByTestId('article-list-row-article-119-title')).not.toBeInTheDocument();
+  });
+
+  it('shows a retry action when loading more fails without clearing existing articles', () => {
+    const loadMoreSnapshotMock = vi.fn().mockResolvedValue(undefined);
+    useAppStore.setState({
+      selectedView: 'feed-1',
+      showUnreadOnly: false,
+      selectedArticleId: 'art-1',
+      articleListHasMore: true,
+      articleListLoadingMore: false,
+      articleListLoadMoreError: true,
+      articleListNextCursor: 'cursor-1',
+      loadMoreSnapshot: loadMoreSnapshotMock,
+    });
+
+    renderWithNotifications();
+
+    expect(screen.getByText('Selected Article')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '重试加载更多' }));
+    expect(loadMoreSnapshotMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps viewport stable when refreshed data prepends newer articles', async () => {
+    useAppStore.setState({
+      selectedView: 'feed-1',
+      showUnreadOnly: false,
+      selectedArticleId: 'article-30',
+      articles: createSeedArticles(80),
+    });
+
+    const { container } = renderWithNotifications();
+    const scrollContainer = getScrollContainer(container);
+
+    Object.defineProperty(scrollContainer, 'clientHeight', {
+      configurable: true,
+      value: 520,
+    });
+    Object.defineProperty(scrollContainer, 'scrollHeight', {
+      configurable: true,
+      value: 4000,
+    });
+
+    scrollContainer.scrollTop = 1600;
+    fireEvent.scroll(scrollContainer, { target: { scrollTop: 1600 } });
+
+    act(() => {
+      useAppStore.setState((state) => ({
+        ...state,
+        articles: [
+          {
+            id: 'article-new-1',
+            feedId: 'feed-1',
+            title: 'Newest Article 1',
+            content: '',
+            summary: 'Summary',
+            publishedAt: new Date('2026-03-01T00:00:00.000Z').toISOString(),
+            link: 'https://example.com/new-1',
+            isRead: false,
+            isStarred: false,
+          },
+          {
+            id: 'article-new-2',
+            feedId: 'feed-1',
+            title: 'Newest Article 2',
+            content: '',
+            summary: 'Summary',
+            publishedAt: new Date('2026-02-28T23:59:00.000Z').toISOString(),
+            link: 'https://example.com/new-2',
+            isRead: false,
+            isStarred: false,
+          },
+          ...state.articles,
+        ],
+      }));
+    });
+
+    await waitFor(() => {
+      expect(scrollContainer.scrollTop).toBeGreaterThan(1600);
+    });
   });
 
   it('does not preload distant preview images before observer activation', () => {

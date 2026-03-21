@@ -11,6 +11,10 @@ const querySchema = z.object({
   view: z.string().optional().default('all'),
   limit: z.coerce.number().int().min(1).max(200).optional(),
   cursor: z.string().optional(),
+  unreadOnly: z
+    .enum(['true', 'false'])
+    .transform((value) => value === 'true')
+    .optional(),
   includeFiltered: z
     .enum(['true', 'false'])
     .transform((value) => value === 'true')
@@ -33,6 +37,7 @@ export async function GET(request: Request) {
       view: url.searchParams.get('view') ?? undefined,
       limit: url.searchParams.get('limit') ?? undefined,
       cursor: url.searchParams.get('cursor') ?? undefined,
+      unreadOnly: url.searchParams.get('unreadOnly') ?? undefined,
       includeFiltered: url.searchParams.get('includeFiltered') ?? undefined,
     });
     if (!parsed.success) {

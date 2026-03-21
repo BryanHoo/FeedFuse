@@ -370,6 +370,7 @@ export interface ReaderSnapshotDto {
       aiSummarySession?: ArticleAiSummarySessionSnapshotDto | null;
     }>;
     nextCursor: string | null;
+    totalCount: number;
   };
 }
 
@@ -378,6 +379,7 @@ export async function getReaderSnapshot(
     view?: string;
     limit?: number;
     cursor?: string;
+    unreadOnly?: boolean;
     includeFiltered?: boolean;
   },
   options?: RequestApiOptions,
@@ -386,6 +388,9 @@ export async function getReaderSnapshot(
   if (input?.view) params.set('view', input.view);
   if (typeof input?.limit === 'number') params.set('limit', String(input.limit));
   if (input?.cursor) params.set('cursor', input.cursor);
+  if (typeof input?.unreadOnly === 'boolean') {
+    params.set('unreadOnly', String(input.unreadOnly));
+  }
   if (typeof input?.includeFiltered === 'boolean') {
     params.set('includeFiltered', String(input.includeFiltered));
   }

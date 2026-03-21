@@ -73,7 +73,8 @@ describe('readerSnapshotService (preview image)', () => {
             sortPublishedAt: '2026-03-08T00:00:00.000Z',
           },
         ],
-      });
+      })
+      .mockResolvedValueOnce({ rows: [{ totalCount: 1 }] });
 
     const pool = { query } as unknown as Pool;
     const mod = (await import('./readerSnapshotService')) as typeof import('./readerSnapshotService');
@@ -112,7 +113,8 @@ describe('readerSnapshotService (preview image)', () => {
             sortPublishedAt: '2026-03-08T00:00:00.000Z',
           },
         ],
-      });
+      })
+      .mockResolvedValueOnce({ rows: [{ totalCount: 1 }] });
 
     const pool = { query } as unknown as Pool;
     const mod = (await import('./readerSnapshotService')) as typeof import('./readerSnapshotService');
@@ -152,7 +154,8 @@ describe('readerSnapshotService (preview image)', () => {
             sortPublishedAt: '2026-03-08T00:00:00.000Z',
           },
         ],
-      });
+      })
+      .mockResolvedValueOnce({ rows: [{ totalCount: 1 }] });
 
     const pool = { query } as unknown as Pool;
     const mod = (await import('./readerSnapshotService')) as typeof import('./readerSnapshotService');
@@ -198,7 +201,8 @@ describe('readerSnapshotService (preview image)', () => {
     const query = vi
       .fn()
       .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] });
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ totalCount: 0 }] });
 
     const pool = { query } as unknown as Pool;
     const mod = (await import('./readerSnapshotService')) as typeof import('./readerSnapshotService');
@@ -251,7 +255,8 @@ describe('readerSnapshotService (preview image)', () => {
             aiSummarySessionUpdatedAt: '2026-03-08T00:00:05.000Z',
           },
         ],
-      });
+      })
+      .mockResolvedValueOnce({ rows: [{ totalCount: 1 }] });
 
     const pool = { query } as unknown as Pool;
     const mod = (await import('./readerSnapshotService')) as typeof import('./readerSnapshotService');
@@ -302,7 +307,8 @@ describe('readerSnapshotService (preview image)', () => {
             sortPublishedAt: '2026-03-08T00:00:00.000Z',
           },
         ],
-      });
+      })
+      .mockResolvedValueOnce({ rows: [{ totalCount: 1 }] });
 
     const pool = { query } as unknown as Pool;
     const mod = (await import('./readerSnapshotService')) as typeof import('./readerSnapshotService');
@@ -346,7 +352,8 @@ describe('readerSnapshotService (preview image)', () => {
             sortPublishedAt: '2026-03-08T00:00:00.000Z',
           },
         ],
-      });
+      })
+      .mockResolvedValueOnce({ rows: [{ totalCount: 1 }] });
 
     const pool = { query } as unknown as Pool;
     const mod = (await import('./readerSnapshotService')) as typeof import('./readerSnapshotService');

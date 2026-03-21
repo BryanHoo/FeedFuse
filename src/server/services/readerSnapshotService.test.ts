@@ -25,6 +25,18 @@ describe('readerSnapshotService', () => {
     expect(filter.params[0]).toEqual(['passed', 'error']);
   });
 
+  it('adds unreadOnly filter on top of aggregate view', () => {
+    const filter = buildArticleFilter({ view: 'all', unreadOnly: true });
+    expect(filter.whereSql).toContain('is_read = false');
+    expect(filter.params[0]).toEqual(['passed', 'error']);
+  });
+
+  it('adds unreadOnly filter on top of feed view', () => {
+    const filter = buildArticleFilter({ view: 'feed-id-1', unreadOnly: true });
+    expect(filter.whereSql).toContain('is_read = false');
+    expect(filter.params[1]).toEqual(['passed', 'error']);
+  });
+
   it('filters ai-digest smart view and only returns ai_digest feeds', () => {
     const filter = buildArticleFilter({ view: AI_DIGEST_VIEW_ID });
     expect(filter.whereSql).toContain(AI_DIGEST_ONLY);

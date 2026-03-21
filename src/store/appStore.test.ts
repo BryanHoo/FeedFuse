@@ -102,6 +102,33 @@ function createSnapshotArticle(id: string, feedId: string, title: string) {
   };
 }
 
+function createSnapshotPage(input: {
+  feeds?: ReturnType<typeof createSnapshotFeed>[];
+  items: ReturnType<typeof createSnapshotArticle>[];
+  nextCursor?: string | null;
+  totalCount?: number;
+}) {
+  return {
+    categories: [],
+    feeds: input.feeds ?? [createSnapshotFeed('feed-1', 'Example', input.totalCount ?? input.items.length)],
+    articles: {
+      items: input.items,
+      nextCursor: input.nextCursor ?? null,
+      totalCount: input.totalCount ?? input.items.length,
+    },
+  };
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 beforeEach(async () => {
   vi.resetModules();
   fetchMock = vi.fn();
@@ -325,6 +352,188 @@ describe('appStore api integration', () => {
     expect(useAppStore.getState().articles[0].content).toBe('');
     expect(useAppStore.getState().articles[0].bodyTranslationEligible).toBe(false);
     expect(useAppStore.getState().articles[0].bodyTranslationBlockedReason).toBe('source_is_simplified_chinese');
+  });
+
+  it('appends next snapshot page into the visible view session', async () => {
+    const firstPage = createSnapshotPage({
+      items: [createSnapshotArticle('art-1', 'feed-1', 'First')],
+      nextCursor: 'cursor-1',
+      totalCount: 3,
+    });
+    const secondPage = createSnapshotPage({
+      items: [createSnapshotArticle('art-2', 'feed-1', 'Second')],
+      nextCursor: 'cursor-2',
+      totalCount: 3,
+    });
+
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(getFetchCallUrl(input), 'https://example.com');
+      const method = getFetchCallMethod(input, init);
+
+      if (url.pathname === '/api/reader/snapshot' && method === 'GET') {
+        const cursor = url.searchParams.get('cursor');
+        return jsonResponse({
+          ok: true,
+          data: cursor === 'cursor-1' ? secondPage : firstPage,
+        });
+      }
+
+      throw new Error(`Unexpected fetch: ${method} ${url.pathname}`);
+    });
+
+    await useAppStore.getState().loadSnapshot({ view: 'all' });
+    await useAppStore.getState().loadMoreSnapshot();
+
+    expect(useAppStore.getState().articles.map((item) => item.id)).toEqual(['art-1', 'art-2']);
+    expect(useAppStore.getState().articleListNextCursor).toBe('cursor-2');
+    expect(useAppStore.getState().articleListHasMore).toBe(true);
+    expect(useAppStore.getState().articleListTotalCount).toBe(3);
+  });
+
+  it('resets pagination session when selectedView changes', async () => {
+    const feedOne = createSnapshotFeed('feed-1', 'Feed One', 2);
+    const feedTwo = createSnapshotFeed('feed-2', 'Feed Two', 0);
+
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(getFetchCallUrl(input), 'https://example.com');
+      const method = getFetchCallMethod(input, init);
+
+      if (url.pathname === '/api/reader/snapshot' && method === 'GET') {
+        const view = url.searchParams.get('view') ?? 'all';
+        if (view === 'feed-1') {
+          return jsonResponse({
+            ok: true,
+            data: createSnapshotPage({
+              feeds: [feedOne, feedTwo],
+              items: [createSnapshotArticle('art-1', 'feed-1', 'Feed One Article')],
+              nextCursor: 'cursor-1',
+              totalCount: 2,
+            }),
+          });
+        }
+
+        return jsonResponse({
+          ok: true,
+          data: createSnapshotPage({
+            feeds: [feedOne, feedTwo],
+            items: [],
+            nextCursor: null,
+            totalCount: 0,
+          }),
+        });
+      }
+
+      throw new Error(`Unexpected fetch: ${method} ${url.pathname}`);
+    });
+
+    useAppStore.getState().setSelectedView('feed-1');
+    await useAppStore.getState().loadSnapshot({ view: 'feed-1' });
+    useAppStore.setState({ articleListLoadingMore: true, articleListLoadMoreError: true });
+
+    useAppStore.getState().setSelectedView('feed-2');
+
+    expect(useAppStore.getState().articleListNextCursor).toBeNull();
+    expect(useAppStore.getState().articleListHasMore).toBe(false);
+    expect(useAppStore.getState().articleListTotalCount).toBe(0);
+    expect(useAppStore.getState().articleListLoadingMore).toBe(false);
+    expect(useAppStore.getState().articleListLoadMoreError).toBe(false);
+  });
+
+  it('drops stale load-more responses when a newer snapshot request wins', async () => {
+    const delayedLoadMore = createDeferred<Response>();
+    let rootSnapshotCalls = 0;
+
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(getFetchCallUrl(input), 'https://example.com');
+      const method = getFetchCallMethod(input, init);
+
+      if (url.pathname === '/api/reader/snapshot' && method === 'GET') {
+        const cursor = url.searchParams.get('cursor');
+        if (cursor === 'cursor-1') {
+          return delayedLoadMore.promise;
+        }
+
+        rootSnapshotCalls += 1;
+        const page =
+          rootSnapshotCalls === 1
+            ? createSnapshotPage({
+                items: [createSnapshotArticle('art-1', 'feed-1', 'First')],
+                nextCursor: 'cursor-1',
+                totalCount: 2,
+              })
+            : createSnapshotPage({
+                items: [createSnapshotArticle('art-refresh', 'feed-1', 'Refreshed')],
+                nextCursor: null,
+                totalCount: 1,
+              });
+
+        return jsonResponse({ ok: true, data: page });
+      }
+
+      throw new Error(`Unexpected fetch: ${method} ${url.pathname}`);
+    });
+
+    await useAppStore.getState().loadSnapshot({ view: 'all' });
+    const loadMorePromise = useAppStore.getState().loadMoreSnapshot();
+    const refreshPromise = useAppStore.getState().loadSnapshot({ view: 'all' });
+
+    delayedLoadMore.resolve(
+      jsonResponse({
+        ok: true,
+        data: createSnapshotPage({
+          items: [createSnapshotArticle('art-2', 'feed-1', 'Second')],
+          nextCursor: null,
+          totalCount: 2,
+        }),
+      }),
+    );
+
+    await Promise.all([loadMorePromise, refreshPromise]);
+
+    expect(useAppStore.getState().articles.map((item) => item.id)).toEqual(['art-refresh']);
+    expect(useAppStore.getState().articleListNextCursor).toBeNull();
+    expect(useAppStore.getState().articleListTotalCount).toBe(1);
+  });
+
+  it('keeps existing articles when loading more fails', async () => {
+    const firstPage = createSnapshotPage({
+      items: [createSnapshotArticle('art-1', 'feed-1', 'First')],
+      nextCursor: 'cursor-1',
+      totalCount: 2,
+    });
+
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(getFetchCallUrl(input), 'https://example.com');
+      const method = getFetchCallMethod(input, init);
+
+      if (url.pathname === '/api/reader/snapshot' && method === 'GET') {
+        const cursor = url.searchParams.get('cursor');
+        if (cursor === 'cursor-1') {
+          return jsonResponse(
+            {
+              ok: false,
+              error: {
+                code: 'internal_error',
+                message: '加载更多失败',
+              },
+            },
+            { status: 500 },
+          );
+        }
+
+        return jsonResponse({ ok: true, data: firstPage });
+      }
+
+      throw new Error(`Unexpected fetch: ${method} ${url.pathname}`);
+    });
+
+    await useAppStore.getState().loadSnapshot({ view: 'all' });
+    await useAppStore.getState().loadMoreSnapshot();
+
+    expect(useAppStore.getState().articles.map((item) => item.id)).toEqual(['art-1']);
+    expect(useAppStore.getState().articleListLoadingMore).toBe(false);
+    expect(useAppStore.getState().articleListLoadMoreError).toBe(true);
+    expect(useAppStore.getState().articleListHasMore).toBe(true);
   });
 
 	  it('loads feed fetch error from reader snapshot into store', async () => {

@@ -94,7 +94,7 @@ describe('/api/reader/snapshot', () => {
     getReaderSnapshotMock.mockResolvedValue({
       categories: [],
       feeds: [],
-      articles: { items: [], nextCursor: null },
+      articles: { items: [], nextCursor: null, totalCount: 0 },
     });
 
     const mod = await import('./route');
@@ -105,6 +105,25 @@ describe('/api/reader/snapshot', () => {
       expect.objectContaining({
         view: '1001',
         includeFiltered: true,
+      }),
+    );
+  });
+
+  it('forwards unreadOnly query param', async () => {
+    getReaderSnapshotMock.mockResolvedValue({
+      categories: [],
+      feeds: [],
+      articles: { items: [], nextCursor: null, totalCount: 0 },
+    });
+
+    const mod = await import('./route');
+    await mod.GET(new Request('http://localhost/api/reader/snapshot?view=feed-1&unreadOnly=true'));
+
+    expect(getReaderSnapshotMock).toHaveBeenCalledWith(
+      pool,
+      expect.objectContaining({
+        view: 'feed-1',
+        unreadOnly: true,
       }),
     );
   });

@@ -93,6 +93,12 @@ interface AppState {
   sidebarCollapsed: boolean;
   showUnreadOnly: boolean;
   snapshotLoading: boolean;
+  articleListNextCursor: string | null;
+  articleListHasMore: boolean;
+  articleListTotalCount: number;
+  articleListInitialLoading: boolean;
+  articleListLoadingMore: boolean;
+  articleListLoadMoreError: boolean;
 
   setSelectedView: (view: ViewType, options?: { history?: ReaderSelectionHistoryMode }) => void;
   setSelectedArticle: (id: string | null, options?: { history?: ReaderSelectionHistoryMode }) => void;
@@ -107,6 +113,7 @@ interface AppState {
     hasAiTranslation: boolean;
   }>;
   loadSnapshot: (input?: { view?: ViewType }) => Promise<void>;
+  loadMoreSnapshot: () => Promise<void>;
   toggleSidebar: () => void;
   markAsRead: (articleId: string) => void;
   markAllAsRead: (feedId?: string) => void;
@@ -246,6 +253,14 @@ const ADD_FEED_SNAPSHOT_POLL_MAX_ATTEMPTS = 20;
 const ADD_FEED_SNAPSHOT_POLL_INTERVAL_MS = 750;
 // Tracks how the next selected view/article URL sync should write browser history.
 let pendingReaderSelectionHistoryMode: ReaderSelectionHistoryMode = 'replace';
+const INITIAL_ARTICLE_LIST_SESSION = {
+  articleListNextCursor: null as string | null,
+  articleListHasMore: false,
+  articleListTotalCount: 0,
+  articleListInitialLoading: false,
+  articleListLoadingMore: false,
+  articleListLoadMoreError: false,
+};
 
 function queueReaderSelectionHistoryMode(mode: ReaderSelectionHistoryMode): void {
   pendingReaderSelectionHistoryMode = mode;
@@ -253,6 +268,47 @@ function queueReaderSelectionHistoryMode(mode: ReaderSelectionHistoryMode): void
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function buildSnapshotRequestInput(
+  state: Pick<AppState, 'selectedView' | 'showUnreadOnly' | 'showFilteredByFeedId'>,
+  view: ViewType,
+  input?: { cursor?: string },
+) {
+  const includeFiltered =
+    typeof view === 'string' &&
+    !['all', 'unread', 'starred'].includes(view) &&
+    view !== 'ai_digest' &&
+    Boolean(state.showFilteredByFeedId[view])
+      ? true
+      : undefined;
+
+  return {
+    view,
+    cursor: input?.cursor,
+    includeFiltered,
+    unreadOnly: state.selectedView === view && state.showUnreadOnly ? true : undefined,
+  };
+}
+
+function getSnapshotTotalCount(
+  snapshot: Awaited<ReturnType<typeof getReaderSnapshot>>,
+  fallbackCount: number,
+): number {
+  return typeof snapshot.articles.totalCount === 'number'
+    ? snapshot.articles.totalCount
+    : fallbackCount;
+}
+
+function mergeSnapshotPage(previous: Article[], incoming: Article[]) {
+  const byId = new Map(previous.map((item) => [item.id, item]));
+
+  for (const article of incoming) {
+    // Keep expanded article details when a later snapshot page overlaps an existing row.
+    byId.set(article.id, mergeSnapshotArticleWithExistingDetails(article, byId.get(article.id)));
+  }
+
+  return Array.from(byId.values());
 }
 
 const initialReaderSelection = readReaderSelectionFromUrl();
@@ -268,6 +324,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   sidebarCollapsed: false,
   showUnreadOnly: false,
   snapshotLoading: false,
+  ...INITIAL_ARTICLE_LIST_SESSION,
 
   setSelectedView: (view, options) => {
     queueReaderSelectionHistoryMode(options?.history ?? 'replace');
@@ -286,6 +343,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         showUnreadOnly,
         articles: articleSnapshotCache[view] ?? [],
         articleSnapshotCache,
+        ...INITIAL_ARTICLE_LIST_SESSION,
       };
     });
   },
@@ -317,7 +375,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     })();
   },
-  toggleShowUnreadOnly: () => set((state) => ({ showUnreadOnly: !state.showUnreadOnly })),
+  toggleShowUnreadOnly: () =>
+    set((state) => ({
+      showUnreadOnly: !state.showUnreadOnly,
+      ...INITIAL_ARTICLE_LIST_SESSION,
+    })),
   toggleShowFilteredForFeed: (feedId) =>
     set((state) => ({
       showFilteredByFeedId: {
@@ -359,19 +421,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     latestSnapshotRequestIdByView.set(view, requestId);
 
     if (get().selectedView === view) {
-      set({ snapshotLoading: true });
+      set({
+        snapshotLoading: true,
+        articleListInitialLoading: true,
+        articleListLoadingMore: false,
+        articleListLoadMoreError: false,
+      });
     }
 
     try {
-      const includeFiltered =
-        typeof view === 'string' &&
-        !['all', 'unread', 'starred'].includes(view) &&
-        view !== 'ai_digest' &&
-        Boolean(get().showFilteredByFeedId[view])
-          ? true
-          : undefined;
       const snapshot = await getReaderSnapshot(
-        { view, includeFiltered },
+        buildSnapshotRequestInput(get(), view),
         { notifyOnError: false },
       );
 
@@ -406,6 +466,8 @@ export const useAppStore = create<AppState>((set, get) => ({
           ...state.articleSnapshotCache,
           [view]: articles,
         };
+        const nextCursor = snapshot.articles.nextCursor ?? null;
+        const totalCount = getSnapshotTotalCount(snapshot, articles.length);
 
         return {
           categories,
@@ -413,6 +475,12 @@ export const useAppStore = create<AppState>((set, get) => ({
           articles: isVisibleView ? articles : state.articles,
           articleSnapshotCache,
           snapshotLoading: isVisibleView ? false : state.snapshotLoading,
+          articleListNextCursor: isVisibleView ? nextCursor : state.articleListNextCursor,
+          articleListHasMore: isVisibleView ? nextCursor !== null : state.articleListHasMore,
+          articleListTotalCount: isVisibleView ? totalCount : state.articleListTotalCount,
+          articleListInitialLoading: isVisibleView ? false : state.articleListInitialLoading,
+          articleListLoadingMore: isVisibleView ? false : state.articleListLoadingMore,
+          articleListLoadMoreError: isVisibleView ? false : state.articleListLoadMoreError,
         };
       });
 
@@ -430,7 +498,65 @@ export const useAppStore = create<AppState>((set, get) => ({
         latestSnapshotRequestIdByView.get(view) === requestId &&
         get().selectedView === view
       ) {
-        set({ snapshotLoading: false });
+        set({
+          snapshotLoading: false,
+          articleListInitialLoading: false,
+        });
+      }
+    }
+  },
+  loadMoreSnapshot: async () => {
+    const state = get();
+    const view = state.selectedView;
+    const cursor = state.articleListNextCursor;
+
+    if (!cursor || !state.articleListHasMore || state.articleListLoadingMore) {
+      return;
+    }
+
+    const requestId = snapshotRequestId + 1;
+    snapshotRequestId = requestId;
+    latestSnapshotRequestIdByView.set(view, requestId);
+    set({ articleListLoadingMore: true, articleListLoadMoreError: false });
+
+    try {
+      const snapshot = await getReaderSnapshot(
+        buildSnapshotRequestInput(get(), view, { cursor }),
+        { notifyOnError: false },
+      );
+
+      if (latestSnapshotRequestIdByView.get(view) !== requestId) return;
+      if (get().selectedView !== view) return;
+
+      set((currentState) => {
+        if (currentState.selectedView !== view) return {};
+
+        const incomingArticles = snapshot.articles.items.map((item) =>
+          mapSnapshotArticleItem(item),
+        );
+        const articles = mergeSnapshotPage(currentState.articles, incomingArticles);
+        const nextCursor = snapshot.articles.nextCursor ?? null;
+
+        return {
+          articles,
+          articleSnapshotCache: {
+            ...currentState.articleSnapshotCache,
+            [view]: articles,
+          },
+          articleListNextCursor: nextCursor,
+          articleListHasMore: nextCursor !== null,
+          articleListTotalCount: getSnapshotTotalCount(snapshot, currentState.articleListTotalCount),
+          articleListLoadingMore: false,
+          articleListLoadMoreError: false,
+        };
+      });
+    } catch (err) {
+      console.error(err);
+      if (latestSnapshotRequestIdByView.get(view) === requestId && get().selectedView === view) {
+        set({
+          articleListLoadingMore: false,
+          articleListLoadMoreError: true,
+        });
       }
     }
   },
@@ -482,6 +608,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         : [...state.feeds, mapped],
       selectedView: mapped.id,
       selectedArticleId: null,
+      ...INITIAL_ARTICLE_LIST_SESSION,
     }));
 
     try {
@@ -516,6 +643,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       feeds: state.feeds.some((item) => item.id === mapped.id) ? state.feeds : [...state.feeds, mapped],
       selectedView: mapped.id,
       selectedArticleId: null,
+      ...INITIAL_ARTICLE_LIST_SESSION,
     }));
 
     // AI digest feed creation should not trigger RSS refresh; it only needs a snapshot reload.
@@ -607,6 +735,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         articles: state.articles.filter((article) => article.feedId !== feedId),
         selectedView: nextSelectedView,
         selectedArticleId: nextSelectedArticleId,
+        ...INITIAL_ARTICLE_LIST_SESSION,
       };
     });
 

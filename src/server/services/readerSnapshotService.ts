@@ -37,6 +37,7 @@ export function buildArticleFilter(input: {
   view: string;
   cursor?: string | null;
   limit?: number;
+  unreadOnly?: boolean;
   includeFiltered?: boolean;
 }): { whereSql: string; params: unknown[]; limit: number } {
   const whereParts: string[] = [];
@@ -56,6 +57,10 @@ export function buildArticleFilter(input: {
 
   if (isRssSmartView(input.view)) {
     whereParts.push("feed_id in (select id from feeds where kind = 'rss')");
+  }
+
+  if (input.unreadOnly) {
+    whereParts.push('is_read = false');
   }
 
   const isSpecificFeedView =
@@ -154,6 +159,7 @@ export interface ReaderSnapshot {
   articles: {
     items: ReaderSnapshotArticleItem[];
     nextCursor: string | null;
+    totalCount: number;
   };
 }
 
@@ -254,7 +260,13 @@ type ArticleQueryRow = ReaderSnapshotArticleItem & {
 
 async function queryArticleRows(
   pool: Pool,
-  input: { view: string; limit: number; cursor?: string | null; includeFiltered?: boolean },
+  input: {
+    view: string;
+    limit: number;
+    cursor?: string | null;
+    unreadOnly?: boolean;
+    includeFiltered?: boolean;
+  },
 ): Promise<ArticleQueryRow[]> {
   const { whereSql, params, limit } = buildArticleFilter(input);
   const queryParams = [...params, limit + 1];
@@ -326,9 +338,37 @@ async function queryArticleRows(
 
   return rows;
 }
+
+async function queryArticleTotalCount(
+  pool: Pool,
+  input: { view: string; unreadOnly?: boolean; includeFiltered?: boolean },
+): Promise<number> {
+  const { whereSql, params } = buildArticleFilter({
+    view: input.view,
+    unreadOnly: input.unreadOnly,
+    includeFiltered: input.includeFiltered,
+  });
+
+  const { rows } = await pool.query<{ totalCount: number }>(
+    `
+      select count(*)::int as "totalCount"
+      from articles
+      ${whereSql}
+    `,
+    params,
+  );
+
+  return rows[0]?.totalCount ?? 0;
+}
 export async function getReaderSnapshot(
   pool: Pool,
-  input: { view: string; limit?: number; cursor?: string | null; includeFiltered?: boolean },
+  input: {
+    view: string;
+    limit?: number;
+    cursor?: string | null;
+    unreadOnly?: boolean;
+    includeFiltered?: boolean;
+  },
 ): Promise<ReaderSnapshot> {
   const [categories, feeds] = await Promise.all([
     listCategories(pool),
@@ -357,12 +397,21 @@ export async function getReaderSnapshot(
   }));
 
   const { limit } = buildArticleFilter(input);
-  const queriedRows = await queryArticleRows(pool, {
-    view: input.view,
-    limit,
-    cursor: input.cursor,
-    includeFiltered: input.includeFiltered,
-  });
+  const [queriedRows, totalCount] = await Promise.all([
+    queryArticleRows(pool, {
+      view: input.view,
+      limit,
+      cursor: input.cursor,
+      unreadOnly: input.unreadOnly,
+      includeFiltered: input.includeFiltered,
+    }),
+    // The header count must reflect the full filtered result set, not the current page window.
+    queryArticleTotalCount(pool, {
+      view: input.view,
+      unreadOnly: input.unreadOnly,
+      includeFiltered: input.includeFiltered,
+    }),
+  ]);
   const nextCursor =
     queriedRows.length > limit
       ? encodeCursor({
@@ -428,6 +477,7 @@ export async function getReaderSnapshot(
         };
       }),
       nextCursor,
+      totalCount,
     },
   };
 }
