@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
 import { normalizePersistedSettings } from '../features/settings/settingsSchema';
+import { resolveArticleBriefContent } from '../lib/articleSummary';
 import { aiDigestCompose, type AiDigestComposeArticle } from '../server/ai/aiDigestCompose';
 import { aiDigestRerank, type AiDigestRerankItem } from '../server/ai/aiDigestRerank';
 import { insertArticleIgnoreDuplicate } from '../server/repositories/articlesRepo';
@@ -353,6 +354,7 @@ async function executeAiDigestRun(input: {
   if (!sanitized) {
     throw new Error('Invalid ai digest result: empty html');
   }
+  const summary = resolveArticleBriefContent({ contentHtml: sanitized }) || null;
 
   const dedupeKey = `ai_digest_run:${input.run.id}`;
   const created = await input.deps.insertArticleIgnoreDuplicate(input.pool, {
@@ -361,7 +363,7 @@ async function executeAiDigestRun(input: {
     title,
     publishedAt: input.now.toISOString(),
     contentHtml: sanitized,
-    summary: null,
+    summary,
     filterStatus: 'passed',
     isFiltered: false,
     filteredBy: [],

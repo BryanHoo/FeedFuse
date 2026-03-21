@@ -6,6 +6,9 @@ export interface ArticleFilterJudgeResult {
   errorMessage: string | null;
 }
 
+const FILTER_DECISION = 'FILTER';
+const ALLOW_DECISION = 'ALLOW';
+
 function buildPrompt(input: { prompt: string; articleText: string }): string {
   return [
     '你是文章过滤助手。',
@@ -21,20 +24,46 @@ function buildPrompt(input: { prompt: string; articleText: string }): string {
   ].join('\n');
 }
 
+function createJudgeResult(matched: boolean): ArticleFilterJudgeResult {
+  return {
+    ok: true,
+    matched,
+    errorMessage: null,
+  };
+}
+
+function createJudgeErrorResult(errorMessage: string): ArticleFilterJudgeResult {
+  return {
+    ok: false,
+    matched: false,
+    errorMessage,
+  };
+}
+
 function parseJudgeContent(content: unknown): ArticleFilterJudgeResult {
   if (typeof content !== 'string' || !content.trim()) {
-    return { ok: false, matched: false, errorMessage: 'Invalid article-filter response: missing content' };
+    return createJudgeErrorResult('Invalid article-filter response: missing content');
   }
 
   const normalized = content.trim().toUpperCase();
-  if (normalized === 'FILTER') {
-    return { ok: true, matched: true, errorMessage: null };
-  }
-  if (normalized === 'ALLOW') {
-    return { ok: true, matched: false, errorMessage: null };
+
+  if (normalized === FILTER_DECISION) {
+    return createJudgeResult(true);
   }
 
-  return { ok: false, matched: false, errorMessage: 'Invalid article-filter response: unsupported decision' };
+  if (normalized === ALLOW_DECISION) {
+    return createJudgeResult(false);
+  }
+
+  return createJudgeErrorResult('Invalid article-filter response: unsupported decision');
+}
+
+function getErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return 'Unknown error';
+  }
+
+  return error.message.trim() || 'Unknown error';
 }
 
 export async function articleFilterJudge(input: {
@@ -72,11 +101,6 @@ export async function articleFilterJudge(input: {
 
     return parseJudgeContent(completion.choices?.[0]?.message?.content);
   } catch (error) {
-    const message = error instanceof Error ? error.message.trim() || 'Unknown error' : 'Unknown error';
-    return {
-      ok: false,
-      matched: false,
-      errorMessage: message,
-    };
+    return createJudgeErrorResult(getErrorMessage(error));
   }
 }

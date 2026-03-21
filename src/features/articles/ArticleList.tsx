@@ -1,8 +1,9 @@
 import { CheckCheck, CircleDot, LayoutGrid, List, RefreshCw } from "lucide-react";
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppStore } from "../../store/appStore";
-import { formatRelativeTime, getArticleSectionHeading, getLocalDayKey } from "../../utils/date";
+import { formatRelativeTime } from "../../utils/date";
 import { generateAiDigest, patchFeed, refreshAllFeeds, refreshFeed } from "../../lib/apiClient";
+import { resolveArticleBriefContent } from "../../lib/articleSummary";
 import { useRenderTimeSnapshot } from "../../hooks/useRenderTimeSnapshot";
 import { READER_PANE_HOVER_BACKGROUND_CLASS_NAME } from "@/lib/designSystem";
 import { cn } from "@/lib/utils";
@@ -14,6 +15,7 @@ import {
 } from "@/lib/view";
 import ReaderToolbarIconButton from "../reader/ReaderToolbarIconButton";
 import { toast } from "../toast/toast";
+import { buildArticleListDerivedState } from "./articleListModel";
 
 const sessionVisibleArticleIds = new Set<string>();
 const REFRESH_POLL_INTERVAL_MS = 1000;
@@ -29,11 +31,6 @@ const unreadSignalTimeClassName =
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function getPreviewImage(content: string) {
-  const match = content.match(/<img[^>]+src=["']([^"']+)["']/i);
-  return match?.[1] ?? null;
 }
 
 function areSetsEqual(left: Set<string>, right: Set<string>) {
@@ -137,91 +134,46 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
     [feeds],
   );
 
-  const viewScopedArticles = (() => {
-    if (selectedView === "all") return articles;
-    if (selectedView === "unread") return articles;
-    if (selectedView === "starred") return articles.filter((article) => article.isStarred);
-    if (selectedView === AI_DIGEST_VIEW_ID) {
-      return articles.filter((article) => aiDigestFeedIds.has(article.feedId));
-    }
-    return articles.filter((article) => article.feedId === selectedView);
-  })();
+  const derivedState = useMemo(
+    () =>
+      buildArticleListDerivedState({
+        articles,
+        feeds,
+        selectedView,
+        selectedArticleId,
+        showUnreadFilterActive,
+        retainedVisibleArticleIds: sessionVisibleArticleIds,
+        aiDigestFeedIds,
+        referenceTime,
+      }),
+    [aiDigestFeedIds, articles, feeds, referenceTime, selectedArticleId, selectedView, showUnreadFilterActive],
+  );
+  const {
+    articleSections,
+    feedById,
+    feedTitleById,
+    filteredArticles,
+    nextVisibleArticleIds,
+    previewImageByArticleId,
+    previewImageCandidates,
+    unreadCount,
+    viewScopedArticles,
+  } = derivedState;
 
-  const filteredArticles = (() => {
-    if (!showUnreadFilterActive) return viewScopedArticles;
-
-    const retainedArticleIds = sessionVisibleArticleIds;
-    const visibleArticles: typeof viewScopedArticles = [];
-
-    for (const article of viewScopedArticles) {
-      if (!article.isRead || retainedArticleIds.has(article.id) || article.id === selectedArticleId) {
-        visibleArticles.push(article);
-      }
-    }
-
-    for (const article of visibleArticles) {
-      retainedArticleIds.add(article.id);
-    }
-    return visibleArticles;
-  })();
-
-  const articleSections = useMemo(() => {
-    const sections: Array<{
-      key: string;
-      title: string;
-      articles: typeof filteredArticles;
-    }> = [];
-
-    let currentSection: (typeof sections)[number] | null = null;
-
-    for (const article of filteredArticles) {
-      const publishedDate = new Date(article.publishedAt);
-      const hasValidDate = !Number.isNaN(publishedDate.getTime());
-      const sectionKey = hasValidDate ? getLocalDayKey(publishedDate) : "unknown";
-
-      if (!currentSection || currentSection.key !== sectionKey) {
-        const title = hasValidDate ? getArticleSectionHeading(publishedDate, referenceTime) : "未知日期";
-
-        currentSection = {
-          key: sectionKey,
-          title,
-          articles: [],
-        };
-
-        sections.push(currentSection);
-      }
-
-      currentSection.articles.push(article);
+  useEffect(() => {
+    if (!showUnreadFilterActive) {
+      return;
     }
 
-    return sections;
-  }, [filteredArticles, referenceTime]);
-
-  const previewImageByArticleId = useMemo(() => {
-    const previews = new Map<string, { key: string; src: string }>();
-
-    for (const article of filteredArticles) {
-      const previewImage = article.previewImage ?? getPreviewImage(article.content);
-      if (!previewImage) continue;
-
-      previews.set(article.id, {
-        key: `${article.id}:${previewImage}`,
-        src: previewImage,
-      });
+    if (areSetsEqual(sessionVisibleArticleIds, nextVisibleArticleIds)) {
+      return;
     }
 
-    return previews;
-  }, [filteredArticles]);
-
-  const previewImageCandidates = useMemo(() => {
-    const candidates = new Map<string, string>();
-
-    for (const { key, src } of previewImageByArticleId.values()) {
-      candidates.set(key, src);
+    sessionVisibleArticleIds.clear();
+    for (const articleId of nextVisibleArticleIds) {
+      sessionVisibleArticleIds.add(articleId);
     }
-
-    return candidates;
-  }, [previewImageByArticleId]);
+  }, [nextVisibleArticleIds, showUnreadFilterActive]);
 
   useEffect(() => {
     const root = scrollContainerRef.current;
@@ -331,9 +283,7 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
     pumpPreviewPreloadQueue();
   }, [activePreviewImageKeys, pumpPreviewPreloadQueue]);
 
-  const getFeedTitle = (feedId: string) => {
-    return feeds.find((feed) => feed.id === feedId)?.title ?? "";
-  };
+  const getFeedTitle = (feedId: string) => feedTitleById.get(feedId) ?? "";
 
   const handleMarkAllAsRead = () => {
     sessionVisibleArticleIds.clear();
@@ -346,16 +296,10 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
     markAllAsRead(selectedView);
   };
 
-  const unreadCount = useMemo(
-    () => viewScopedArticles.reduce((count, article) => count + (article.isRead ? 0 : 1), 0),
-    [viewScopedArticles],
-  );
   const articleCount = showUnreadFilterActive ? unreadCount : filteredArticles.length;
 
   const isAggregateView = isAggregateReaderView(selectedView);
-  const selectedFeed = isAggregateView
-    ? null
-    : feeds.find((feed) => feed.id === selectedView) ?? null;
+  const selectedFeed = isAggregateView ? null : feedById.get(selectedView) ?? null;
   const headerTitle = selectedView === AI_DIGEST_VIEW_ID ? "智能解读" : (selectedFeed?.title ?? "文章");
   const effectiveDisplayMode = isAggregateView ? "card" : (selectedFeed?.articleListDisplayMode ?? "card");
   const isAiDigestView = Boolean(selectedFeed && (selectedFeed.kind ?? "rss") === "ai_digest");
@@ -393,7 +337,8 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
       window.cancelAnimationFrame(rafId);
       window.removeEventListener("resize", measureWrappedTitles);
     };
-  }, [effectiveDisplayMode, filteredArticles]);
+    // Re-measure after preview images become visible because they shrink the text column width.
+  }, [effectiveDisplayMode, filteredArticles, previewImageStatuses]);
 
   const canRefresh = (() => {
     if (refreshing) return false;
@@ -426,7 +371,7 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
   const getArticleButtonLabel = useCallback(
     (article: (typeof filteredArticles)[number], displayTitle: string) => {
       const labelParts = [displayTitle];
-      const feedTitle = feeds.find((feed) => feed.id === article.feedId)?.title ?? "";
+      const feedTitle = feedTitleById.get(article.feedId) ?? "";
 
       if (feedTitle) {
         labelParts.push(feedTitle);
@@ -440,7 +385,7 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
 
       return labelParts.join("，");
     },
-    [feeds, referenceTime],
+    [feedTitleById, referenceTime],
   );
 
   const handleArticleKeyDown = useCallback(
@@ -709,6 +654,12 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
                 const showPreviewImage = previewImageStatus === "ready";
                 const displayTitle = article.titleZh?.trim() || article.title;
                 const articleFiltered = shouldShowFilteredBadge(article);
+                const articleBriefContent = aiDigestFeedIds.has(article.feedId)
+                  ? resolveArticleBriefContent({
+                      summary: article.summary,
+                      contentHtml: article.content,
+                    })
+                  : article.summary;
 
                 if (effectiveDisplayMode === "list") {
                   return (
@@ -830,7 +781,7 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
                             wrappedCardTitleArticleIds.has(article.id) ? "line-clamp-1" : "line-clamp-2",
                           )}
                         >
-                          {article.summary}
+                          {articleBriefContent}
                         </p>
 
                         <div className="mt-auto flex items-center justify-between gap-3 pt-1.5 text-[11px]">

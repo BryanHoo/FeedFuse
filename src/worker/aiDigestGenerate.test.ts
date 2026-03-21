@@ -237,6 +237,74 @@ describe('runAiDigestGenerate', () => {
     );
   });
 
+  it('stores a text summary for generated AI digest articles', async () => {
+    writeSystemLogMock.mockReset();
+    const insertArticleIgnoreDuplicateMock = vi.fn().mockResolvedValue({ id: 'digest-article-2' });
+    const pool = { query: vi.fn() } as unknown as Pool;
+
+    const { runAiDigestGenerate } = await import('./aiDigestGenerate');
+    await runAiDigestGenerate({
+      pool,
+      runId: 'run-3b',
+      jobId: null,
+      isFinalAttempt: true,
+      deps: {
+        getAiDigestRunById: vi.fn().mockResolvedValue({
+          id: 'run-3b',
+          feedId: 'feed-ai',
+          windowStartAt: '2026-03-17T00:00:00.000Z',
+          windowEndAt: '2026-03-17T01:00:00.000Z',
+          status: 'queued',
+        }),
+        getAiDigestConfigByFeedId: vi.fn().mockResolvedValue({
+          feedId: 'feed-ai',
+          prompt: 'x',
+          intervalMinutes: 60,
+          topN: 1,
+          selectedFeedIds: ['feed-rss-1'],
+          selectedCategoryIds: [],
+        }),
+        listFeeds: vi.fn().mockResolvedValue([
+          { id: 'feed-ai', kind: 'ai_digest', title: 'AI解读', categoryId: null },
+          { id: 'feed-rss-1', kind: 'rss', title: 'RSS 1', categoryId: null },
+        ]) as never,
+        listAiDigestCandidateArticles: vi.fn().mockResolvedValue([
+          {
+            id: 'candidate-1',
+            feedTitle: 'RSS 1',
+            title: '来源1',
+            summary: 's1',
+            link: null,
+            fetchedAt: '2026-03-17T00:30:00.000Z',
+            contentFullHtml: null,
+          },
+        ]),
+        updateAiDigestRun: vi.fn().mockResolvedValue(undefined),
+        updateAiDigestConfigLastWindowEndAt: vi.fn().mockResolvedValue(undefined),
+        getAiApiKey: vi.fn().mockResolvedValue('k'),
+        getUiSettings: vi.fn().mockResolvedValue({}),
+        aiDigestRerank: vi.fn().mockResolvedValue(['candidate-1']),
+        aiDigestCompose: vi.fn().mockResolvedValue({
+          title: 'Digest',
+          html: '<h1>Digest</h1><p>这是 AI 解读摘要。</p><p>后续段落。</p>',
+        }),
+        sanitizeContent: vi
+          .fn()
+          .mockReturnValue('<h1>Digest</h1><p>这是 AI 解读摘要。</p><p>后续段落。</p>'),
+        insertArticleIgnoreDuplicate: insertArticleIgnoreDuplicateMock,
+        queryArticleIdByDedupeKey: vi.fn().mockResolvedValue('digest-article-2'),
+        replaceAiDigestRunSources: vi.fn().mockResolvedValue(undefined),
+      },
+    });
+
+    expect(insertArticleIgnoreDuplicateMock).toHaveBeenCalledWith(
+      pool,
+      expect.objectContaining({
+        summary: 'Digest 这是 AI 解读摘要。 后续段落。',
+      }),
+    );
+  });
+
   it('writes failed lifecycle logs when digest generation throws', async () => {
     writeSystemLogMock.mockReset();
     const updateAiDigestRunMock = vi.fn().mockResolvedValue(undefined);

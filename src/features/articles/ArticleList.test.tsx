@@ -1078,6 +1078,47 @@ describe('ArticleList', () => {
     expect(screen.queryByText('Digest Article Read')).not.toBeInTheDocument();
   });
 
+  it('shows brief content under the title for AI digest cards when summary is empty', () => {
+    useAppStore.setState({
+      feeds: [
+        {
+          id: 'digest-1',
+          kind: 'ai_digest',
+          title: 'Digest Feed',
+          url: 'http://localhost/__feedfuse_ai_digest__/digest-1',
+          unreadCount: 1,
+          enabled: true,
+          fullTextOnOpenEnabled: false,
+          aiSummaryOnOpenEnabled: false,
+          articleListDisplayMode: 'card',
+          categoryId: null,
+        },
+      ],
+      articles: [
+        {
+          id: 'digest-article-brief',
+          feedId: 'digest-1',
+          title: 'Digest Article With Brief',
+          content: '<p>这是一段 AI 解读的简要内容。</p><p>第二段。</p>',
+          summary: '',
+          publishedAt: new Date('2026-02-24T00:00:00.000Z').toISOString(),
+          link: 'https://example.com/digest-brief',
+          isRead: false,
+          isStarred: false,
+        },
+      ],
+      selectedView: AI_DIGEST_VIEW_ID,
+      selectedArticleId: 'digest-article-brief',
+      showUnreadOnly: false,
+    });
+
+    renderWithNotifications();
+
+    expect(screen.getByTestId('article-card-digest-article-brief-summary')).toHaveTextContent(
+      '这是一段 AI 解读的简要内容。 第二段。',
+    );
+  });
+
   it('shows display mode toggle only in feed view and hides it in all/unread/starred/ai-digest views', () => {
     useAppStore.setState({ selectedView: 'feed-1' });
     renderWithNotifications();
@@ -1263,6 +1304,69 @@ describe('ArticleList', () => {
     });
 
     getComputedStyleSpy.mockRestore();
+  });
+
+  it('recomputes summary clamp after preview image narrows the card text column', async () => {
+    const preload = setupImagePreloadMock();
+    const observer = setupIntersectionObserverMock();
+
+    useAppStore.setState((state) => ({
+      ...state,
+      selectedView: 'feed-1',
+      articles: state.articles.map((article) =>
+        article.id === 'art-1'
+          ? { ...article, previewImage: 'https://example.com/preview.jpg' }
+          : article,
+      ),
+    }));
+
+    const getComputedStyleSpy = vi.spyOn(window, 'getComputedStyle').mockImplementation(
+      () =>
+        ({
+          lineHeight: '20px',
+        }) as CSSStyleDeclaration,
+    );
+
+    try {
+      renderWithNotifications();
+
+      const titleArt1 = await screen.findByTestId('article-card-art-1-title');
+      const summaryArt1 = screen.getByTestId('article-card-art-1-summary');
+
+      Object.defineProperty(titleArt1, 'clientHeight', { configurable: true, value: 20 });
+
+      act(() => {
+        window.dispatchEvent(new Event('resize'));
+      });
+
+      await waitFor(() => {
+        expect(summaryArt1).toHaveClass('line-clamp-2');
+        expect(summaryArt1).not.toHaveClass('line-clamp-1');
+      });
+
+      act(() => {
+        observer.triggerIntersect(['art-1']);
+      });
+
+      await waitFor(() => {
+        expect(preload.instances).toHaveLength(1);
+      });
+
+      Object.defineProperty(titleArt1, 'clientHeight', { configurable: true, value: 40 });
+
+      act(() => {
+        preload.instances[0].triggerLoad();
+      });
+
+      await waitFor(() => {
+        expect(summaryArt1).toHaveClass('line-clamp-1');
+        expect(summaryArt1).not.toHaveClass('line-clamp-2');
+      });
+    } finally {
+      getComputedStyleSpy.mockRestore();
+      preload.restore();
+      observer.restore();
+    }
   });
 
   it('rolls back display mode and relies on global api notification when patchFeed fails', async () => {
