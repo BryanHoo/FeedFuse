@@ -136,7 +136,7 @@ describe('ArticleView markdown export', () => {
   it('shows the export action in the desktop toolbar when an article is selected', async () => {
     render(<ArticleView />);
 
-    expect(await screen.findByRole('button', { name: '导出 Markdown' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '导出文章' })).toBeInTheDocument();
   });
 
   it('does not show the export action when no article is selected', async () => {
@@ -145,7 +145,7 @@ describe('ArticleView markdown export', () => {
     render(<ArticleView />);
 
     await waitFor(() => {
-      expect(screen.queryByRole('button', { name: '导出 Markdown' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '导出文章' })).not.toBeInTheDocument();
     });
   });
 
@@ -173,7 +173,7 @@ describe('ArticleView markdown export', () => {
 
     render(<ArticleView />);
 
-    fireEvent.click(await screen.findByRole('button', { name: '导出 Markdown' }));
+    fireEvent.click(await screen.findByRole('button', { name: '导出文章' }));
 
     expect(createObjectURL).toHaveBeenCalledTimes(1);
     expect(anchorClick).toHaveBeenCalledTimes(1);

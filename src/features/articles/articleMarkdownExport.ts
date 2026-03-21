@@ -62,10 +62,10 @@ export function triggerArticleMarkdownDownload(input: ArticleMarkdownDownloadInp
     anchor.download = input.filename;
     anchor.click();
 
-    toast.success('Markdown 已开始下载');
+    toast.success('文章已开始导出');
   } catch (error) {
     console.error(error);
-    toast.error('Markdown 导出失败');
+    toast.error('文章导出失败');
   } finally {
     if (objectUrl) {
       URL.revokeObjectURL(objectUrl);

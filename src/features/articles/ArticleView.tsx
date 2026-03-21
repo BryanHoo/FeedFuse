@@ -488,7 +488,7 @@ export default function ArticleView({
           {showDesktopMarkdownExportButton ? (
             <ReaderToolbarIconButton
               icon={Download}
-              label="导出 Markdown"
+              label="导出文章"
               onClick={onMarkdownExportButtonClick}
             />
           ) : null}
