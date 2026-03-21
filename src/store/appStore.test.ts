@@ -245,11 +245,11 @@ describe('appStore api integration', () => {
     clearApiErrorNotifier();
   });
 
-	  it('maps new feed trigger flags from dto into app store feed', async () => {
-	    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
-	      const url = getFetchCallUrl(input);
-	      if (url.includes('/api/reader/snapshot')) {
-	        return jsonResponse({
+  it('normalizes mutually exclusive feed trigger flags from snapshot dto', async () => {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = getFetchCallUrl(input);
+      if (url.includes('/api/reader/snapshot')) {
+        return jsonResponse({
           ok: true,
           data: {
             categories: [],
@@ -290,14 +290,14 @@ describe('appStore api integration', () => {
     const feed = useAppStore.getState().feeds.find((item) => item.id === 'feed-1');
     expect(feed?.aiSummaryOnFetchEnabled).toBe(true);
     expect(feed?.bodyTranslateOnFetchEnabled).toBe(true);
-    expect(feed?.bodyTranslateOnOpenEnabled).toBe(true);
+    expect(feed?.bodyTranslateOnOpenEnabled).toBe(false);
   });
 
-	  it('loads snapshot into store', async () => {
-	    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
-	      const url = getFetchCallUrl(input);
-	      if (url.includes('/api/reader/snapshot')) {
-	        return jsonResponse({
+  it('loads snapshot into store', async () => {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = getFetchCallUrl(input);
+      if (url.includes('/api/reader/snapshot')) {
+        return jsonResponse({
           ok: true,
           data: {
             categories: [{ id: 'cat-tech', name: '科技', position: 0 }],
