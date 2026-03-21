@@ -93,7 +93,7 @@ export default function FeedTranslationPolicyDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent closeLabel="close-translation-policy" className={DIALOG_FORM_CONTENT_CLASS_NAME}>
+      <DialogContent closeLabel="关闭翻译配置" className={DIALOG_FORM_CONTENT_CLASS_NAME}>
         <DialogHeader>
           <DialogTitle>翻译配置</DialogTitle>
           <DialogDescription>仅保存自动触发规则，现在不会立即开始翻译。</DialogDescription>

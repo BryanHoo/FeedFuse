@@ -991,6 +991,7 @@ describe('FeedList manage', () => {
     fireEvent.click(await screen.findByRole('menuitem', { name: '编辑' }));
 
     expect(await screen.findByRole('dialog', { name: '重命名分类' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '关闭重命名分类' })).toBeInTheDocument();
   });
 
   it('wraps long category names in rename dialog description', async () => {

@@ -31,6 +31,7 @@ describe('FeedDialog translation flags', () => {
   it('FeedDialog no longer renders policy controls', () => {
     renderFeedDialog();
 
+    expect(screen.getByRole('button', { name: '关闭编辑 RSS 源' })).toBeInTheDocument();
     expect(screen.getByLabelText('URL')).toBeInTheDocument();
     expect(screen.getByLabelText('名称')).toBeInTheDocument();
     expect(screen.getByLabelText('分类')).toBeInTheDocument();

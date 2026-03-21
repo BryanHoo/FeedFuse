@@ -221,6 +221,7 @@ describe('AddFeedDialog', () => {
     renderWithNotifications();
     await openAddFeedDialog();
     expect(screen.getByRole('dialog', { name: '添加 RSS 源' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '关闭添加 RSS 源' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '取消' }));
     expect(screen.queryByRole('dialog', { name: '添加 RSS 源' })).not.toBeInTheDocument();

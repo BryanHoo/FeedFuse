@@ -85,7 +85,7 @@ export default function FeedSummaryPolicyDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent closeLabel="close-summary-policy" className={DIALOG_FORM_CONTENT_CLASS_NAME}>
+      <DialogContent closeLabel="关闭 AI 摘要配置" className={DIALOG_FORM_CONTENT_CLASS_NAME}>
         <DialogHeader>
           <DialogTitle>AI 摘要配置</DialogTitle>
           <DialogDescription>仅保存自动触发规则，现在不会立即生成摘要。</DialogDescription>

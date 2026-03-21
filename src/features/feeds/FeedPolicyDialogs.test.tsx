@@ -41,6 +41,8 @@ describe('FeedPolicyDialogs', () => {
       />,
     );
 
+    expect(screen.getByRole('button', { name: '关闭 AI 摘要配置' })).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole('switch', { name: '收到新文章时自动生成摘要' }));
     fireEvent.click(screen.getByRole('switch', { name: '打开文章时自动生成摘要' }));
     fireEvent.click(screen.getByRole('button', { name: '保存配置' }));
@@ -64,6 +66,8 @@ describe('FeedPolicyDialogs', () => {
         onSubmit={onSubmit}
       />,
     );
+
+    expect(screen.getByRole('button', { name: '关闭翻译配置' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('switch', { name: '收到新文章时自动翻译标题' }));
     fireEvent.click(screen.getByRole('switch', { name: '收到新文章时自动翻译正文' }));
@@ -92,6 +96,8 @@ describe('FeedPolicyDialogs', () => {
       />,
     );
 
+    expect(screen.getByRole('button', { name: '关闭翻译配置' })).toBeInTheDocument();
+
     expect(screen.getByRole('switch', { name: '打开文章时自动翻译正文' })).toHaveAttribute(
       'data-state',
       'checked',
@@ -109,6 +115,8 @@ describe('FeedPolicyDialogs', () => {
         onSubmit={onSubmit}
       />,
     );
+
+    expect(screen.getByRole('button', { name: '关闭全文抓取配置' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('switch', { name: '打开文章时自动抓取全文' }));
     fireEvent.click(screen.getByRole('switch', { name: '入库时自动抓取全文' }));

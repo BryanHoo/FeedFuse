@@ -82,7 +82,7 @@ export default function FeedFulltextPolicyDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent closeLabel="close-fulltext-policy" className={DIALOG_FORM_CONTENT_CLASS_NAME}>
+      <DialogContent closeLabel="关闭全文抓取配置" className={DIALOG_FORM_CONTENT_CLASS_NAME}>
         <DialogHeader>
           <DialogTitle>全文抓取配置</DialogTitle>
           <DialogDescription>分别控制阅读时补全文和入库过滤前补全文，两者不会立即触发抓取。</DialogDescription>

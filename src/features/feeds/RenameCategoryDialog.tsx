@@ -70,7 +70,7 @@ export default function RenameCategoryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent closeLabel="close-rename-category" className="max-w-sm">
+      <DialogContent closeLabel="关闭重命名分类" className="max-w-sm">
         <DialogHeader>
           <DialogTitle>重命名分类</DialogTitle>
           <DialogDescription className="break-words">

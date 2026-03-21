@@ -75,7 +75,7 @@ const VALIDATION_STATE_META: Record<ValidationState, ValidationStateMeta> = {
 
 const MODE_META: Record<FeedDialogMode, ModeMeta> = {
   add: {
-    closeLabel: 'close-add-feed',
+    closeLabel: '关闭添加 RSS 源',
     dialogTitle: '添加 RSS 源',
     dialogDescription: '输入 RSS 地址后，我们会自动验证链接，并尽量补全订阅名称。',
     sectionLabel: '订阅信息',
@@ -84,7 +84,7 @@ const MODE_META: Record<FeedDialogMode, ModeMeta> = {
     successMessage: '已添加订阅源',
   },
   edit: {
-    closeLabel: 'close-edit-feed',
+    closeLabel: '关闭编辑 RSS 源',
     dialogTitle: '编辑 RSS 源',
     dialogDescription: '修改订阅地址、名称或分类。保存后不会影响已有文章。',
     sectionLabel: '订阅信息',

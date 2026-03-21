@@ -22,6 +22,7 @@ describe('ui smoke', () => {
     );
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByText('Hello')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '关闭' })).toBeInTheDocument();
   });
 
   it('renders Switch and can be toggled', () => {
