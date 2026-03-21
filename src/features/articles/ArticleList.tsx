@@ -1,5 +1,14 @@
 import { CheckCheck, CircleDot, LayoutGrid, List, RefreshCw } from "lucide-react";
-import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type KeyboardEvent,
+  type UIEvent,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useAppStore } from "../../store/appStore";
 import { formatRelativeTime } from "../../utils/date";
 import { generateAiDigest, patchFeed, refreshAllFeeds, refreshFeed } from "../../lib/apiClient";
@@ -16,6 +25,10 @@ import {
 import ReaderToolbarIconButton from "../reader/ReaderToolbarIconButton";
 import { toast } from "../toast/toast";
 import { buildArticleListDerivedState } from "./articleListModel";
+import {
+  getArticleVirtualAnchorCompensation,
+  getArticleVirtualWindow,
+} from "./articleVirtualWindow";
 
 const sessionVisibleArticleIds = new Set<string>();
 const REFRESH_POLL_INTERVAL_MS = 1000;
@@ -23,6 +36,8 @@ const REFRESH_POLL_MAX_ATTEMPTS = 12;
 const AI_DIGEST_POLL_INTERVAL_MS = 1000;
 const AI_DIGEST_POLL_MAX_ATTEMPTS = 30;
 const PREVIEW_PRELOAD_MAX_CONCURRENT = 2;
+const VIRTUAL_OVERSCAN = 8;
+const LOAD_MORE_THRESHOLD_PX = 320;
 type PreviewImageStatus = "loading" | "ready" | "failed";
 const unreadSignalDotClassName =
   "h-2 w-2 rounded-full bg-[color-mix(in_oklab,var(--color-primary)_78%,white)] ring-2 ring-background/95";
@@ -59,6 +74,11 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
   const showUnreadOnly = useAppStore((state) => state.showUnreadOnly);
   const toggleShowUnreadOnly = useAppStore((state) => state.toggleShowUnreadOnly);
   const loadSnapshot = useAppStore((state) => state.loadSnapshot);
+  const loadMoreSnapshot = useAppStore((state) => state.loadMoreSnapshot);
+  const articleListHasMore = useAppStore((state) => state.articleListHasMore);
+  const articleListTotalCount = useAppStore((state) => state.articleListTotalCount);
+  const articleListLoadingMore = useAppStore((state) => state.articleListLoadingMore);
+  const articleListLoadMoreError = useAppStore((state) => state.articleListLoadMoreError);
   const refreshRequestIdRef = useRef(0);
   const displayModeRequestIdRef = useRef(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -81,6 +101,7 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const articleCardRefs = useRef(new Map<string, HTMLButtonElement>());
+  const previousVirtualRowsRef = useRef<Array<{ key: string; height: number }>>([]);
   const [previewImageStatuses, setPreviewImageStatuses] = useState<Map<string, PreviewImageStatus>>(
     () => new Map(),
   );
@@ -92,6 +113,8 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
   const [wrappedCardTitleArticleIds, setWrappedCardTitleArticleIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(0);
   const referenceTime = useRenderTimeSnapshot(renderedAt);
 
   useEffect(() => {
@@ -174,8 +197,28 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
     previewImageByArticleId,
     previewImageCandidates,
     unreadCount,
+    virtualRows,
     viewScopedArticles,
   } = derivedState;
+  const rowHeights = useMemo(() => virtualRows.map((row) => row.height), [virtualRows]);
+  const effectiveViewportHeight = viewportHeight || scrollContainerRef.current?.clientHeight || 768;
+  const virtualWindow = useMemo(
+    () =>
+      getArticleVirtualWindow({
+        rowHeights,
+        scrollTop,
+        viewportHeight: effectiveViewportHeight,
+        overscan: VIRTUAL_OVERSCAN,
+      }),
+    [effectiveViewportHeight, rowHeights, scrollTop],
+  );
+  const visibleRows = useMemo(() => {
+    if (virtualWindow.endIndex < virtualWindow.startIndex) {
+      return [];
+    }
+
+    return virtualRows.slice(virtualWindow.startIndex, virtualWindow.endIndex + 1);
+  }, [virtualRows, virtualWindow]);
 
   useEffect(() => {
     if (!showUnreadFilterActive) {
@@ -194,7 +237,9 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
 
   useEffect(() => {
     const root = scrollContainerRef.current;
-    if (!root || previewImageByArticleId.size === 0) return;
+    if (!root || previewImageByArticleId.size === 0 || typeof IntersectionObserver === "undefined") {
+      return;
+    }
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -224,6 +269,43 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
 
     return () => observer.disconnect();
   }, [previewImageByArticleId]);
+
+  useEffect(() => {
+    previousVirtualRowsRef.current = [];
+    setScrollTop(0);
+    setViewportHeight(0);
+  }, [selectedView]);
+
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) {
+      previousVirtualRowsRef.current = virtualRows.map((row) => ({ key: row.key, height: row.height }));
+      return;
+    }
+
+    const nextRows = virtualRows.map((row) => ({ key: row.key, height: row.height }));
+    const previousRows = previousVirtualRowsRef.current;
+
+    if (previousRows.length > 0 && container.scrollTop > 0) {
+      const nextScrollTop = getArticleVirtualAnchorCompensation({
+        previousRows,
+        nextRows,
+        previousScrollTop: container.scrollTop,
+      });
+
+      if (nextScrollTop !== null && Math.abs(nextScrollTop - container.scrollTop) > 0.5) {
+        // Keep the same anchor row under the viewport when refreshed data prepends new items.
+        container.scrollTop = nextScrollTop;
+        setScrollTop(nextScrollTop);
+      }
+    }
+
+    previousVirtualRowsRef.current = nextRows;
+    const nextViewportHeight = container.clientHeight;
+    if (nextViewportHeight > 0 && nextViewportHeight !== viewportHeight) {
+      setViewportHeight(nextViewportHeight);
+    }
+  }, [viewportHeight, virtualRows]);
 
   useEffect(() => {
     const candidateKeys = new Set(previewImageCandidates.keys());
@@ -313,7 +395,8 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
     markAllAsRead(selectedView);
   };
 
-  const articleCount = showUnreadFilterActive ? unreadCount : filteredArticles.length;
+  const articleCount =
+    articleListTotalCount || (showUnreadFilterActive ? unreadCount : filteredArticles.length);
 
   const selectedFeed = isAggregateView ? null : feedById.get(selectedView) ?? selectedFeedFromStore;
   const headerTitle = selectedView === AI_DIGEST_VIEW_ID ? "智能解读" : (selectedFeed?.title ?? "文章");
@@ -464,6 +547,31 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
   const displayModeButtonTitle = effectiveDisplayMode === "card" ? "切换为列表" : "切换为卡片";
   const unreadOnlyButtonLabel = showUnreadOnly ? "显示全部文章" : "仅显示未读文章";
 
+  const maybeLoadMore = useCallback(
+    (container: HTMLDivElement) => {
+      if (!articleListHasMore || articleListLoadingMore || articleListLoadMoreError) {
+        return;
+      }
+
+      const remainingDistance =
+        container.scrollHeight - (container.scrollTop + container.clientHeight);
+      if (remainingDistance <= LOAD_MORE_THRESHOLD_PX) {
+        void loadMoreSnapshot();
+      }
+    },
+    [articleListHasMore, articleListLoadMoreError, articleListLoadingMore, loadMoreSnapshot],
+  );
+
+  const handleScroll = useCallback(
+    (event: UIEvent<HTMLDivElement>) => {
+      const container = event.currentTarget;
+      setScrollTop(container.scrollTop);
+      setViewportHeight(container.clientHeight);
+      maybeLoadMore(container);
+    },
+    [maybeLoadMore],
+  );
+
   const onRefreshClick = () => {
     if (!canRefresh) return;
 
@@ -599,6 +707,225 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
       });
   };
 
+  const renderVirtualRow = (row: (typeof visibleRows)[number]) => {
+    if (row.type === "section") {
+      return (
+        <div
+          key={row.key}
+          className="flex items-center px-4 py-2"
+          style={{ height: row.height }}
+        >
+          <h3 className="text-[18px] font-semibold tracking-tight text-foreground">
+            {row.sectionTitle}
+          </h3>
+        </div>
+      );
+    }
+
+    const article = row.article;
+    if (!article) {
+      return null;
+    }
+
+    const previewImage = previewImageByArticleId.get(article.id);
+    const previewImageStatus = previewImage
+      ? previewImageStatuses.get(previewImage.key)
+      : undefined;
+    const showPreviewImage = previewImageStatus === "ready";
+    const displayTitle = article.titleZh?.trim() || article.title;
+    const articleFiltered = shouldShowFilteredBadge(article);
+    const articleBriefContent = aiDigestFeedIds.has(article.feedId)
+      ? resolveArticleBriefContent({
+          summary: article.summary,
+          contentHtml: article.content,
+        })
+      : article.summary;
+
+    if (effectiveDisplayMode === "list") {
+      return (
+        <button
+          key={row.key}
+          data-article-nav="true"
+          data-article-id={article.id}
+          type="button"
+          onClick={() => setSelectedArticle(article.id)}
+          onKeyDown={(event) => handleArticleKeyDown(event, article.id)}
+          aria-current={selectedArticleId === article.id ? "true" : undefined}
+          aria-label={getArticleButtonLabel(article, displayTitle)}
+          className={cn(
+            "w-full px-4 py-2.5 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+            selectedArticleId === article.id
+              ? "bg-accent"
+              : READER_PANE_HOVER_BACKGROUND_CLASS_NAME,
+          )}
+          style={{ height: row.height }}
+        >
+          <div className="min-w-0">
+            <span
+              data-testid={`article-list-row-${article.id}-title`}
+              title={displayTitle}
+              className={cn(
+                "block min-w-0 truncate text-[0.94rem] leading-[1.35]",
+                article.isRead
+                  ? "font-medium text-muted-foreground"
+                  : "font-semibold text-foreground",
+              )}
+            >
+              {displayTitle}
+            </span>
+            <div className="mt-1 flex items-center justify-between gap-3 text-[11px]">
+              <div className="min-w-0 flex items-center gap-2">
+                <span
+                  data-testid={`article-list-row-${article.id}-feed`}
+                  className="min-w-0 max-w-[10.5rem] truncate font-medium text-muted-foreground"
+                >
+                  {getFeedTitle(article.feedId)}
+                </span>
+                {articleFiltered ? (
+                  <Badge variant="secondary" className="h-5 shrink-0 px-1.5 text-[10px] font-medium">
+                    已过滤
+                  </Badge>
+                ) : null}
+              </div>
+              <div className="shrink-0 flex items-center gap-1.5">
+                {!article.isRead && (
+                  <span
+                    data-testid={`article-list-row-${article.id}-unread-dot`}
+                    aria-hidden="true"
+                    className={unreadSignalDotClassName}
+                  />
+                )}
+                <span
+                  data-testid={`article-list-row-${article.id}-time`}
+                  className={article.isRead ? "text-muted-foreground" : unreadSignalTimeClassName}
+                >
+                  {formatRelativeTime(article.publishedAt, referenceTime)}
+                </span>
+              </div>
+            </div>
+          </div>
+        </button>
+      );
+    }
+
+    return (
+      <button
+        key={row.key}
+        data-article-nav="true"
+        data-article-id={article.id}
+        ref={(node) => {
+          if (node) {
+            articleCardRefs.current.set(article.id, node);
+            return;
+          }
+
+          articleCardRefs.current.delete(article.id);
+        }}
+        type="button"
+        onClick={() => setSelectedArticle(article.id)}
+        onKeyDown={(event) => handleArticleKeyDown(event, article.id)}
+        aria-current={selectedArticleId === article.id ? "true" : undefined}
+        aria-label={getArticleButtonLabel(article, displayTitle)}
+        className={cn(
+          "w-full px-4 py-2.5 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+          selectedArticleId === article.id
+            ? "bg-accent"
+            : READER_PANE_HOVER_BACKGROUND_CLASS_NAME,
+        )}
+        style={{ height: row.height }}
+      >
+        <div className="flex h-full items-stretch gap-3">
+          <div className="flex h-full min-w-0 flex-1 flex-col">
+            <h3
+              data-testid={`article-card-${article.id}-title`}
+              ref={(titleElement) => {
+                if (titleElement) {
+                  cardTitleRefs.current.set(article.id, titleElement);
+                  return;
+                }
+
+                cardTitleRefs.current.delete(article.id);
+              }}
+              className={cn(
+                "line-clamp-2 text-[0.94rem] leading-[1.35]",
+                article.isRead
+                  ? "font-medium text-muted-foreground"
+                  : "font-semibold text-foreground",
+              )}
+            >
+              {displayTitle}
+            </h3>
+
+            <p
+              data-testid={`article-card-${article.id}-summary`}
+              className={cn(
+                "mt-0.5 text-[12px] leading-relaxed text-muted-foreground",
+                wrappedCardTitleArticleIds.has(article.id) ? "line-clamp-1" : "line-clamp-2",
+              )}
+            >
+              {articleBriefContent}
+            </p>
+
+            <div className="mt-auto flex items-center justify-between gap-3 pt-1.5 text-[11px]">
+              <div className="min-w-0 flex items-center gap-2">
+                <span className="max-w-[10.5rem] truncate font-medium text-muted-foreground">
+                  {getFeedTitle(article.feedId)}
+                </span>
+                {articleFiltered ? (
+                  <Badge variant="secondary" className="h-5 shrink-0 px-1.5 text-[10px] font-medium">
+                    已过滤
+                  </Badge>
+                ) : null}
+              </div>
+              <div className="shrink-0 flex items-center gap-1.5">
+                {!article.isRead && (
+                  <span
+                    data-testid={`article-card-${article.id}-unread-dot`}
+                    aria-hidden="true"
+                    className={unreadSignalDotClassName}
+                  />
+                )}
+                <span
+                  data-testid={`article-card-${article.id}-time`}
+                  className={article.isRead ? "text-muted-foreground" : unreadSignalTimeClassName}
+                >
+                  {formatRelativeTime(article.publishedAt, referenceTime)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {showPreviewImage && previewImage ? (
+            <div className="h-full w-24 shrink-0 overflow-hidden rounded-md bg-muted">
+              <img
+                src={previewImage.src}
+                alt=""
+                aria-hidden="true"
+                loading="lazy"
+                decoding="async"
+                fetchPriority="low"
+                width={96}
+                height={104}
+                className="h-full w-full object-cover"
+                onError={() => {
+                  setPreviewImageStatuses((previousStatuses) => {
+                    if (previousStatuses.get(previewImage.key) === "failed") {
+                      return previousStatuses;
+                    }
+
+                    const nextStatuses = new Map(previousStatuses);
+                    nextStatuses.set(previewImage.key, "failed");
+                    return nextStatuses;
+                  });
+                }}
+              />
+            </div>
+          ) : null}
+        </div>
+      </button>
+    );
+  };
+
   return (
     <div className="flex h-full flex-col" aria-busy={refreshing || displayModeSaving}>
       <div className="flex h-12 min-w-0 items-center justify-between gap-3 px-4">
@@ -644,222 +971,35 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
         </div>
       </div>
 
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pb-3 pt-1">
+      <div
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto pb-3 pt-1"
+      >
         {articleSections.length === 0 ? (
           <div className="flex min-h-full items-center justify-center px-6 py-10">
             <p className="text-center text-muted-foreground">{emptyStateMessage}</p>
           </div>
         ) : (
-          articleSections.map((section, sectionIndex) => (
-            <div
-              key={`${section.key}-${sectionIndex}`}
-              className="mt-3 first:mt-0"
-            >
-              <div className="px-4 py-2">
-                <h3 className="text-[18px] font-semibold tracking-tight text-foreground">
-                  {section.title}
-                </h3>
+          <>
+            <div aria-hidden="true" style={{ height: virtualWindow.topSpacerHeight }} />
+            {visibleRows.map(renderVirtualRow)}
+            <div aria-hidden="true" style={{ height: virtualWindow.bottomSpacerHeight }} />
+            {articleListLoadingMore ? (
+              <div className="px-4 py-3 text-xs text-muted-foreground">加载更多中...</div>
+            ) : null}
+            {articleListLoadMoreError ? (
+              <div className="px-4 py-3">
+                <button
+                  type="button"
+                  onClick={() => void loadMoreSnapshot()}
+                  className="text-xs font-medium text-foreground underline underline-offset-4"
+                >
+                  重试加载更多
+                </button>
               </div>
-
-              {section.articles.map((article) => {
-                const previewImage = previewImageByArticleId.get(article.id);
-                const previewImageStatus = previewImage
-                  ? previewImageStatuses.get(previewImage.key)
-                  : undefined;
-                const showPreviewImage = previewImageStatus === "ready";
-                const displayTitle = article.titleZh?.trim() || article.title;
-                const articleFiltered = shouldShowFilteredBadge(article);
-                const articleBriefContent = aiDigestFeedIds.has(article.feedId)
-                  ? resolveArticleBriefContent({
-                      summary: article.summary,
-                      contentHtml: article.content,
-                    })
-                  : article.summary;
-
-                if (effectiveDisplayMode === "list") {
-                  return (
-                    <button
-                      key={article.id}
-                      data-article-nav="true"
-                      data-article-id={article.id}
-                      type="button"
-                      onClick={() => setSelectedArticle(article.id)}
-                      onKeyDown={(event) => handleArticleKeyDown(event, article.id)}
-                      aria-current={selectedArticleId === article.id ? "true" : undefined}
-                      aria-label={getArticleButtonLabel(article, displayTitle)}
-                      className={cn(
-                        "w-full px-4 py-2.5 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
-                        selectedArticleId === article.id
-                          ? "bg-accent"
-                          : READER_PANE_HOVER_BACKGROUND_CLASS_NAME,
-                      )}
-                    >
-                      <div className="min-w-0">
-                        <span
-                          data-testid={`article-list-row-${article.id}-title`}
-                          title={displayTitle}
-                          className={cn(
-                            "block min-w-0 truncate text-[0.94rem] leading-[1.35]",
-                            article.isRead
-                              ? "font-medium text-muted-foreground"
-                              : "font-semibold text-foreground",
-                          )}
-                        >
-                          {displayTitle}
-                        </span>
-                        <div className="mt-1 flex items-center justify-between gap-3 text-[11px]">
-                          <div className="min-w-0 flex items-center gap-2">
-                            <span
-                              data-testid={`article-list-row-${article.id}-feed`}
-                              className="min-w-0 max-w-[10.5rem] truncate font-medium text-muted-foreground"
-                            >
-                              {getFeedTitle(article.feedId)}
-                            </span>
-                            {articleFiltered ? (
-                              <Badge variant="secondary" className="h-5 shrink-0 px-1.5 text-[10px] font-medium">
-                                已过滤
-                              </Badge>
-                            ) : null}
-                          </div>
-                          <div className="shrink-0 flex items-center gap-1.5">
-                            {!article.isRead && (
-                              <span
-                                data-testid={`article-list-row-${article.id}-unread-dot`}
-                                aria-hidden="true"
-                                className={unreadSignalDotClassName}
-                              />
-                            )}
-                            <span
-                              data-testid={`article-list-row-${article.id}-time`}
-                              className={article.isRead ? "text-muted-foreground" : unreadSignalTimeClassName}
-                            >
-                              {formatRelativeTime(article.publishedAt, referenceTime)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                }
-
-                return (
-                  <button
-                    key={article.id}
-                    data-article-nav="true"
-                    data-article-id={article.id}
-                    ref={(node) => {
-                      if (node) {
-                        articleCardRefs.current.set(article.id, node);
-                        return;
-                      }
-
-                      articleCardRefs.current.delete(article.id);
-                    }}
-                    type="button"
-                    onClick={() => setSelectedArticle(article.id)}
-                    onKeyDown={(event) => handleArticleKeyDown(event, article.id)}
-                    aria-current={selectedArticleId === article.id ? "true" : undefined}
-                    aria-label={getArticleButtonLabel(article, displayTitle)}
-                    className={cn(
-                      "h-[6.5rem] w-full px-4 py-2.5 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
-                      selectedArticleId === article.id
-                        ? "bg-accent"
-                        : READER_PANE_HOVER_BACKGROUND_CLASS_NAME,
-                    )}
-                  >
-                    <div className="flex h-full items-stretch gap-3">
-                      <div className="flex h-full min-w-0 flex-1 flex-col">
-                        <h3
-                          data-testid={`article-card-${article.id}-title`}
-                          ref={(titleElement) => {
-                            if (titleElement) {
-                              cardTitleRefs.current.set(article.id, titleElement);
-                              return;
-                            }
-
-                            cardTitleRefs.current.delete(article.id);
-                          }}
-                          className={cn(
-                            "line-clamp-2 text-[0.94rem] leading-[1.35]",
-                            article.isRead
-                              ? "font-medium text-muted-foreground"
-                              : "font-semibold text-foreground",
-                          )}
-                        >
-                          {displayTitle}
-                        </h3>
-
-                        <p
-                          data-testid={`article-card-${article.id}-summary`}
-                          className={cn(
-                            "mt-0.5 text-[12px] leading-relaxed text-muted-foreground",
-                            wrappedCardTitleArticleIds.has(article.id) ? "line-clamp-1" : "line-clamp-2",
-                          )}
-                        >
-                          {articleBriefContent}
-                        </p>
-
-                        <div className="mt-auto flex items-center justify-between gap-3 pt-1.5 text-[11px]">
-                          <div className="min-w-0 flex items-center gap-2">
-                            <span className="max-w-[10.5rem] truncate font-medium text-muted-foreground">
-                              {getFeedTitle(article.feedId)}
-                            </span>
-                            {articleFiltered ? (
-                              <Badge variant="secondary" className="h-5 shrink-0 px-1.5 text-[10px] font-medium">
-                                已过滤
-                              </Badge>
-                            ) : null}
-                          </div>
-                          <div className="shrink-0 flex items-center gap-1.5">
-                            {!article.isRead && (
-                              <span
-                                data-testid={`article-card-${article.id}-unread-dot`}
-                                aria-hidden="true"
-                                className={unreadSignalDotClassName}
-                              />
-                            )}
-                            <span
-                              data-testid={`article-card-${article.id}-time`}
-                              className={article.isRead ? "text-muted-foreground" : unreadSignalTimeClassName}
-                            >
-                              {formatRelativeTime(article.publishedAt, referenceTime)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {showPreviewImage && previewImage ? (
-                        <div className="h-full w-24 shrink-0 overflow-hidden rounded-md bg-muted">
-                          <img
-                            src={previewImage.src}
-                            alt=""
-                            aria-hidden="true"
-                            loading="lazy"
-                            decoding="async"
-                            fetchPriority="low"
-                            width={96}
-                            height={104}
-                            className="h-full w-full object-cover"
-                            onError={() => {
-                              setPreviewImageStatuses((previousStatuses) => {
-                                if (previousStatuses.get(previewImage.key) === "failed") {
-                                  return previousStatuses;
-                                }
-
-                                const nextStatuses = new Map(previousStatuses);
-                                nextStatuses.set(previewImage.key, "failed");
-                                return nextStatuses;
-                              });
-                            }}
-                          />
-                        </div>
-                      ) : null}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          ))
+            ) : null}
+          </>
         )}
       </div>
     </div>
