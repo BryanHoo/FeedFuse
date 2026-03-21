@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Article, Feed } from '../../types';
 import { AI_DIGEST_VIEW_ID } from '../../lib/view';
-import { buildArticleListDerivedState } from './articleListModel';
+import {
+  ARTICLE_CARD_ROW_HEIGHT,
+  ARTICLE_LIST_ROW_HEIGHT,
+  ARTICLE_SECTION_ROW_HEIGHT,
+  buildArticleListDerivedState,
+} from './articleListModel';
 
 function createFeed(overrides: Partial<Feed> = {}): Feed {
   return {
@@ -53,6 +58,7 @@ describe('buildArticleListDerivedState', () => {
       ],
       selectedView: 'all',
       selectedArticleId: 'article-1',
+      displayMode: 'card',
       showUnreadFilterActive: true,
       retainedVisibleArticleIds,
       aiDigestFeedIds: new Set(),
@@ -65,6 +71,15 @@ describe('buildArticleListDerivedState', () => {
     expect(result.articleSections.map((section) => section.articles.map((article) => article.id))).toEqual([
       ['article-1', 'article-2'],
     ]);
+    expect(result.virtualRows.map((row) => row.type)).toEqual(['section', 'article', 'article']);
+    expect(result.virtualRows.map((row) => row.height)).toEqual([
+      ARTICLE_SECTION_ROW_HEIGHT,
+      ARTICLE_CARD_ROW_HEIGHT,
+      ARTICLE_CARD_ROW_HEIGHT,
+    ]);
+    expect(result.totalVirtualHeight).toBe(
+      ARTICLE_SECTION_ROW_HEIGHT + ARTICLE_CARD_ROW_HEIGHT * 2,
+    );
   });
 
   it('为 AI 解读视图筛选文章，并优先使用 previewImage 生成预览图索引', () => {
@@ -84,6 +99,7 @@ describe('buildArticleListDerivedState', () => {
       ],
       selectedView: AI_DIGEST_VIEW_ID,
       selectedArticleId: null,
+      displayMode: 'card',
       showUnreadFilterActive: false,
       retainedVisibleArticleIds: new Set(),
       aiDigestFeedIds: new Set(['digest-feed']),
@@ -109,6 +125,7 @@ describe('buildArticleListDerivedState', () => {
       ],
       selectedView: 'all',
       selectedArticleId: null,
+      displayMode: 'card',
       showUnreadFilterActive: false,
       retainedVisibleArticleIds: new Set(),
       aiDigestFeedIds: new Set(),
@@ -117,5 +134,23 @@ describe('buildArticleListDerivedState', () => {
 
     expect(result.feedTitleById.get('feed-1')).toBe('Feed One');
     expect(result.feedTitleById.get('feed-2')).toBe('Feed Two');
+  });
+
+  it('uses list row height when displayMode=list', () => {
+    const result = buildArticleListDerivedState({
+      articles: [createArticle()],
+      selectedView: 'all',
+      selectedArticleId: null,
+      displayMode: 'list',
+      showUnreadFilterActive: false,
+      retainedVisibleArticleIds: new Set(),
+      aiDigestFeedIds: new Set(),
+      referenceTime: new Date('2026-02-25T12:00:00.000Z'),
+    });
+
+    expect(result.virtualRows.map((row) => row.height)).toEqual([
+      ARTICLE_SECTION_ROW_HEIGHT,
+      ARTICLE_LIST_ROW_HEIGHT,
+    ]);
   });
 });

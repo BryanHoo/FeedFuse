@@ -68,6 +68,13 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
   // Keep AI smart digest from exposing "mark all read" while allowing unread filter.
   const showMarkAllAsReadAction =
     showUnreadToggleAction && selectedView !== AI_DIGEST_VIEW_ID;
+  const isAggregateView = isAggregateReaderView(selectedView);
+  const selectedFeedFromStore = isAggregateView
+    ? null
+    : feeds.find((feed) => feed.id === selectedView) ?? null;
+  const effectiveDisplayMode = isAggregateView
+    ? "card"
+    : (selectedFeedFromStore?.articleListDisplayMode ?? "card");
 
   const showUnreadFilterActive =
     selectedView === "unread" || (showUnreadOnly && showUnreadToggleAction);
@@ -141,12 +148,22 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
         feeds,
         selectedView,
         selectedArticleId,
+        displayMode: effectiveDisplayMode,
         showUnreadFilterActive,
         retainedVisibleArticleIds: sessionVisibleArticleIds,
         aiDigestFeedIds,
         referenceTime,
       }),
-    [aiDigestFeedIds, articles, feeds, referenceTime, selectedArticleId, selectedView, showUnreadFilterActive],
+    [
+      aiDigestFeedIds,
+      articles,
+      effectiveDisplayMode,
+      feeds,
+      referenceTime,
+      selectedArticleId,
+      selectedView,
+      showUnreadFilterActive,
+    ],
   );
   const {
     articleSections,
@@ -298,10 +315,8 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
 
   const articleCount = showUnreadFilterActive ? unreadCount : filteredArticles.length;
 
-  const isAggregateView = isAggregateReaderView(selectedView);
-  const selectedFeed = isAggregateView ? null : feedById.get(selectedView) ?? null;
+  const selectedFeed = isAggregateView ? null : feedById.get(selectedView) ?? selectedFeedFromStore;
   const headerTitle = selectedView === AI_DIGEST_VIEW_ID ? "智能解读" : (selectedFeed?.title ?? "文章");
-  const effectiveDisplayMode = isAggregateView ? "card" : (selectedFeed?.articleListDisplayMode ?? "card");
   const isAiDigestView = Boolean(selectedFeed && (selectedFeed.kind ?? "rss") === "ai_digest");
 
   useEffect(() => {

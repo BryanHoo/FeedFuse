@@ -7,10 +7,24 @@ export interface ArticlePreviewImage {
   src: string;
 }
 
+export const ARTICLE_SECTION_ROW_HEIGHT = 52;
+export const ARTICLE_LIST_ROW_HEIGHT = 68;
+export const ARTICLE_CARD_ROW_HEIGHT = 104;
+
 export interface ArticleSection {
   key: string;
   title: string;
   articles: Article[];
+}
+
+export interface ArticleVirtualRow {
+  key: string;
+  type: 'section' | 'article';
+  height: number;
+  articleId: string | null;
+  sectionKey: string;
+  sectionTitle: string;
+  article: Article | null;
 }
 
 interface BuildArticleListDerivedStateInput {
@@ -18,6 +32,7 @@ interface BuildArticleListDerivedStateInput {
   feeds?: Feed[];
   selectedView: ViewType;
   selectedArticleId: string | null;
+  displayMode: 'card' | 'list';
   showUnreadFilterActive: boolean;
   retainedVisibleArticleIds: Set<string>;
   aiDigestFeedIds: Set<string>;
@@ -31,6 +46,8 @@ interface BuildArticleListDerivedStateResult {
   filteredArticles: Article[];
   unreadCount: number;
   articleSections: ArticleSection[];
+  virtualRows: ArticleVirtualRow[];
+  totalVirtualHeight: number;
   previewImageByArticleId: Map<string, ArticlePreviewImage>;
   previewImageCandidates: Map<string, string>;
   nextVisibleArticleIds: Set<string>;
@@ -106,9 +123,13 @@ export function buildArticleListDerivedState(
   }
 
   const articleSections: ArticleSection[] = [];
+  const virtualRows: ArticleVirtualRow[] = [];
   const previewImageByArticleId = new Map<string, ArticlePreviewImage>();
   const previewImageCandidates = new Map<string, string>();
   let currentSection: ArticleSection | null = null;
+  let totalVirtualHeight = 0;
+  const articleRowHeight =
+    input.displayMode === 'list' ? ARTICLE_LIST_ROW_HEIGHT : ARTICLE_CARD_ROW_HEIGHT;
 
   for (const article of filteredArticles) {
     const publishedDate = new Date(article.publishedAt);
@@ -124,9 +145,29 @@ export function buildArticleListDerivedState(
         articles: [],
       };
       articleSections.push(currentSection);
+      virtualRows.push({
+        key: `section:${sectionKey}`,
+        type: 'section',
+        height: ARTICLE_SECTION_ROW_HEIGHT,
+        articleId: null,
+        sectionKey,
+        sectionTitle: currentSection.title,
+        article: null,
+      });
+      totalVirtualHeight += ARTICLE_SECTION_ROW_HEIGHT;
     }
 
     currentSection.articles.push(article);
+    virtualRows.push({
+      key: `article:${article.id}`,
+      type: 'article',
+      height: articleRowHeight,
+      articleId: article.id,
+      sectionKey,
+      sectionTitle: currentSection.title,
+      article,
+    });
+    totalVirtualHeight += articleRowHeight;
 
     const previewImage = article.previewImage ?? getPreviewImage(article.content);
     if (!previewImage) {
@@ -149,6 +190,8 @@ export function buildArticleListDerivedState(
     filteredArticles,
     unreadCount,
     articleSections,
+    virtualRows,
+    totalVirtualHeight,
     previewImageByArticleId,
     previewImageCandidates,
     nextVisibleArticleIds,
