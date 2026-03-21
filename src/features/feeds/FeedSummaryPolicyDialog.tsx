@@ -11,6 +11,7 @@ import {
 import { DIALOG_FORM_CONTENT_CLASS_NAME } from '@/lib/designSystem';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { normalizeFeedAutoTriggerFlags } from '../../lib/feedAutoTriggerPolicy';
 import type { Feed } from '../../types';
 
 export interface FeedSummaryPolicyPatch {
@@ -35,10 +36,33 @@ export default function FeedSummaryPolicyDialog({
   const [aiSummaryOnOpenEnabled, setAiSummaryOnOpenEnabled] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  const syncSummaryFlags = (
+    patch: {
+      aiSummaryOnFetchEnabled?: boolean;
+      aiSummaryOnOpenEnabled?: boolean;
+    },
+    preferredPhase: 'fetch' | 'open',
+  ) => {
+    const next = normalizeFeedAutoTriggerFlags(
+      {
+        aiSummaryOnFetchEnabled,
+        aiSummaryOnOpenEnabled,
+        ...patch,
+      },
+      preferredPhase,
+    );
+    setAiSummaryOnFetchEnabled(Boolean(next.aiSummaryOnFetchEnabled));
+    setAiSummaryOnOpenEnabled(Boolean(next.aiSummaryOnOpenEnabled));
+  };
+
   useEffect(() => {
     if (!open || !feed) return;
-    setAiSummaryOnFetchEnabled(feed.aiSummaryOnFetchEnabled);
-    setAiSummaryOnOpenEnabled(feed.aiSummaryOnOpenEnabled);
+    const next = normalizeFeedAutoTriggerFlags({
+      aiSummaryOnFetchEnabled: feed.aiSummaryOnFetchEnabled,
+      aiSummaryOnOpenEnabled: feed.aiSummaryOnOpenEnabled,
+    });
+    setAiSummaryOnFetchEnabled(Boolean(next.aiSummaryOnFetchEnabled));
+    setAiSummaryOnOpenEnabled(Boolean(next.aiSummaryOnOpenEnabled));
     setSaving(false);
   }, [feed, open]);
 
@@ -77,7 +101,9 @@ export default function FeedSummaryPolicyDialog({
               id="summary-on-fetch"
               aria-label="收到新文章时自动生成摘要"
               checked={aiSummaryOnFetchEnabled}
-              onCheckedChange={setAiSummaryOnFetchEnabled}
+              onCheckedChange={(checked) =>
+                syncSummaryFlags({ aiSummaryOnFetchEnabled: checked }, 'fetch')
+              }
             />
           </div>
 
@@ -90,7 +116,9 @@ export default function FeedSummaryPolicyDialog({
               id="summary-on-open"
               aria-label="打开文章时自动生成摘要"
               checked={aiSummaryOnOpenEnabled}
-              onCheckedChange={setAiSummaryOnOpenEnabled}
+              onCheckedChange={(checked) =>
+                syncSummaryFlags({ aiSummaryOnOpenEnabled: checked }, 'open')
+              }
             />
           </div>
         </div>

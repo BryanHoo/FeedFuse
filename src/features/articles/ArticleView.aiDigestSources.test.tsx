@@ -233,6 +233,64 @@ describe('ArticleView ai digest sources', () => {
     expect(await screen.findByText('暂无来源记录')).toBeInTheDocument();
   });
 
+  it('uses an internal scroll container when sources exceed three items', async () => {
+    seedState({
+      feed: { id: 'feed-digest', kind: 'ai_digest', title: 'AI解读' },
+      article: {
+        id: 'digest-4',
+        feedId: 'feed-digest',
+        aiDigestSources: [
+          {
+            articleId: 'src-1',
+            feedId: 'feed-rss-1',
+            feedTitle: 'RSS 1',
+            title: '来源 1',
+            link: 'https://example.com/1',
+            publishedAt: '2026-03-17T00:00:00.000Z',
+            position: 0,
+          },
+          {
+            articleId: 'src-2',
+            feedId: 'feed-rss-2',
+            feedTitle: 'RSS 2',
+            title: '来源 2',
+            link: 'https://example.com/2',
+            publishedAt: '2026-03-16T00:00:00.000Z',
+            position: 1,
+          },
+          {
+            articleId: 'src-3',
+            feedId: 'feed-rss-3',
+            feedTitle: 'RSS 3',
+            title: '来源 3',
+            link: 'https://example.com/3',
+            publishedAt: '2026-03-15T00:00:00.000Z',
+            position: 2,
+          },
+          {
+            articleId: 'src-4',
+            feedId: 'feed-rss-4',
+            feedTitle: 'RSS 4',
+            title: '来源 4',
+            link: 'https://example.com/4',
+            publishedAt: '2026-03-14T00:00:00.000Z',
+            position: 3,
+          },
+        ],
+      },
+    });
+
+    render(<ArticleView />);
+
+    const scrollContainer = await screen.findByTestId('ai-digest-sources-scroll-container');
+    expect(scrollContainer).toHaveClass('overflow-y-auto');
+    expect(scrollContainer).toHaveClass('max-h-[13.5rem]');
+    expect(screen.getByRole('button', { name: /来源 1/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /来源 2/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /来源 3/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /来源 4/ })).toBeInTheDocument();
+  });
+
   it('clicking source item preserves back history by using none->push navigation semantics', async () => {
     const loadSnapshot = vi.fn().mockResolvedValue(undefined);
     const setSelectedView = vi.fn();

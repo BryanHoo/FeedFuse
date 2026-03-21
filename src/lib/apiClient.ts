@@ -7,6 +7,7 @@ import type {
   SystemLogsPage,
 } from '../types';
 import { notifyApiError } from './apiErrorNotifier';
+import { normalizeFeedAutoTriggerFlags } from './feedAutoTriggerPolicy';
 import { isRecord } from './utils';
 
 export interface ApiErrorPayload {
@@ -927,6 +928,14 @@ export async function deleteTranslationApiKey(): Promise<{ hasApiKey: boolean }>
 
 export function mapFeedDto(dto: FeedDtoLike, categories: Category[]): Feed {
   const categoryNameById = new Map(categories.map((category) => [category.id, category.name]));
+  const normalizedTriggers = normalizeFeedAutoTriggerFlags({
+    fullTextOnOpenEnabled: dto.fullTextOnOpenEnabled,
+    fullTextOnFetchEnabled: dto.fullTextOnFetchEnabled,
+    aiSummaryOnOpenEnabled: dto.aiSummaryOnOpenEnabled,
+    aiSummaryOnFetchEnabled: Boolean(dto.aiSummaryOnFetchEnabled),
+    bodyTranslateOnFetchEnabled: Boolean(dto.bodyTranslateOnFetchEnabled),
+    bodyTranslateOnOpenEnabled: Boolean(dto.bodyTranslateOnOpenEnabled),
+  });
   return {
     id: dto.id,
     kind: dto.kind,
@@ -936,12 +945,12 @@ export function mapFeedDto(dto: FeedDtoLike, categories: Category[]): Feed {
     icon: dto.iconUrl ?? undefined,
     unreadCount: 'unreadCount' in dto ? dto.unreadCount ?? 0 : 0,
     enabled: dto.enabled,
-    fullTextOnOpenEnabled: dto.fullTextOnOpenEnabled,
-    fullTextOnFetchEnabled: dto.fullTextOnFetchEnabled,
-    aiSummaryOnOpenEnabled: dto.aiSummaryOnOpenEnabled,
-    aiSummaryOnFetchEnabled: Boolean(dto.aiSummaryOnFetchEnabled),
-    bodyTranslateOnFetchEnabled: Boolean(dto.bodyTranslateOnFetchEnabled),
-    bodyTranslateOnOpenEnabled: Boolean(dto.bodyTranslateOnOpenEnabled),
+    fullTextOnOpenEnabled: Boolean(normalizedTriggers.fullTextOnOpenEnabled),
+    fullTextOnFetchEnabled: Boolean(normalizedTriggers.fullTextOnFetchEnabled),
+    aiSummaryOnOpenEnabled: Boolean(normalizedTriggers.aiSummaryOnOpenEnabled),
+    aiSummaryOnFetchEnabled: Boolean(normalizedTriggers.aiSummaryOnFetchEnabled),
+    bodyTranslateOnFetchEnabled: Boolean(normalizedTriggers.bodyTranslateOnFetchEnabled),
+    bodyTranslateOnOpenEnabled: Boolean(normalizedTriggers.bodyTranslateOnOpenEnabled),
     titleTranslateEnabled: dto.titleTranslateEnabled,
     bodyTranslateEnabled: dto.bodyTranslateEnabled,
     articleListDisplayMode: dto.articleListDisplayMode,

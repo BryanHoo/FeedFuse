@@ -11,6 +11,7 @@ import {
 import { DIALOG_FORM_CONTENT_CLASS_NAME } from '@/lib/designSystem';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { normalizeFeedAutoTriggerFlags } from '../../lib/feedAutoTriggerPolicy';
 import type { Feed } from '../../types';
 
 export interface FeedFulltextPolicyPatch {
@@ -35,10 +36,33 @@ export default function FeedFulltextPolicyDialog({
   const [fullTextOnFetchEnabled, setFullTextOnFetchEnabled] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  const syncFulltextFlags = (
+    patch: {
+      fullTextOnOpenEnabled?: boolean;
+      fullTextOnFetchEnabled?: boolean;
+    },
+    preferredPhase: 'fetch' | 'open',
+  ) => {
+    const next = normalizeFeedAutoTriggerFlags(
+      {
+        fullTextOnOpenEnabled,
+        fullTextOnFetchEnabled,
+        ...patch,
+      },
+      preferredPhase,
+    );
+    setFullTextOnOpenEnabled(Boolean(next.fullTextOnOpenEnabled));
+    setFullTextOnFetchEnabled(Boolean(next.fullTextOnFetchEnabled));
+  };
+
   useEffect(() => {
     if (!open || !feed) return;
-    setFullTextOnOpenEnabled(feed.fullTextOnOpenEnabled);
-    setFullTextOnFetchEnabled(feed.fullTextOnFetchEnabled);
+    const next = normalizeFeedAutoTriggerFlags({
+      fullTextOnOpenEnabled: feed.fullTextOnOpenEnabled,
+      fullTextOnFetchEnabled: feed.fullTextOnFetchEnabled,
+    });
+    setFullTextOnOpenEnabled(Boolean(next.fullTextOnOpenEnabled));
+    setFullTextOnFetchEnabled(Boolean(next.fullTextOnFetchEnabled));
     setSaving(false);
   }, [feed, open]);
 
@@ -74,7 +98,9 @@ export default function FeedFulltextPolicyDialog({
               id="fulltext-on-open"
               aria-label="打开文章时自动抓取全文"
               checked={fullTextOnOpenEnabled}
-              onCheckedChange={setFullTextOnOpenEnabled}
+              onCheckedChange={(checked) =>
+                syncFulltextFlags({ fullTextOnOpenEnabled: checked }, 'open')
+              }
             />
           </div>
 
@@ -87,7 +113,9 @@ export default function FeedFulltextPolicyDialog({
               id="fulltext-on-fetch"
               aria-label="入库时自动抓取全文"
               checked={fullTextOnFetchEnabled}
-              onCheckedChange={setFullTextOnFetchEnabled}
+              onCheckedChange={(checked) =>
+                syncFulltextFlags({ fullTextOnFetchEnabled: checked }, 'fetch')
+              }
             />
           </div>
         </div>

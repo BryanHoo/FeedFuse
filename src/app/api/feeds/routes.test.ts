@@ -129,7 +129,7 @@ describe('/api/feeds', () => {
       siteUrl: null,
       iconUrl: null,
       enabled: true,
-      fullTextOnOpenEnabled: true,
+      fullTextOnOpenEnabled: false,
       fullTextOnFetchEnabled: true,
       aiSummaryOnOpenEnabled: true,
       categoryId,
@@ -156,7 +156,7 @@ describe('/api/feeds', () => {
     expect(createFeedWithCategoryResolutionMock).toHaveBeenCalledWith(
       pool,
       expect.objectContaining({
-        fullTextOnOpenEnabled: true,
+        fullTextOnOpenEnabled: false,
         fullTextOnFetchEnabled: true,
         aiSummaryOnOpenEnabled: true,
       }),
@@ -213,7 +213,7 @@ describe('/api/feeds', () => {
       aiSummaryOnOpenEnabled: false,
       aiSummaryOnFetchEnabled: true,
       bodyTranslateOnFetchEnabled: true,
-      bodyTranslateOnOpenEnabled: true,
+      bodyTranslateOnOpenEnabled: false,
       categoryId: null,
       fetchIntervalMinutes: 30,
     });
@@ -239,7 +239,58 @@ describe('/api/feeds', () => {
       expect.objectContaining({
         aiSummaryOnFetchEnabled: true,
         bodyTranslateOnFetchEnabled: true,
-        bodyTranslateOnOpenEnabled: true,
+        bodyTranslateOnOpenEnabled: false,
+      }),
+    );
+    expect(json.ok).toBe(true);
+  });
+
+  it('POST /api/feeds normalizes mutually exclusive auto-trigger flags', async () => {
+    createFeedWithCategoryResolutionMock.mockResolvedValue({
+      id: feedId,
+      title: 'Example',
+      url: 'https://1.1.1.1/rss.xml',
+      siteUrl: null,
+      iconUrl: null,
+      enabled: true,
+      fullTextOnOpenEnabled: false,
+      fullTextOnFetchEnabled: true,
+      aiSummaryOnOpenEnabled: false,
+      aiSummaryOnFetchEnabled: true,
+      bodyTranslateOnFetchEnabled: true,
+      bodyTranslateOnOpenEnabled: false,
+      categoryId: null,
+      fetchIntervalMinutes: 30,
+    });
+
+    const mod = await import('./route');
+    const res = await mod.POST(
+      new Request('http://localhost/api/feeds', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          title: 'Example',
+          url: 'https://1.1.1.1/rss.xml',
+          fullTextOnOpenEnabled: true,
+          fullTextOnFetchEnabled: true,
+          aiSummaryOnOpenEnabled: true,
+          aiSummaryOnFetchEnabled: true,
+          bodyTranslateOnFetchEnabled: true,
+          bodyTranslateOnOpenEnabled: true,
+        }),
+      }),
+    );
+    const json = await res.json();
+
+    expect(createFeedWithCategoryResolutionMock).toHaveBeenCalledWith(
+      pool,
+      expect.objectContaining({
+        fullTextOnOpenEnabled: false,
+        fullTextOnFetchEnabled: true,
+        aiSummaryOnOpenEnabled: false,
+        aiSummaryOnFetchEnabled: true,
+        bodyTranslateOnFetchEnabled: true,
+        bodyTranslateOnOpenEnabled: false,
       }),
     );
     expect(json.ok).toBe(true);
@@ -360,7 +411,7 @@ describe('/api/feeds', () => {
       siteUrl: null,
       iconUrl: null,
       enabled: false,
-      fullTextOnOpenEnabled: true,
+      fullTextOnOpenEnabled: false,
       fullTextOnFetchEnabled: true,
       aiSummaryOnOpenEnabled: true,
       articleListDisplayMode: 'list',
@@ -390,7 +441,7 @@ describe('/api/feeds', () => {
       pool,
       feedId,
       expect.objectContaining({
-        fullTextOnOpenEnabled: true,
+        fullTextOnOpenEnabled: false,
         fullTextOnFetchEnabled: true,
         aiSummaryOnOpenEnabled: true,
         articleListDisplayMode: 'list',
@@ -448,7 +499,7 @@ describe('/api/feeds', () => {
       aiSummaryOnOpenEnabled: false,
       aiSummaryOnFetchEnabled: true,
       bodyTranslateOnFetchEnabled: true,
-      bodyTranslateOnOpenEnabled: true,
+      bodyTranslateOnOpenEnabled: false,
       categoryId: null,
       fetchIntervalMinutes: 30,
     });
@@ -474,7 +525,58 @@ describe('/api/feeds', () => {
       expect.objectContaining({
         aiSummaryOnFetchEnabled: true,
         bodyTranslateOnFetchEnabled: true,
-        bodyTranslateOnOpenEnabled: true,
+        bodyTranslateOnOpenEnabled: false,
+      }),
+    );
+    expect(json.ok).toBe(true);
+  });
+
+  it('PATCH /api/feeds/:id normalizes mutually exclusive auto-trigger flags', async () => {
+    updateFeedWithCategoryResolutionMock.mockResolvedValue({
+      id: feedId,
+      title: 'Updated',
+      url: 'https://example.com/rss.xml',
+      siteUrl: null,
+      iconUrl: null,
+      enabled: true,
+      fullTextOnOpenEnabled: false,
+      fullTextOnFetchEnabled: true,
+      aiSummaryOnOpenEnabled: false,
+      aiSummaryOnFetchEnabled: true,
+      bodyTranslateOnFetchEnabled: true,
+      bodyTranslateOnOpenEnabled: false,
+      categoryId: null,
+      fetchIntervalMinutes: 30,
+    });
+
+    const mod = await import('./[id]/route');
+    const res = await mod.PATCH(
+      new Request(`http://localhost/api/feeds/${feedId}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          fullTextOnOpenEnabled: true,
+          fullTextOnFetchEnabled: true,
+          aiSummaryOnOpenEnabled: true,
+          aiSummaryOnFetchEnabled: true,
+          bodyTranslateOnFetchEnabled: true,
+          bodyTranslateOnOpenEnabled: true,
+        }),
+      }),
+      { params: Promise.resolve({ id: feedId }) },
+    );
+    const json = await res.json();
+
+    expect(updateFeedWithCategoryResolutionMock).toHaveBeenCalledWith(
+      pool,
+      feedId,
+      expect.objectContaining({
+        fullTextOnOpenEnabled: false,
+        fullTextOnFetchEnabled: true,
+        aiSummaryOnOpenEnabled: false,
+        aiSummaryOnFetchEnabled: true,
+        bodyTranslateOnFetchEnabled: true,
+        bodyTranslateOnOpenEnabled: false,
       }),
     );
     expect(json.ok).toBe(true);

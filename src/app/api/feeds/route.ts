@@ -7,6 +7,7 @@ import { listFeeds } from '../../../server/repositories/feedsRepo';
 import { deriveFeedIconUrl } from '../../../server/rss/deriveFeedIconUrl';
 import { isSafeExternalUrl } from '../../../server/rss/ssrfGuard';
 import { createFeedWithCategoryResolution } from '../../../server/services/feedCategoryLifecycleService';
+import { normalizeFeedAutoTriggerFlags } from '../../../lib/feedAutoTriggerPolicy';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -110,7 +111,7 @@ export async function POST(request: Request) {
 
     const pool = getPool();
     const siteUrl = parsed.data.siteUrl ?? null;
-    const created = await createFeedWithCategoryResolution(pool, {
+    const created = await createFeedWithCategoryResolution(pool, normalizeFeedAutoTriggerFlags({
       ...parsed.data,
       siteUrl,
       iconUrl: deriveFeedIconUrl(siteUrl),
@@ -122,7 +123,7 @@ export async function POST(request: Request) {
       bodyTranslateOnOpenEnabled: parsed.data.bodyTranslateOnOpenEnabled ?? false,
       titleTranslateEnabled: parsed.data.titleTranslateEnabled ?? false,
       bodyTranslateEnabled: parsed.data.bodyTranslateEnabled ?? false,
-    });
+    }));
 
     return ok({ ...created, unreadCount: 0 });
   } catch (err) {

@@ -13,6 +13,7 @@ import {
   deleteFeedAndCleanupCategory,
   updateFeedWithCategoryResolution,
 } from '../../../../server/services/feedCategoryLifecycleService';
+import { normalizeFeedAutoTriggerFlags } from '../../../../lib/feedAutoTriggerPolicy';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -112,12 +113,12 @@ export async function PATCH(
       return fail(new ValidationError('Invalid request body', { url: 'Unsafe URL' }));
     }
 
-    const input = {
+    const input = normalizeFeedAutoTriggerFlags({
       ...bodyParsed.data,
       ...(typeof bodyParsed.data.siteUrl !== 'undefined'
         ? { iconUrl: deriveFeedIconUrl(bodyParsed.data.siteUrl) }
         : {}),
-    };
+    });
 
     const pool = getPool();
     const updated = await updateFeedWithCategoryResolution(pool, paramsParsed.data.id, input);

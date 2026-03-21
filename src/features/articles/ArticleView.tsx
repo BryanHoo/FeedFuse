@@ -34,6 +34,8 @@ import ReaderToolbarIconButton from '../reader/ReaderToolbarIconButton';
 import { READER_RESIZE_DESKTOP_MIN_WIDTH } from '../reader/readerLayoutSizing';
 
 const FLOATING_TITLE_SCROLL_THRESHOLD_PX = 96;
+const AI_DIGEST_SOURCES_VISIBLE_LIMIT = 3;
+const AI_DIGEST_SOURCES_SCROLL_MAX_HEIGHT_CLASS = 'max-h-[13.5rem]';
 
 interface ArticleViewProps {
   onOpenSettings?: () => void;
@@ -135,6 +137,7 @@ export default function ArticleView({
   // AI digest articles are already synthesized content, so fulltext/translation actions stay disabled.
   const isAiDigestArticle = (feed?.kind ?? 'rss') === 'ai_digest';
   const aiDigestSources = article?.aiDigestSources ?? [];
+  const aiDigestSourcesOverflow = aiDigestSources.length > AI_DIGEST_SOURCES_VISIBLE_LIMIT;
   const titleOriginal = article?.titleOriginal?.trim() || article?.title || '';
   const titleZh = article?.titleZh?.trim();
   const showBilingualTitle = aiTranslationViewing && Boolean(titleZh);
@@ -1028,31 +1031,41 @@ export default function ArticleView({
               {aiDigestSources.length === 0 ? (
                 <p className="mt-2 text-sm text-muted-foreground">暂无来源记录</p>
               ) : (
-                <ul className="mt-2 space-y-2">
-                  {aiDigestSources.map((source) => (
-                    <li key={`${article.id}-${source.articleId}-${source.position}`}>
-                      <button
-                        type="button"
-                        className="flex w-full items-start justify-between gap-3 rounded-lg border border-border/60 bg-background/80 px-3 py-2 text-left transition-colors hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                        onClick={() => {
-                          void onAiDigestSourceClick(source);
-                        }}
-                      >
-                        <span className="min-w-0 space-y-0.5">
-                          <span className="block break-words text-sm font-medium text-foreground">
-                            {source.title}
+                <div
+                  data-testid={aiDigestSourcesOverflow ? 'ai-digest-sources-scroll-container' : undefined}
+                  className={cn(
+                    'mt-2',
+                    aiDigestSourcesOverflow &&
+                      // Cap the panel at roughly three source cards; longer lists scroll inside.
+                      `${AI_DIGEST_SOURCES_SCROLL_MAX_HEIGHT_CLASS} overflow-y-auto pr-1`,
+                  )}
+                >
+                  <ul className="space-y-2">
+                    {aiDigestSources.map((source) => (
+                      <li key={`${article.id}-${source.articleId}-${source.position}`}>
+                        <button
+                          type="button"
+                          className="flex w-full items-start justify-between gap-3 rounded-lg border border-border/60 bg-background/80 px-3 py-2 text-left transition-colors hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          onClick={() => {
+                            void onAiDigestSourceClick(source);
+                          }}
+                        >
+                          <span className="min-w-0 space-y-0.5">
+                            <span className="block break-words text-sm font-medium text-foreground">
+                              {source.title}
+                            </span>
+                            <span className="block break-words text-xs text-muted-foreground">
+                              {source.feedTitle}
+                            </span>
                           </span>
-                          <span className="block break-words text-xs text-muted-foreground">
-                            {source.feedTitle}
+                          <span className="shrink-0 text-xs text-muted-foreground">
+                            {formatRelativeTime(source.publishedAt ?? article.publishedAt, referenceTime)}
                           </span>
-                        </span>
-                        <span className="shrink-0 text-xs text-muted-foreground">
-                          {formatRelativeTime(source.publishedAt ?? article.publishedAt, referenceTime)}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </section>
           ) : null}

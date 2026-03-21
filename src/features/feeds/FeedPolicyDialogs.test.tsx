@@ -29,7 +29,7 @@ function buildFeed(overrides: Partial<Feed> = {}): Feed {
 }
 
 describe('FeedPolicyDialogs', () => {
-  it('summary policy dialog saves aiSummaryOnFetchEnabled and aiSummaryOnOpenEnabled', async () => {
+  it('summary policy dialog keeps fetch/open mutually exclusive', async () => {
     const onSubmit = vi.fn(async () => undefined);
 
     render(
@@ -47,13 +47,13 @@ describe('FeedPolicyDialogs', () => {
 
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalledWith({
-        aiSummaryOnFetchEnabled: true,
+        aiSummaryOnFetchEnabled: false,
         aiSummaryOnOpenEnabled: true,
       });
     });
   });
 
-  it('translation policy dialog saves 3 translation switches', async () => {
+  it('translation policy dialog keeps body translation fetch/open mutually exclusive', async () => {
     const onSubmit = vi.fn(async () => undefined);
 
     render(
@@ -73,7 +73,7 @@ describe('FeedPolicyDialogs', () => {
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalledWith({
         titleTranslateEnabled: true,
-        bodyTranslateOnFetchEnabled: true,
+        bodyTranslateOnFetchEnabled: false,
         bodyTranslateOnOpenEnabled: true,
       });
     });
@@ -98,7 +98,7 @@ describe('FeedPolicyDialogs', () => {
     );
   });
 
-  it('fulltext policy dialog saves fullTextOnOpenEnabled and fullTextOnFetchEnabled', async () => {
+  it('fulltext policy dialog keeps fetch/open mutually exclusive', async () => {
     const onSubmit = vi.fn(async () => undefined);
 
     render(
@@ -116,7 +116,7 @@ describe('FeedPolicyDialogs', () => {
 
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalledWith({
-        fullTextOnOpenEnabled: true,
+        fullTextOnOpenEnabled: false,
         fullTextOnFetchEnabled: true,
       });
     });
