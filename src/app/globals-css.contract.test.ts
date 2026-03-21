@@ -59,4 +59,11 @@ describe('globals.css contract', () => {
     expect(headingRuleMatch?.[1]).toBeDefined();
     expect(headingRuleMatch?.[1]).not.toContain('text-wrap: balance;');
   });
+
+  it('keeps muted foreground restrained while tightening contrast slightly', () => {
+    const css = readFileSync('src/app/globals.css', 'utf-8');
+
+    expect(css).toContain('--color-muted-foreground: hsl(222 18% 38%)');
+    expect(css).toContain('--color-muted-foreground: hsl(216 18% 78%)');
+  });
 });

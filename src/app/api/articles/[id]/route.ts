@@ -22,8 +22,6 @@ import { rewriteHtmlImages } from '../../../../server/media/rewriteHtmlImages';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const ARTICLE_CONTENT_IMAGE_QUALITY = 70;
-
 const paramsSchema = z.object({
   id: numericIdSchema,
 });
@@ -68,8 +66,7 @@ function rewriteArticleHtmlFields(article: ArticleRow): ArticleRow {
     return article;
   }
 
-  const rewriteUrl = (sourceUrl: string) =>
-    buildImageProxyUrl({ sourceUrl, secret, quality: ARTICLE_CONTENT_IMAGE_QUALITY });
+  const rewriteUrl = (sourceUrl: string) => buildImageProxyUrl({ sourceUrl, secret });
 
   return {
     ...article,

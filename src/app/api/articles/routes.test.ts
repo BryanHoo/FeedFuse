@@ -485,7 +485,7 @@ describe('/api/articles', () => {
 
     expect(json.ok).toBe(true);
     expect(json.data.contentHtml).toContain('/api/media/image?');
-    expect(json.data.contentHtml).toContain('q=70');
+    expect(json.data.contentHtml).not.toContain('q=');
     expect(json.data.contentHtml).toContain('srcset="/api/media/image?');
     expect(json.data.contentFullHtml).toContain('/api/media/image?');
     expect(json.data.aiTranslationBilingualHtml).toContain('/api/media/image?');

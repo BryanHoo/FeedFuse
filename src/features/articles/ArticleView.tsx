@@ -1006,7 +1006,8 @@ export default function ArticleView({
           <div
             ref={articleContentRef}
             className={cn(
-              'prose max-w-none dark:prose-invert',
+              // Tighten article typography contrast without making the surrounding UI feel heavier.
+              'prose max-w-none prose-headings:text-foreground/94 prose-headings:font-semibold prose-p:text-foreground/84 prose-p:font-[450] prose-li:text-foreground/84 prose-li:font-[450] prose-strong:text-foreground/96 prose-blockquote:border-border/90 prose-blockquote:text-foreground/84 prose-figcaption:text-muted-foreground prose-a:text-foreground/94 prose-a:decoration-primary/45 dark:prose-invert',
               fontSizeClass,
               lineHeightClass,
               fontFamilyClass,
