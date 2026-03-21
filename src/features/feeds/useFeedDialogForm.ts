@@ -101,24 +101,27 @@ function resolveTitleFieldError(title: string, titleTouched: boolean, submitAtte
 function resolveUrlFieldError({
   trimmedUrl,
   urlTouched,
-  submitAttempted,
   validationState,
   lastVerifiedUrl,
   validationMessage,
 }: {
   trimmedUrl: string;
   urlTouched: boolean;
-  submitAttempted: boolean;
   validationState: ValidationState;
   lastVerifiedUrl: string | null;
   validationMessage: string | null;
 }): string | null {
-  if (!urlTouched && !submitAttempted) {
+  if (!urlTouched) {
     return null;
   }
 
   if (!trimmedUrl) {
     return '请输入 RSS 地址。';
+  }
+
+  // Blur 触发异步校验后，先展示验证中状态，不要提前渲染失败提示。
+  if (validationState === 'validating') {
+    return null;
   }
 
   if (validationState === 'failed') {
@@ -182,7 +185,6 @@ export function useFeedDialogForm({
     resolveUrlFieldError({
       trimmedUrl,
       urlTouched,
-      submitAttempted,
       validationState,
       lastVerifiedUrl,
       validationMessage,
@@ -224,7 +226,6 @@ export function useFeedDialogForm({
     const nextUrlError = resolveUrlFieldError({
       trimmedUrl,
       urlTouched: true,
-      submitAttempted: true,
       validationState,
       lastVerifiedUrl,
       validationMessage,
@@ -313,6 +314,7 @@ export function useFeedDialogForm({
   const handleUrlChange = (nextUrl: string) => {
     validationRequestIdRef.current += 1;
     setUrl(nextUrl);
+    setUrlTouched(false);
     setSubmitError(null);
     setServerFieldErrors((current) => ({ ...current, url: undefined }));
     resetValidationState();

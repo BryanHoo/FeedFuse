@@ -397,6 +397,73 @@ describe('AddFeedDialog', () => {
     expect(submitButton).toBeDisabled();
   });
 
+  it('hides url feedback while editing again before the next blur', async () => {
+    renderWithNotifications();
+    await openAddFeedDialog();
+
+    const urlInput = screen.getByLabelText('URL');
+    fireEvent.change(urlInput, {
+      target: { value: 'https://example.com/success.xml' },
+    });
+    fireEvent.blur(urlInput);
+
+    await waitFor(() => {
+      expect(screen.getByText('链接可用，已识别为 RSS 源。')).toBeInTheDocument();
+      expect(urlInput).toHaveAttribute('aria-invalid', 'false');
+    });
+
+    fireEvent.change(urlInput, {
+      target: { value: 'https://example.com/edited.xml' },
+    });
+
+    expect(screen.queryByText('链接可用，已识别为 RSS 源。')).not.toBeInTheDocument();
+    expect(screen.queryByText('请先验证可用的 RSS 地址。')).not.toBeInTheDocument();
+    expect(screen.queryByText('暂时无法验证该链接，请检查后重试。')).not.toBeInTheDocument();
+    expect(urlInput).toHaveAttribute('aria-invalid', 'false');
+  });
+
+  it('keeps url field in validating state instead of showing an error immediately after blur', async () => {
+    let resolveValidation:
+      | ((value: Awaited<ReturnType<typeof validateRssUrl>>) => void)
+      | undefined;
+    vi.mocked(validateRssUrl).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveValidation = resolve;
+        }),
+    );
+
+    renderWithNotifications();
+    await openAddFeedDialog();
+
+    const urlInput = screen.getByLabelText('URL');
+    fireEvent.change(urlInput, {
+      target: { value: 'https://example.com/pending.xml' },
+    });
+
+    fireEvent.blur(urlInput);
+
+    await waitFor(() => {
+      expect(screen.getByText('验证中')).toBeInTheDocument();
+      expect(screen.getByText('正在验证链接…')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('请先验证可用的 RSS 地址。')).not.toBeInTheDocument();
+    expect(urlInput).toHaveAttribute('aria-invalid', 'false');
+
+    resolveValidation?.({
+      ok: true,
+      kind: 'rss',
+      title: 'Pending Feed Title',
+      siteUrl: 'https://example.com/',
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('验证成功')).toBeInTheDocument();
+      expect(urlInput).toHaveAttribute('aria-invalid', 'false');
+    });
+  });
+
   it('falls back to failed validation state when validation throws unexpectedly', async () => {
     vi.mocked(validateRssUrl).mockRejectedValueOnce(new Error('socket hang up'));
 
