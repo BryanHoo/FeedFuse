@@ -1,0 +1,87 @@
+name: Release Images
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      manual_tag:
+        description: 'Optional tag for manual image publishing'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract web image metadata
+        id: web-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/bryanhoo/feedfuse-web
+          tags: |
+            # Keep installs pinned to explicit versions instead of publishing latest.
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=short,prefix=sha-
+            type=raw,value=${{ inputs.manual_tag }},enable=${{ github.event_name == 'workflow_dispatch' && inputs.manual_tag != '' }}
+
+      - name: Extract worker image metadata
+        id: worker-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/bryanhoo/feedfuse-worker
+          tags: |
+            # Keep installs pinned to explicit versions instead of publishing latest.
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=short,prefix=sha-
+            type=raw,value=${{ inputs.manual_tag }},enable=${{ github.event_name == 'workflow_dispatch' && inputs.manual_tag != '' }}
+
+      - name: Build and push web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: web
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.web-meta.outputs.tags }}
+          labels: ${{ steps.web-meta.outputs.labels }}
+          cache-from: type=gha,scope=feedfuse-web
+          cache-to: type=gha,scope=feedfuse-web,mode=max
+
+      - name: Build and push worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: worker
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.worker-meta.outputs.tags }}
+          labels: ${{ steps.worker-meta.outputs.labels }}
+          cache-from: type=gha,scope=feedfuse-worker
+          cache-to: type=gha,scope=feedfuse-worker,mode=max

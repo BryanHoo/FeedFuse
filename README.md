@@ -50,23 +50,40 @@ FeedFuse 保留了 RSS 最有价值的部分：开放、可迁移、可掌控。
 
 ## 快速开始
 
-推荐直接使用 `docker compose`，默认配置即可跑起来。
+推荐直接使用预构建镜像配合 `docker compose`，不需要先拉取完整源码仓库。
 
-### 1. 准备环境变量
+### 1. 准备安装目录并下载发布文件
 
 ```bash
-cp .env.example .env
+mkdir -p feedfuse
+cd feedfuse
+curl -fsSL -o compose.yaml https://raw.githubusercontent.com/BryanHoo/FeedFuse/main/deploy/compose.yaml
+curl -fsSL -o .env https://raw.githubusercontent.com/BryanHoo/FeedFuse/main/deploy/.env.example
 ```
 
-默认情况下，`.env.example` 已包含本地运行所需的基础配置：
+### 2. 编辑 `.env`
 
-- `DATABASE_URL`
+至少需要修改：
+
+- `FEEDFUSE_VERSION`：改成要安装的发布版本，例如 `0.1.0`
+- `IMAGE_PROXY_SECRET`：改成你自己的随机密钥
+- `POSTGRES_PASSWORD`：改成你自己的数据库密码
+
+默认情况下，`.env` 已包含本地自托管所需的基础配置：
+
+- `POSTGRES_DB`
+- `POSTGRES_USER`
+- `POSTGRES_PASSWORD`
+- `POSTGRES_PORT`
+- `WEB_PORT`
 - `IMAGE_PROXY_SECRET`
+- `FEEDFUSE_VERSION`
 
-### 2. 启动服务
+### 3. 拉取镜像并启动服务
 
 ```bash
-docker compose up --build
+docker compose pull
+docker compose up -d
 ```
 
 启动后访问：
@@ -78,15 +95,26 @@ http://127.0.0.1:9559
 `docker compose` 会同时启动：
 
 - `db`：PostgreSQL
-- `web`：FeedFuse Web 应用
+- `web`：FeedFuse Web 应用，启动前会自动执行数据库迁移
 - `worker`：后台任务进程，用于抓取全文、生成摘要、翻译和 `AI解读`
 
-### 3. 首次使用
+### 4. 首次使用
 
 1. 添加自己的 RSS 源
 2. 按需整理分类
 3. 在设置中心补充 AI 配置
 4. 开始阅读，并按需要生成摘要、翻译或 `AI解读`
+
+### 5. 升级
+
+升级时只需要更新 `.env` 里的 `FEEDFUSE_VERSION`，然后重新拉取并启动：
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+建议固定到明确的版本号，而不是依赖漂移的默认标签，这样更容易回滚和排查问题。
 
 ## AI 配置
 
@@ -140,4 +168,13 @@ pnpm dev
 pnpm worker:dev
 ```
 
-如果你只是想试用产品，优先使用上面的 `docker compose` 方式，会更直接。
+## 从源码运行 Docker 版本
+
+如果你是在开发、调试镜像，或者需要本地修改代码后再构建，可以继续使用仓库根目录的 `docker-compose.yml`：
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+这条路径会在本地构建 `web` 和 `worker` 镜像，适合开发者，不再作为普通用户的默认安装方式。

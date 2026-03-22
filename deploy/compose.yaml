@@ -1,0 +1,65 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - feedfuse_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  web:
+    image: ghcr.io/bryanhoo/feedfuse-web:${FEEDFUSE_VERSION}
+    command:
+      [
+        'sh',
+        '-lc',
+        'node scripts/db/migrate.mjs && exec node node_modules/next/dist/bin/next start -p 9559',
+      ]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      IMAGE_PROXY_SECRET: ${IMAGE_PROXY_SECRET}
+      PORT: '9559'
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    ports:
+      - '${WEB_PORT:-9559}:9559'
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:9559/ >/dev/null || exit 1']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  worker:
+    image: ghcr.io/bryanhoo/feedfuse-worker:${FEEDFUSE_VERSION}
+    command:
+      [
+        'sh',
+        '-lc',
+        'node scripts/db/migrate.mjs && exec node node_modules/tsx/dist/cli.mjs src/worker/index.ts',
+      ]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  feedfuse_pg:
