@@ -34,3 +34,6 @@ artifacts/
 .env
 .superpowers
 .superwork
+.claude
+.agents
+.codex

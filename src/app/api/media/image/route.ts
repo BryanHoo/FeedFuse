@@ -1,7 +1,6 @@
 import { z } from 'zod';
-import sharp from 'sharp';
 import { getServerEnv } from '../../../../server/env';
-import { fetchImageBytes } from '../../../../server/http/externalHttpClient';
+import { fetchImageStream } from '../../../../server/http/externalHttpClient';
 import {
   getImageProxySecret,
   hasValidImageProxySignature,
@@ -12,6 +11,7 @@ export const dynamic = 'force-dynamic';
 
 const querySchema = z.object({
   url: z.string().url(),
+  // Keep legacy transform params in the signature contract for previously issued URLs.
   w: z.coerce.number().int().positive().max(2048).optional(),
   h: z.coerce.number().int().positive().max(2048).optional(),
   q: z.coerce.number().int().positive().max(100).optional(),
@@ -19,60 +19,6 @@ const querySchema = z.object({
 });
 
 const MAX_REDIRECTS = 3;
-const MAX_BYTES = 5 * 1024 * 1024;
-const DEFAULT_TRANSFORM_QUALITY = 75;
-const PASSTHROUGH_TRANSFORM_CONTENT_TYPES = new Set(['image/gif', 'image/svg+xml']);
-
-function normalizeContentType(contentType: string): string {
-  return contentType.split(';', 1)[0]?.trim().toLowerCase() ?? '';
-}
-
-async function maybeTransformImage(input: {
-  bytes: ArrayBuffer | Uint8Array;
-  contentType: string;
-  width?: number;
-  height?: number;
-  quality?: number;
-}): Promise<{ bytes: Blob; contentType: string }> {
-  const { bytes, contentType, width, height, quality } = input;
-  const sourceBytes = new Uint8Array(bytes);
-  const sourceBlob = new Blob([sourceBytes]);
-
-  if (width === undefined && height === undefined && quality === undefined) {
-    return { bytes: sourceBlob, contentType };
-  }
-
-  const normalizedContentType = normalizeContentType(contentType);
-  if (PASSTHROUGH_TRANSFORM_CONTENT_TYPES.has(normalizedContentType)) {
-    return { bytes: sourceBlob, contentType };
-  }
-
-  try {
-    let pipeline = sharp(sourceBytes);
-
-    if (width !== undefined || height !== undefined) {
-      pipeline = pipeline.resize({
-        width,
-        height,
-        fit: 'cover',
-        position: 'centre',
-        withoutEnlargement: true,
-      });
-    }
-
-    const transformed = await pipeline
-      .webp({ quality: quality ?? DEFAULT_TRANSFORM_QUALITY })
-      .toBuffer();
-    const transformedBytes = Uint8Array.from(transformed);
-
-    return {
-      bytes: new Blob([transformedBytes]),
-      contentType: 'image/webp',
-    };
-  } catch {
-    return { bytes: sourceBlob, contentType };
-  }
-}
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -102,15 +48,10 @@ export async function GET(request: Request) {
     return new Response('Forbidden', { status: 403 });
   }
 
-  const upstream = await fetchImageBytes(parsed.data.url, {
+  const upstream = await fetchImageStream(parsed.data.url, {
     maxRedirects: MAX_REDIRECTS,
-    maxBytes: MAX_BYTES,
     userAgent: 'FeedFuse Image Proxy/1.0',
   });
-
-  if (upstream.kind === 'redirect_fallback') {
-    return Response.redirect(parsed.data.url, 307);
-  }
 
   if (upstream.kind === 'forbidden') {
     return new Response('Forbidden', { status: 403 });
@@ -128,23 +69,16 @@ export async function GET(request: Request) {
     return new Response('Unsupported media type', { status: 415 });
   }
 
-  if (upstream.kind === 'too_large') {
-    return new Response('Payload too large', { status: 413 });
-  }
+  const headers = new Headers();
+  if (upstream.contentType) headers.set('content-type', upstream.contentType);
+  headers.set('cache-control', upstream.cacheControl);
+  if (upstream.contentEncoding) headers.set('content-encoding', upstream.contentEncoding);
+  if (upstream.contentLength) headers.set('content-length', upstream.contentLength);
+  if (upstream.etag) headers.set('etag', upstream.etag);
+  if (upstream.lastModified) headers.set('last-modified', upstream.lastModified);
 
-  const transformed = await maybeTransformImage({
-    bytes: upstream.bytes,
-    contentType: upstream.contentType,
-    width: parsed.data.w,
-    height: parsed.data.h,
-    quality: parsed.data.q,
-  });
-
-  return new Response(transformed.bytes, {
+  return new Response(upstream.body, {
     status: upstream.status,
-    headers: {
-      'content-type': transformed.contentType,
-      'cache-control': upstream.cacheControl,
-    },
+    headers,
   });
 }

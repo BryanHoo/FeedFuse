@@ -33,6 +33,15 @@ export function decodeCursor(cursor: string | null | undefined): CursorPayload |
   }
 }
 
+function serializeCursorPublishedAt(value: unknown): string {
+  // Keep cursor payloads stable even when pg materializes timestamptz as Date objects.
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  return String(value);
+}
+
 export function buildArticleFilter(input: {
   view: string;
   cursor?: string | null;
@@ -79,7 +88,7 @@ export function buildArticleFilter(input: {
   const decodedCursor = decodeCursor(input.cursor);
   if (decodedCursor) {
     whereParts.push(
-      `(coalesce(published_at, 'epoch'::timestamptz), id) < ($${paramIndex++}, $${paramIndex++})`,
+      `(coalesce(published_at, 'epoch'::timestamptz), articles.id) < ($${paramIndex++}, $${paramIndex++})`,
     );
     params.push(decodedCursor.publishedAt, decodedCursor.id);
   }
@@ -163,11 +172,6 @@ export interface ReaderSnapshot {
   };
 }
 
-const ARTICLE_LIST_PREVIEW_IMAGE_WIDTH = 192;
-const ARTICLE_LIST_PREVIEW_IMAGE_HEIGHT = 208;
-const ARTICLE_LIST_PREVIEW_IMAGE_QUALITY = 55;
-const FEED_ICON_IMAGE_SIZE = 32;
-const FEED_ICON_IMAGE_QUALITY = 70;
 const HTML_ENTITY_MAP: Record<string, string> = {
   amp: '&',
   lt: '<',
@@ -205,10 +209,7 @@ function isExpiredSignedImageUrl(value: string): boolean {
   }
 }
 
-function rewriteImageUrl(
-  imageUrl: string | null,
-  transform: { width?: number; height?: number; quality?: number },
-): string | null {
+function rewriteImageUrl(imageUrl: string | null): string | null {
   if (!imageUrl) return null;
 
   const normalizedImageUrl = decodeHtmlEntities(imageUrl).trim();
@@ -221,24 +222,15 @@ function rewriteImageUrl(
   return buildImageProxyUrl({
     sourceUrl: normalizedImageUrl,
     secret,
-    ...transform,
   });
 }
 
 function rewritePreviewImage(previewImage: string | null): string | null {
-  return rewriteImageUrl(previewImage, {
-    width: ARTICLE_LIST_PREVIEW_IMAGE_WIDTH,
-    height: ARTICLE_LIST_PREVIEW_IMAGE_HEIGHT,
-    quality: ARTICLE_LIST_PREVIEW_IMAGE_QUALITY,
-  });
+  return rewriteImageUrl(previewImage);
 }
 
 function rewriteFeedIcon(iconUrl: string | null): string | null {
-  return rewriteImageUrl(iconUrl, {
-    width: FEED_ICON_IMAGE_SIZE,
-    height: FEED_ICON_IMAGE_SIZE,
-    quality: FEED_ICON_IMAGE_QUALITY,
-  });
+  return rewriteImageUrl(iconUrl);
 }
 
 type ArticleQueryRow = ReaderSnapshotArticleItem & {
@@ -330,7 +322,7 @@ async function queryArticleRows(
         limit 1
       ) ai_summary_session on true
       ${whereSql}
-      order by "sortPublishedAt" desc, id desc
+      order by "sortPublishedAt" desc, articles.id desc
       limit $${limitParamIndex}
     `,
     queryParams,
@@ -415,7 +407,7 @@ export async function getReaderSnapshot(
   const nextCursor =
     queriedRows.length > limit
       ? encodeCursor({
-          publishedAt: String(queriedRows[limit].sortPublishedAt),
+          publishedAt: serializeCursorPublishedAt(queriedRows[limit].sortPublishedAt),
           id: queriedRows[limit].id,
         })
       : null;

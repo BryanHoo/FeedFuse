@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { Article, Category, Feed, ViewType } from '../types';
 import { useSettingsStore } from './settingsStore';
-import { shouldUseDefaultUnreadOnly } from '../lib/view';
+import { AI_DIGEST_VIEW_ID, shouldUseDefaultUnreadOnly } from '../lib/view';
 import {
   createAiDigest,
   createFeed,
@@ -278,7 +278,7 @@ function buildSnapshotRequestInput(
   const includeFiltered =
     typeof view === 'string' &&
     !['all', 'unread', 'starred'].includes(view) &&
-    view !== 'ai_digest' &&
+    view !== AI_DIGEST_VIEW_ID &&
     Boolean(state.showFilteredByFeedId[view])
       ? true
       : undefined;
@@ -375,11 +375,20 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     })();
   },
-  toggleShowUnreadOnly: () =>
+  toggleShowUnreadOnly: () => {
     set((state) => ({
       showUnreadOnly: !state.showUnreadOnly,
       ...INITIAL_ARTICLE_LIST_SESSION,
-    })),
+    }));
+
+    const view = get().selectedView;
+    if (!shouldUseDefaultUnreadOnly(view)) {
+      return;
+    }
+
+    // Reload the current snapshot so pagination and server-side unread filtering stay in sync.
+    void get().loadSnapshot({ view });
+  },
   toggleShowFilteredForFeed: (feedId) =>
     set((state) => ({
       showFilteredByFeedId: {

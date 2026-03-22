@@ -1,4 +1,5 @@
 import got from 'got';
+import { Readable } from 'node:stream';
 import { getPool } from '../db/pool';
 import { writeSystemLog } from '../logging/systemLogger';
 import { getFetchUrlCandidates } from '../rss/fetchUrlCandidates';
@@ -28,6 +29,10 @@ interface ExternalRequestLogging {
   source: string;
   requestLabel: string;
   context?: Record<string, unknown>;
+}
+
+function getHeaderValue(value: string | string[] | undefined): string | null {
+  return typeof value === 'string' ? value : value?.[0] ?? null;
 }
 
 function getExternalErrorDetails(err: unknown): string {
@@ -258,39 +263,57 @@ export async function fetchHtml(
   }
 }
 
-export type FetchImageBytesResult =
-  | {
-      kind: 'ok';
-      status: number;
-      contentType: string;
-      cacheControl: string;
-      bytes: Buffer;
-    }
-  | { kind: 'redirect_fallback' }
+export type FetchImageStreamResult =
+  | FetchImageStreamOkResult
   | { kind: 'forbidden' }
   | { kind: 'too_many_redirects' }
   | { kind: 'bad_gateway' }
-  | { kind: 'unsupported_media_type' }
-  | { kind: 'too_large' };
+  | { kind: 'unsupported_media_type' };
 
-type FetchImageBytesHopResult =
+type FetchImageStreamOkResult = {
+  kind: 'ok';
+  status: number;
+  contentType: string | null;
+  cacheControl: string;
+  contentEncoding: string | null;
+  contentLength: string | null;
+  etag: string | null;
+  lastModified: string | null;
+  body: ReadableStream<Uint8Array>;
+};
+
+type FetchImageStreamHopResult =
   | { kind: 'redirect'; nextUrl: string }
-  | {
-      kind: 'ok';
-      status: number;
-      contentType: string;
-      cacheControl: string;
-      bytes: Buffer;
-    }
-  | { kind: 'redirect_fallback' }
+  | FetchImageStreamOkResult
   | { kind: 'bad_gateway' }
-  | { kind: 'unsupported_media_type' }
-  | { kind: 'too_large' };
+  | { kind: 'unsupported_media_type' };
 
-async function fetchImageBytesHop(
+function isImageContentType(contentType: string | null): boolean {
+  return contentType?.toLowerCase().startsWith('image/') ?? false;
+}
+
+function buildFetchImageStreamOkResult(input: {
+  status: number;
+  headers: Record<string, string | string[] | undefined>;
+  body: ReadableStream<Uint8Array>;
+}): FetchImageStreamOkResult {
+  return {
+    kind: 'ok',
+    status: input.status,
+    contentType: getHeaderValue(input.headers['content-type']),
+    cacheControl: getHeaderValue(input.headers['cache-control']) ?? 'public, max-age=3600',
+    contentEncoding: getHeaderValue(input.headers['content-encoding']),
+    contentLength: getHeaderValue(input.headers['content-length']),
+    etag: getHeaderValue(input.headers.etag),
+    lastModified: getHeaderValue(input.headers['last-modified']),
+    body: input.body,
+  };
+}
+
+async function fetchImageStreamHop(
   url: string,
-  options: { maxBytes: number; userAgent: string; timeoutMs: number },
-): Promise<FetchImageBytesHopResult> {
+  options: { userAgent: string; timeoutMs: number },
+): Promise<FetchImageStreamHopResult> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs);
 
@@ -304,118 +327,73 @@ async function fetchImageBytesHop(
         accept: 'image/*,*/*;q=0.8',
         referer: `${sourceUrl.origin}/`,
       },
+      decompress: false,
       signal: controller.signal,
     });
 
-    return await new Promise<FetchImageBytesHopResult>((resolve) => {
+    return await new Promise<FetchImageStreamHopResult>((resolve) => {
       let settled = false;
-      const safeResolve = (value: FetchImageBytesHopResult) => {
+      const cleanup = () => clearTimeout(timeout);
+      const safeResolve = (value: FetchImageStreamHopResult) => {
         if (settled) return;
         settled = true;
         resolve(value);
       };
 
+      req.on('close', cleanup);
+      req.on('error', () => {
+        cleanup();
+        safeResolve({ kind: 'bad_gateway' });
+      });
+
       req.on('response', (res) => {
         const status = res.statusCode;
 
         if ([301, 302, 303, 307, 308].includes(status)) {
-          const locationHeader = res.headers.location;
-          const location =
-            typeof locationHeader === 'string'
-              ? locationHeader
-              : locationHeader?.[0] ?? null;
+          const location = getHeaderValue(res.headers.location);
           if (!location) {
+            cleanup();
             safeResolve({ kind: 'bad_gateway' });
             req.destroy();
             return;
           }
 
           const nextUrl = new URL(location, url).toString();
+          cleanup();
           safeResolve({ kind: 'redirect', nextUrl });
           req.destroy();
           return;
         }
 
-        if (status < 200 || status >= 300) {
-          safeResolve({ kind: 'redirect_fallback' });
-          req.destroy();
-          return;
-        }
-
-        const contentTypeHeader = res.headers['content-type'];
-        const contentType =
-          typeof contentTypeHeader === 'string'
-            ? contentTypeHeader
-            : contentTypeHeader?.[0] ?? '';
-        if (!contentType.toLowerCase().startsWith('image/')) {
+        const contentType = getHeaderValue(res.headers['content-type']);
+        if (status >= 200 && status < 300 && !isImageContentType(contentType)) {
+          cleanup();
           safeResolve({ kind: 'unsupported_media_type' });
           req.destroy();
           return;
         }
-      });
 
-      const chunks: Buffer[] = [];
-      let received = 0;
-
-      req.on('data', (chunk) => {
-        if (settled) return;
-        const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-
-        received += buf.byteLength;
-        if (received > options.maxBytes) {
-          safeResolve({ kind: 'too_large' });
-          req.destroy();
-          return;
-        }
-
-        chunks.push(buf);
-      });
-
-      req.on('end', () => {
-        if (settled) return;
-        const res = req.response;
-        const status = res?.statusCode ?? 0;
-        const contentTypeHeader = res?.headers?.['content-type'];
-        const cacheControlHeader = res?.headers?.['cache-control'];
-
-        const contentType =
-          typeof contentTypeHeader === 'string'
-            ? contentTypeHeader
-            : contentTypeHeader?.[0] ?? '';
-        const cacheControl =
-          typeof cacheControlHeader === 'string'
-            ? cacheControlHeader
-            : cacheControlHeader?.[0] ?? 'public, max-age=3600';
-
-        safeResolve({
-          kind: 'ok',
+        safeResolve(buildFetchImageStreamOkResult({
           status,
-          contentType,
-          cacheControl,
-          bytes: Buffer.concat(chunks),
-        });
-      });
-
-      req.on('error', () => {
-        safeResolve({ kind: 'bad_gateway' });
+          headers: res.headers,
+          body: Readable.toWeb(req) as ReadableStream<Uint8Array>,
+        }));
       });
     });
   } catch {
-    return { kind: 'bad_gateway' };
-  } finally {
     clearTimeout(timeout);
+    return { kind: 'bad_gateway' };
   }
 }
 
-export async function fetchImageBytes(
+export async function fetchImageStream(
   url: string,
   options: {
     maxRedirects: number;
-    maxBytes: number;
     userAgent: string;
     timeoutMs?: number;
   },
-): Promise<FetchImageBytesResult> {
+): Promise<FetchImageStreamResult> {
   let currentUrl = url;
   let redirects = 0;
 
@@ -424,8 +402,7 @@ export async function fetchImageBytes(
       return { kind: 'forbidden' };
     }
 
-    const hop = await fetchImageBytesHop(currentUrl, {
-      maxBytes: options.maxBytes,
+    const hop = await fetchImageStreamHop(currentUrl, {
       userAgent: options.userAgent,
       timeoutMs: options.timeoutMs ?? 10_000,
     });

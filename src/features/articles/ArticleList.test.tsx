@@ -150,6 +150,13 @@ describe('ArticleList', () => {
     return element;
   }
 
+  function expectLoadMoreFooterCentered(element: HTMLElement) {
+    expect(element).toHaveClass('flex');
+    expect(element).toHaveClass('justify-center');
+    expect(element).toHaveClass('px-4');
+    expect(element).toHaveClass('py-3');
+  }
+
   function createSeedArticles(count: number) {
     return Array.from({ length: count }, (_, index) => ({
       id: `article-${index}`,
@@ -551,8 +558,44 @@ describe('ArticleList', () => {
     renderWithNotifications();
 
     expect(screen.getByText('Selected Article')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '重试加载更多' }));
+    const retryButton = screen.getByRole('button', { name: '加载更多时出了点小问题，再试一次' });
+    expectLoadMoreFooterCentered(retryButton.parentElement as HTMLElement);
+    fireEvent.click(retryButton);
     expect(loadMoreSnapshotMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a centered gentle loading hint while loading more', () => {
+    useAppStore.setState({
+      selectedView: 'feed-1',
+      showUnreadOnly: false,
+      selectedArticleId: 'art-1',
+      articleListHasMore: true,
+      articleListLoadingMore: true,
+      articleListLoadMoreError: false,
+      articleListNextCursor: 'cursor-1',
+    });
+
+    renderWithNotifications();
+
+    const hint = screen.getByText('正在为你加载更多内容...');
+    expectLoadMoreFooterCentered(hint.parentElement as HTMLElement);
+  });
+
+  it('shows a centered end hint after the last page is reached', () => {
+    useAppStore.setState({
+      selectedView: 'feed-1',
+      showUnreadOnly: false,
+      selectedArticleId: 'art-1',
+      articleListHasMore: false,
+      articleListLoadingMore: false,
+      articleListLoadMoreError: false,
+      articleListNextCursor: null,
+    });
+
+    renderWithNotifications();
+
+    const hint = screen.getByText('已经到底了，暂时没有更多内容');
+    expectLoadMoreFooterCentered(hint.parentElement as HTMLElement);
   });
 
   it('keeps viewport stable when refreshed data prepends newer articles', async () => {
@@ -1549,6 +1592,120 @@ describe('ArticleList', () => {
         expect(summaryArt1).toHaveClass('line-clamp-1');
         expect(summaryArt1).not.toHaveClass('line-clamp-2');
       });
+    } finally {
+      getComputedStyleSpy.mockRestore();
+      preload.restore();
+      observer.restore();
+    }
+  });
+
+  it('preserves wrapped-title summary clamp after virtualized cards unmount during pagination', async () => {
+    const preload = setupImagePreloadMock();
+    const observer = setupIntersectionObserverMock();
+
+    useAppStore.setState({
+      selectedView: 'feed-1',
+      showUnreadOnly: false,
+      selectedArticleId: 'art-1',
+      articles: [
+        {
+          id: 'art-1',
+          feedId: 'feed-1',
+          title:
+            'A long preview image title that should keep the summary on a single line after remount',
+          content: '',
+          previewImage: 'https://example.com/preview-art-1.jpg',
+          summary: 'Summary',
+          publishedAt: new Date('2026-02-26T00:00:00.000Z').toISOString(),
+          link: 'https://example.com/art-1',
+          isRead: false,
+          isStarred: false,
+        },
+        ...createSeedArticles(80),
+      ],
+    });
+
+    const getComputedStyleSpy = vi.spyOn(window, 'getComputedStyle').mockImplementation(
+      () =>
+        ({
+          lineHeight: '20px',
+        }) as CSSStyleDeclaration,
+    );
+
+    try {
+      const { container } = renderWithNotifications();
+      const scrollContainer = getScrollContainer(container);
+
+      Object.defineProperty(scrollContainer, 'clientHeight', {
+        configurable: true,
+        value: 520,
+      });
+      Object.defineProperty(scrollContainer, 'scrollHeight', {
+        configurable: true,
+        value: 12000,
+      });
+
+      const titleArt1 = await screen.findByTestId('article-card-art-1-title');
+      const summaryArt1 = screen.getByTestId('article-card-art-1-summary');
+
+      Object.defineProperty(titleArt1, 'clientHeight', { configurable: true, value: 40 });
+
+      act(() => {
+        observer.triggerIntersect(['art-1']);
+      });
+
+      await waitFor(() => {
+        expect(preload.instances).toHaveLength(1);
+      });
+
+      act(() => {
+        preload.instances[0].triggerLoad();
+      });
+
+      await waitFor(() => {
+        expect(summaryArt1).toHaveClass('line-clamp-1');
+      });
+
+      act(() => {
+        scrollContainer.scrollTop = 2600;
+        fireEvent.scroll(scrollContainer, { target: { scrollTop: 2600 } });
+      });
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('article-card-art-1-title')).not.toBeInTheDocument();
+      });
+
+      act(() => {
+        useAppStore.setState((state) => ({
+          ...state,
+          articles: [
+            ...state.articles,
+            ...Array.from({ length: 20 }, (_, index) => ({
+              id: `page-2-${index}`,
+              feedId: 'feed-1',
+              title: `Page 2 Article ${index}`,
+              content: '',
+              summary: `Summary page 2 ${index}`,
+              publishedAt: new Date(Date.UTC(2026, 1, 10, 0, index, 0)).toISOString(),
+              link: `https://example.com/page-2-${index}`,
+              isRead: false,
+              isStarred: false,
+            })),
+          ],
+        }));
+      });
+
+      act(() => {
+        scrollContainer.scrollTop = 0;
+        fireEvent.scroll(scrollContainer, { target: { scrollTop: 0 } });
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('article-card-art-1-title')).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId('article-card-art-1-summary')).toHaveClass('line-clamp-1');
+      expect(screen.getByTestId('article-card-art-1-summary')).not.toHaveClass('line-clamp-2');
     } finally {
       getComputedStyleSpy.mockRestore();
       preload.restore();

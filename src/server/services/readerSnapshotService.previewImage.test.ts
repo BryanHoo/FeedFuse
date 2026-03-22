@@ -165,9 +165,9 @@ describe('readerSnapshotService (preview image)', () => {
     expect(snapshot.articles.items[0].previewImage).toContain(
       'url=https%3A%2F%2Fimg.example.com%2Fcard.jpg',
     );
-    expect(snapshot.articles.items[0].previewImage).toContain('w=192');
-    expect(snapshot.articles.items[0].previewImage).toContain('h=208');
-    expect(snapshot.articles.items[0].previewImage).toContain('q=55');
+    expect(snapshot.articles.items[0].previewImage).not.toContain('w=');
+    expect(snapshot.articles.items[0].previewImage).not.toContain('h=');
+    expect(snapshot.articles.items[0].previewImage).not.toContain('q=');
   });
 
   it('rewrites feed icon to a signed proxy url', async () => {
@@ -210,9 +210,9 @@ describe('readerSnapshotService (preview image)', () => {
 
     expect(snapshot.feeds[0]?.iconUrl).toContain('/api/media/image?');
     expect(snapshot.feeds[0]?.iconUrl).toContain('url=https%3A%2F%2Fimg.example.com%2Ficon.png');
-    expect(snapshot.feeds[0]?.iconUrl).toContain('w=32');
-    expect(snapshot.feeds[0]?.iconUrl).toContain('h=32');
-    expect(snapshot.feeds[0]?.iconUrl).toContain('q=70');
+    expect(snapshot.feeds[0]?.iconUrl).not.toContain('w=');
+    expect(snapshot.feeds[0]?.iconUrl).not.toContain('h=');
+    expect(snapshot.feeds[0]?.iconUrl).not.toContain('q=');
   });
 
   it('includes aiSummarySession in snapshot article items so reload can preserve summary state', async () => {

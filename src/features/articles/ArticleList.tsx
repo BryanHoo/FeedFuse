@@ -38,6 +38,8 @@ const AI_DIGEST_POLL_MAX_ATTEMPTS = 30;
 const PREVIEW_PRELOAD_MAX_CONCURRENT = 2;
 const VIRTUAL_OVERSCAN = 8;
 const LOAD_MORE_THRESHOLD_PX = 320;
+const LOAD_MORE_FOOTER_CLASS_NAME = "flex justify-center px-4 py-3 text-center";
+const LOAD_MORE_HINT_CLASS_NAME = "text-xs text-muted-foreground";
 type PreviewImageStatus = "loading" | "ready" | "failed";
 const unreadSignalDotClassName =
   "h-2 w-2 rounded-full bg-[color-mix(in_oklab,var(--color-primary)_78%,white)] ring-2 ring-background/95";
@@ -411,20 +413,39 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
     }
 
     const measureWrappedTitles = () => {
-      const nextWrappedIds = new Set<string>();
+      const measuredWrappedIds = new Map<string, boolean>();
 
       for (const [articleId, titleElement] of cardTitleRefs.current) {
         const lineHeight = Number.parseFloat(window.getComputedStyle(titleElement).lineHeight);
         if (!Number.isFinite(lineHeight) || lineHeight <= 0) continue;
+        if (titleElement.clientHeight <= 0) continue;
 
-        if (titleElement.clientHeight > lineHeight + 0.5) {
-          nextWrappedIds.add(articleId);
-        }
+        measuredWrappedIds.set(articleId, titleElement.clientHeight > lineHeight + 0.5);
       }
 
-      setWrappedCardTitleArticleIds((previousWrappedIds) =>
-        areSetsEqual(previousWrappedIds, nextWrappedIds) ? previousWrappedIds : nextWrappedIds,
-      );
+      const filteredArticleIds = new Set(filteredArticles.map((article) => article.id));
+
+      setWrappedCardTitleArticleIds((previousWrappedIds) => {
+        const nextWrappedIds = new Set<string>();
+
+        // Preserve off-screen card measurements so virtualized unmounts do not reset summary clamping.
+        for (const articleId of previousWrappedIds) {
+          if (filteredArticleIds.has(articleId) && !measuredWrappedIds.has(articleId)) {
+            nextWrappedIds.add(articleId);
+          }
+        }
+
+        for (const [articleId, isWrapped] of measuredWrappedIds) {
+          if (isWrapped) {
+            nextWrappedIds.add(articleId);
+            continue;
+          }
+
+          nextWrappedIds.delete(articleId);
+        }
+
+        return areSetsEqual(previousWrappedIds, nextWrappedIds) ? previousWrappedIds : nextWrappedIds;
+      });
     };
 
     measureWrappedTitles();
@@ -436,7 +457,7 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
       window.removeEventListener("resize", measureWrappedTitles);
     };
     // Re-measure after preview images become visible because they shrink the text column width.
-  }, [effectiveDisplayMode, filteredArticles, previewImageStatuses]);
+  }, [effectiveDisplayMode, filteredArticles, previewImageStatuses, visibleRows]);
 
   const canRefresh = (() => {
     if (refreshing) return false;
@@ -571,6 +592,43 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
     },
     [maybeLoadMore],
   );
+
+  const renderLoadMoreFooter = () => {
+    if (articleListLoadingMore) {
+      return (
+        <div className={LOAD_MORE_FOOTER_CLASS_NAME}>
+          <p className={LOAD_MORE_HINT_CLASS_NAME}>正在为你加载更多内容...</p>
+        </div>
+      );
+    }
+
+    if (articleListLoadMoreError) {
+      return (
+        <div className={LOAD_MORE_FOOTER_CLASS_NAME}>
+          <button
+            type="button"
+            onClick={() => void loadMoreSnapshot()}
+            className={cn(
+              LOAD_MORE_HINT_CLASS_NAME,
+              "rounded-full border border-border/70 px-3 py-1 transition-colors hover:border-border hover:text-foreground",
+            )}
+          >
+            加载更多时出了点小问题，再试一次
+          </button>
+        </div>
+      );
+    }
+
+    if (!articleListHasMore) {
+      return (
+        <div className={LOAD_MORE_FOOTER_CLASS_NAME}>
+          <p className={LOAD_MORE_HINT_CLASS_NAME}>已经到底了，暂时没有更多内容</p>
+        </div>
+      );
+    }
+
+    return null;
+  };
 
   const onRefreshClick = () => {
     if (!canRefresh) return;
@@ -985,20 +1043,7 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
             <div aria-hidden="true" style={{ height: virtualWindow.topSpacerHeight }} />
             {visibleRows.map(renderVirtualRow)}
             <div aria-hidden="true" style={{ height: virtualWindow.bottomSpacerHeight }} />
-            {articleListLoadingMore ? (
-              <div className="px-4 py-3 text-xs text-muted-foreground">加载更多中...</div>
-            ) : null}
-            {articleListLoadMoreError ? (
-              <div className="px-4 py-3">
-                <button
-                  type="button"
-                  onClick={() => void loadMoreSnapshot()}
-                  className="text-xs font-medium text-foreground underline underline-offset-4"
-                >
-                  重试加载更多
-                </button>
-              </div>
-            ) : null}
+            {renderLoadMoreFooter()}
           </>
         )}
       </div>

@@ -2,27 +2,37 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import sharp from 'sharp';
 import { buildImageProxyUrl } from '../../../../server/media/imageProxyUrl';
 
-const fetchImageBytesMock = vi.fn();
+const fetchImageStreamMock = vi.fn();
+
+function streamFromBytes(bytes: Uint8Array): ReadableStream<Uint8Array> {
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(bytes);
+      controller.close();
+    },
+  });
+}
 
 vi.mock('../../../../server/http/externalHttpClient', () => ({
-  fetchImageBytes: (...args: unknown[]) => fetchImageBytesMock(...args),
+  fetchImageStream: (...args: unknown[]) => fetchImageStreamMock(...args),
 }));
 
 describe('/api/media/image', () => {
   beforeEach(() => {
-    fetchImageBytesMock.mockReset();
+    fetchImageStreamMock.mockReset();
     vi.unstubAllEnvs();
     vi.stubEnv('DATABASE_URL', 'postgres://example');
     vi.stubEnv('IMAGE_PROXY_SECRET', 'test-image-proxy-secret');
   });
 
   it('proxies image bytes for a valid signed request', async () => {
-    fetchImageBytesMock.mockResolvedValue({
+    const sourceBytes = Uint8Array.from([1, 2, 3]);
+    fetchImageStreamMock.mockResolvedValue({
       kind: 'ok',
       status: 200,
       contentType: 'image/jpeg',
       cacheControl: 'public, max-age=600',
-      bytes: Buffer.from([1, 2, 3]),
+      body: streamFromBytes(sourceBytes),
     });
 
     const proxied = buildImageProxyUrl({
@@ -35,39 +45,17 @@ describe('/api/media/image', () => {
 
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('image/jpeg');
-    expect(fetchImageBytesMock).toHaveBeenCalled();
+    expect(Buffer.from(await res.arrayBuffer())).toEqual(Buffer.from(sourceBytes));
   });
 
-  it('sends a same-origin referer to upstream image hosts', async () => {
-    fetchImageBytesMock.mockResolvedValue({
+  it('proxies upstream error responses instead of redirecting to the source image', async () => {
+    fetchImageStreamMock.mockResolvedValue({
       kind: 'ok',
-      status: 200,
-      contentType: 'image/jpeg',
-      cacheControl: 'public, max-age=600',
-      bytes: Buffer.from([1, 2, 3]),
+      status: 429,
+      contentType: 'text/plain; charset=utf-8',
+      cacheControl: 'no-store',
+      body: streamFromBytes(new TextEncoder().encode('rate limited')),
     });
-
-    const proxied = buildImageProxyUrl({
-      sourceUrl: 'https://cdnfile.sspai.com/2026/02/25/cover.jpg',
-      secret: 'test-image-proxy-secret',
-    });
-
-    const mod = await import('./route');
-    const res = await mod.GET(new Request(`http://localhost${proxied}`));
-
-    expect(res.status).toBe(200);
-    expect(fetchImageBytesMock).toHaveBeenCalledWith(
-      'https://cdnfile.sspai.com/2026/02/25/cover.jpg',
-      expect.objectContaining({
-        maxRedirects: 3,
-        maxBytes: 5 * 1024 * 1024,
-        userAgent: 'FeedFuse Image Proxy/1.0',
-      }),
-    );
-  });
-
-  it('redirects to the original image when upstream returns a non-success status', async () => {
-    fetchImageBytesMock.mockResolvedValue({ kind: 'redirect_fallback' });
 
     const proxied = buildImageProxyUrl({
       sourceUrl: 'https://img.example.com/rate-limited.jpg',
@@ -77,8 +65,9 @@ describe('/api/media/image', () => {
     const mod = await import('./route');
     const res = await mod.GET(new Request(`http://localhost${proxied}`));
 
-    expect(res.status).toBe(307);
-    expect(res.headers.get('location')).toBe('https://img.example.com/rate-limited.jpg');
+    expect(res.status).toBe(429);
+    expect(res.headers.get('location')).toBeNull();
+    expect(await res.text()).toBe('rate limited');
   });
 
   it('rejects an invalid signature', async () => {
@@ -90,11 +79,11 @@ describe('/api/media/image', () => {
     );
 
     expect(res.status).toBe(403);
-    expect(fetchImageBytesMock).not.toHaveBeenCalled();
+    expect(fetchImageStreamMock).not.toHaveBeenCalled();
   });
 
   it('rejects non-image upstream responses', async () => {
-    fetchImageBytesMock.mockResolvedValue({ kind: 'unsupported_media_type' });
+    fetchImageStreamMock.mockResolvedValue({ kind: 'unsupported_media_type' });
 
     const proxied = buildImageProxyUrl({
       sourceUrl: 'https://img.example.com/not-image',
@@ -108,7 +97,7 @@ describe('/api/media/image', () => {
   });
 
   it('rejects redirects that end at private targets', async () => {
-    fetchImageBytesMock.mockResolvedValue({ kind: 'forbidden' });
+    fetchImageStreamMock.mockResolvedValue({ kind: 'forbidden' });
 
     const proxied = buildImageProxyUrl({
       sourceUrl: 'https://img.example.com/redirect.jpg',
@@ -121,7 +110,7 @@ describe('/api/media/image', () => {
     expect(res.status).toBe(403);
   });
 
-  it('resizes and compresses signed preview image requests', async () => {
+  it('passes through signed preview image requests without resizing or recompression', async () => {
     const sourceImage = await sharp({
       create: {
         width: 800,
@@ -133,12 +122,12 @@ describe('/api/media/image', () => {
       .jpeg({ quality: 92 })
       .toBuffer();
 
-    fetchImageBytesMock.mockResolvedValue({
+    fetchImageStreamMock.mockResolvedValue({
       kind: 'ok',
       status: 200,
       contentType: 'image/jpeg',
       cacheControl: 'public, max-age=600',
-      bytes: sourceImage,
+      body: streamFromBytes(Uint8Array.from(sourceImage)),
     });
 
     const proxied = buildImageProxyUrl({
@@ -151,14 +140,10 @@ describe('/api/media/image', () => {
 
     const mod = await import('./route');
     const res = await mod.GET(new Request(`http://localhost${proxied}`));
-    const transformedBytes = Buffer.from(await res.arrayBuffer());
-    const metadata = await sharp(transformedBytes).metadata();
+    const proxiedBytes = Buffer.from(await res.arrayBuffer());
 
     expect(res.status).toBe(200);
-    expect(res.headers.get('content-type')).toBe('image/webp');
-    expect(metadata.format).toBe('webp');
-    expect(metadata.width).toBe(192);
-    expect(metadata.height).toBe(208);
-    expect(transformedBytes.byteLength).toBeLessThan(sourceImage.byteLength);
+    expect(res.headers.get('content-type')).toBe('image/jpeg');
+    expect(proxiedBytes).toEqual(sourceImage);
   });
 });

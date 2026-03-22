@@ -439,6 +439,62 @@ describe('appStore api integration', () => {
     expect(useAppStore.getState().articleListLoadMoreError).toBe(false);
   });
 
+  it('reloads the current view without unreadOnly when unread-only toggle is turned off', async () => {
+    const snapshotUrls: string[] = [];
+
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(getFetchCallUrl(input), 'https://example.com');
+      const method = getFetchCallMethod(input, init);
+
+      if (url.pathname === '/api/reader/snapshot' && method === 'GET') {
+        snapshotUrls.push(url.toString());
+        const unreadOnly = url.searchParams.get('unreadOnly') === 'true';
+
+        return jsonResponse({
+          ok: true,
+          data: createSnapshotPage({
+            feeds: [createSnapshotFeed('feed-1', 'Feed One', unreadOnly ? 1 : 2)],
+            items: unreadOnly
+              ? [createSnapshotArticle('art-unread', 'feed-1', 'Unread Article')]
+              : [
+                  createSnapshotArticle('art-unread', 'feed-1', 'Unread Article'),
+                  {
+                    ...createSnapshotArticle('art-read', 'feed-1', 'Read Article'),
+                    isRead: true,
+                  },
+                ],
+            nextCursor: null,
+            totalCount: unreadOnly ? 1 : 2,
+          }),
+        });
+      }
+
+      throw new Error(`Unexpected fetch: ${method} ${url.pathname}`);
+    });
+
+    useAppStore.setState({
+      selectedView: 'feed-1',
+      showUnreadOnly: true,
+    });
+
+    await useAppStore.getState().loadSnapshot({ view: 'feed-1' });
+
+    expect(snapshotUrls).toHaveLength(1);
+    expect(new URL(snapshotUrls[0]).searchParams.get('unreadOnly')).toBe('true');
+    expect(useAppStore.getState().articles.map((item) => item.id)).toEqual(['art-unread']);
+
+    useAppStore.getState().toggleShowUnreadOnly();
+    await flushPromises();
+
+    expect(snapshotUrls).toHaveLength(2);
+    expect(new URL(snapshotUrls[1]).searchParams.get('unreadOnly')).toBeNull();
+    expect(useAppStore.getState().articles.map((item) => item.id)).toEqual([
+      'art-unread',
+      'art-read',
+    ]);
+    expect(useAppStore.getState().showUnreadOnly).toBe(false);
+  });
+
   it('drops stale load-more responses when a newer snapshot request wins', async () => {
     const delayedLoadMore = createDeferred<Response>();
     let rootSnapshotCalls = 0;
@@ -1639,6 +1695,41 @@ describe('appStore api integration', () => {
     expect(thirdSnapshotUrl.searchParams.get('includeFiltered')).toBeNull();
     expect(useAppStore.getState().showFilteredByFeedId['feed-1']).toBe(true);
     expect(useAppStore.getState().showFilteredByFeedId['feed-2']).toBeUndefined();
+  });
+
+  it('does not pass includeFiltered for ai digest aggregate view', async () => {
+    const snapshot = {
+      categories: [],
+      feeds: [createSnapshotFeed('feed-1', 'Feed One', 2)],
+      articles: {
+        items: [],
+        nextCursor: null,
+      },
+    };
+
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(getFetchCallUrl(input), 'https://example.com');
+      const method = getFetchCallMethod(input, init);
+
+      if (url.pathname === '/api/reader/snapshot' && method === 'GET') {
+        return jsonResponse({ ok: true, data: snapshot });
+      }
+
+      throw new Error(`Unexpected fetch: ${method} ${url.pathname}`);
+    });
+
+    useAppStore.setState({
+      selectedView: AI_DIGEST_VIEW_ID,
+      selectedArticleId: null,
+      showFilteredByFeedId: {
+        [AI_DIGEST_VIEW_ID]: true,
+      },
+    });
+
+    await useAppStore.getState().loadSnapshot({ view: AI_DIGEST_VIEW_ID });
+
+    const snapshotUrl = new URL(getFetchCallUrl(fetchMock.mock.calls[0][0]));
+    expect(snapshotUrl.searchParams.get('includeFiltered')).toBeNull();
   });
 
   it('keeps foreground articles stable when loading a background view snapshot', async () => {
