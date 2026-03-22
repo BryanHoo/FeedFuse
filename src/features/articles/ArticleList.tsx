@@ -25,6 +25,7 @@ import {
 import ReaderToolbarIconButton from "../reader/ReaderToolbarIconButton";
 import { toast } from "../toast/toast";
 import { buildArticleListDerivedState } from "./articleListModel";
+import { getFilteredReasonLabel } from "./articleFilterReason";
 import {
   getArticleVirtualAnchorCompensation,
   getArticleVirtualWindow,
@@ -498,7 +499,7 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
 
       labelParts.push(formatRelativeTime(article.publishedAt, referenceTime));
       if (shouldShowFilteredBadge(article)) {
-        labelParts.push("已过滤");
+        labelParts.push(getFilteredReasonLabel(article.filteredBy));
       }
       labelParts.push(article.isRead ? "已读" : "未读");
 
@@ -841,7 +842,7 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
                 </span>
                 {articleFiltered ? (
                   <Badge variant="secondary" className="h-5 shrink-0 px-1.5 text-[10px] font-medium">
-                    已过滤
+                    {getFilteredReasonLabel(article.filteredBy)}
                   </Badge>
                 ) : null}
               </div>
@@ -931,7 +932,7 @@ export default function ArticleList({ renderedAt }: ArticleListProps = {}) {
                 </span>
                 {articleFiltered ? (
                   <Badge variant="secondary" className="h-5 shrink-0 px-1.5 text-[10px] font-medium">
-                    已过滤
+                    {getFilteredReasonLabel(article.filteredBy)}
                   </Badge>
                 ) : null}
               </div>

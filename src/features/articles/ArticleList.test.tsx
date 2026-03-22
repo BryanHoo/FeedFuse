@@ -1402,7 +1402,7 @@ describe('ArticleList', () => {
     expect(screen.getByTestId('article-list-row-art-1-unread-dot')).toBeInTheDocument();
   });
 
-  it('renders 已过滤 badge in card and list modes while keeping the article clickable', async () => {
+  it('shows duplicate filter reason in card and list modes while keeping the article clickable', async () => {
     useAppStore.setState((state) => ({
       ...state,
       selectedView: 'feed-1',
@@ -1413,7 +1413,7 @@ describe('ArticleList', () => {
               ...article,
               filterStatus: 'filtered',
               isFiltered: true,
-              filteredBy: ['keyword'],
+              filteredBy: ['duplicate'],
             }
           : article,
       ),
@@ -1423,7 +1423,9 @@ describe('ArticleList', () => {
 
     const filteredCardButton = screen.getByTestId('article-card-art-2-title').closest('button');
     expect(filteredCardButton).not.toBeNull();
-    expect(within(filteredCardButton as HTMLButtonElement).getByText('已过滤')).toBeInTheDocument();
+    expect(
+      within(filteredCardButton as HTMLButtonElement).getByText('已过滤 · 重复/相似转载'),
+    ).toBeInTheDocument();
 
     fireEvent.click(filteredCardButton as HTMLButtonElement);
 
@@ -1435,7 +1437,9 @@ describe('ArticleList', () => {
 
     const filteredRowButton = (await screen.findByTestId('article-list-row-art-2-title')).closest('button');
     expect(filteredRowButton).not.toBeNull();
-    expect(within(filteredRowButton as HTMLButtonElement).getByText('已过滤')).toBeInTheDocument();
+    expect(
+      within(filteredRowButton as HTMLButtonElement).getByText('已过滤 · 重复/相似转载'),
+    ).toBeInTheDocument();
   });
 
   it('keeps backend-provided filtered articles visible in aggregate views', () => {

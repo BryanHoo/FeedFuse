@@ -27,6 +27,7 @@ import { cn } from '@/lib/utils';
 import { useImmersiveTranslation } from './useImmersiveTranslation';
 import { useAnimatedAiSummaryText } from './useAnimatedAiSummaryText';
 import { useStreamingAiSummary } from './useStreamingAiSummary';
+import { getFilteredReasonLabel } from './articleFilterReason';
 import { buildImmersiveHtml } from './immersiveRender';
 import {
   buildArticleMarkdownDocument,
@@ -791,7 +792,7 @@ export default function ArticleView({
                 <span className="shrink-0">{formatRelativeTime(article.publishedAt, referenceTime)}</span>
                 {articleFiltered ? (
                   <Badge variant="secondary" className="h-5 shrink-0 px-1.5 text-[10px] font-medium" data-testid="article-filter-badge">
-                    已过滤
+                    {getFilteredReasonLabel(article.filteredBy)}
                   </Badge>
                 ) : null}
                 {article.author && (

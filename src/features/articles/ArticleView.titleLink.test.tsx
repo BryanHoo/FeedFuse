@@ -198,7 +198,7 @@ describe('ArticleView title link', () => {
     expect(screen.getByText(longAuthor)).toHaveClass('break-words');
   });
 
-  it('shows filtered badge in article metadata when the article is filtered', async () => {
+  it('shows duplicate filter reason in article metadata when the article is filtered', async () => {
     useAppStore.setState({
       feeds: [
         {
@@ -224,7 +224,7 @@ describe('ArticleView title link', () => {
           link: 'https://example.com/a1',
           filterStatus: 'filtered',
           isFiltered: true,
-          filteredBy: ['keyword'],
+          filteredBy: ['duplicate'],
           isRead: true,
           isStarred: false,
         },
@@ -239,7 +239,7 @@ describe('ArticleView title link', () => {
       await Promise.resolve();
     });
 
-    expect(screen.getByTestId('article-filter-badge')).toHaveTextContent('已过滤');
+    expect(screen.getByTestId('article-filter-badge')).toHaveTextContent('已过滤 · 重复/相似转载');
   });
 
   it('uses fixed horizontal padding and adds more left space on wide screens', async () => {

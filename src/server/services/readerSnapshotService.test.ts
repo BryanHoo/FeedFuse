@@ -58,6 +58,11 @@ describe('readerSnapshotService', () => {
     expect(aggregate.params[0]).toEqual(['passed', 'error']);
   });
 
+  it('keeps duplicate filtered articles visible when includeFiltered is enabled for a feed', () => {
+    const filter = buildArticleFilter({ view: 'feed-id-1', includeFiltered: true });
+    expect(filter.params[1]).toEqual(['passed', 'error', 'filtered']);
+  });
+
   it('roundtrips cursor', () => {
     const cursor = encodeCursor({ publishedAt: '2026-01-01T00:00:00.000Z', id: 'id-1' });
     expect(decodeCursor(cursor)).toEqual({
