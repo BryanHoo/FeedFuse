@@ -145,9 +145,12 @@ export interface ArticleFilterSettings {
   ai: ArticleFilterAiSettings;
 }
 
+export type RssMaxStoredArticlesPerFeed = 100 | 200 | 500 | 1000 | 2000;
+
 export interface RssSettings {
   sources: RssSourceSetting[];
   fetchIntervalMinutes: 5 | 15 | 30 | 60 | 120;
+  maxStoredArticlesPerFeed: RssMaxStoredArticlesPerFeed;
   articleFilter: ArticleFilterSettings;
 }
 

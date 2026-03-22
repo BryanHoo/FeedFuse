@@ -1,6 +1,7 @@
 import { getPool } from '../../../server/db/pool';
 import { ok, fail } from '../../../server/http/apiResponse';
 import { writeSystemLog } from '../../../server/logging/systemLogger';
+import { pruneAllFeedsArticlesToLimit } from '../../../server/repositories/articlesRepo';
 import { getUiSettings, updateUiSettings } from '../../../server/repositories/settingsRepo';
 import { updateAllFeedsFetchIntervalMinutes } from '../../../server/repositories/feedsRepo';
 import { normalizePersistedSettings } from '../../../features/settings/settingsSchema';
@@ -36,6 +37,10 @@ export async function PUT(request: Request) {
 
       if (prev.rss.fetchIntervalMinutes !== next.rss.fetchIntervalMinutes) {
         await updateAllFeedsFetchIntervalMinutes(client, next.rss.fetchIntervalMinutes);
+      }
+
+      if (prev.rss.maxStoredArticlesPerFeed !== normalizedSaved.rss.maxStoredArticlesPerFeed) {
+        await pruneAllFeedsArticlesToLimit(client, normalizedSaved.rss.maxStoredArticlesPerFeed);
       }
 
       const nextLogging = normalizedSaved.logging;

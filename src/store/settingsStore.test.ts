@@ -198,6 +198,21 @@ describe('settingsStore', () => {
     expect(lastSettingsPutBodyText).not.toContain('feedKeywordsByFeedId');
   });
 
+  it('persists rss maxStoredArticlesPerFeed through settingsStore saveDraft', async () => {
+    useSettingsStore.getState().loadDraft();
+    useSettingsStore.getState().updateDraft((draft) => {
+      (
+        draft.persisted.rss as typeof draft.persisted.rss & {
+          maxStoredArticlesPerFeed?: number;
+        }
+      ).maxStoredArticlesPerFeed = 1000;
+    });
+
+    await useSettingsStore.getState().saveDraft();
+
+    expect(lastSettingsPutBodyText).toContain('"maxStoredArticlesPerFeed":1000');
+  });
+
   it('persists logging settings through settingsStore saveDraft', async () => {
     useSettingsStore.getState().loadDraft();
     useSettingsStore.getState().updateDraft((draft) => {

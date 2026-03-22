@@ -6,6 +6,33 @@ import type { SettingsDraft } from '../../../store/settingsStore';
 import type { RssSettings } from '../../../types';
 import OpmlTransferSection, { type OpmlTransferResultSummary } from './OpmlTransferSection';
 
+const fetchIntervalOptions: Array<{ value: RssSettings['fetchIntervalMinutes']; label: string }> = [
+  { value: 5, label: '每 5 分钟' },
+  { value: 15, label: '每 15 分钟' },
+  { value: 30, label: '每 30 分钟' },
+  { value: 60, label: '每 1 小时' },
+  { value: 120, label: '每 2 小时' },
+];
+
+const maxStoredArticlesOptions: Array<{
+  value: RssSettings['maxStoredArticlesPerFeed'];
+  label: string;
+}> = [
+  { value: 100, label: '100 条' },
+  { value: 200, label: '200 条' },
+  { value: 500, label: '500 条' },
+  { value: 1000, label: '1000 条' },
+  { value: 2000, label: '2000 条' },
+];
+
+function isFetchIntervalMinutes(value: number): value is RssSettings['fetchIntervalMinutes'] {
+  return fetchIntervalOptions.some((option) => option.value === value);
+}
+
+function isMaxStoredArticlesPerFeed(value: number): value is RssSettings['maxStoredArticlesPerFeed'] {
+  return maxStoredArticlesOptions.some((option) => option.value === value);
+}
+
 interface RssSettingsPanelProps {
   draft: SettingsDraft;
   onChange: (updater: (draft: SettingsDraft) => void) => void;
@@ -29,14 +56,6 @@ export default function RssSettingsPanel({
   const globalKeywordsText = rss.articleFilter.keyword.keywords.join('\n');
   const aiPrompt = rss.articleFilter.ai.prompt;
 
-  const fetchIntervalOptions: Array<{ value: RssSettings['fetchIntervalMinutes']; label: string }> = [
-    { value: 5, label: '每 5 分钟' },
-    { value: 15, label: '每 15 分钟' },
-    { value: 30, label: '每 30 分钟' },
-    { value: 60, label: '每 1 小时' },
-    { value: 120, label: '每 2 小时' },
-  ];
-
   return (
     <section className="space-y-4">
       <div className="overflow-hidden rounded-lg border border-border bg-background">
@@ -51,7 +70,7 @@ export default function RssSettingsPanel({
                 value={String(rss.fetchIntervalMinutes)}
                 onValueChange={(value) => {
                   const next = Number(value);
-                  if (next !== 5 && next !== 15 && next !== 30 && next !== 60 && next !== 120) return;
+                  if (!isFetchIntervalMinutes(next)) return;
                   onChange((nextDraft) => {
                     nextDraft.persisted.rss.fetchIntervalMinutes = next;
                   });
@@ -62,6 +81,38 @@ export default function RssSettingsPanel({
                 </SelectTrigger>
                 <SelectContent>
                   {fetchIntervalOptions.map(({ value, label }) => (
+                    <SelectItem key={value} value={String(value)}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-4 px-4 py-3.5">
+            <div>
+              <p className="text-sm font-medium text-foreground">每个 Feed 最多存储条数</p>
+              <p className="text-xs text-muted-foreground">
+                超出后会按最旧时间清理未收藏文章；已收藏文章会保留，因此极端情况下总数可能仍高于上限。
+              </p>
+            </div>
+            <div className="w-[140px]">
+              <Select
+                value={String(rss.maxStoredArticlesPerFeed)}
+                onValueChange={(value) => {
+                  const next = Number(value);
+                  if (!isMaxStoredArticlesPerFeed(next)) return;
+                  onChange((nextDraft) => {
+                    nextDraft.persisted.rss.maxStoredArticlesPerFeed = next;
+                  });
+                }}
+              >
+                <SelectTrigger className="h-8">
+                  <SelectValue placeholder="选择条数" />
+                </SelectTrigger>
+                <SelectContent>
+                  {maxStoredArticlesOptions.map(({ value, label }) => (
                     <SelectItem key={value} value={String(value)}>
                       {label}
                     </SelectItem>

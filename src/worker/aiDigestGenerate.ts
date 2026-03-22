@@ -3,7 +3,10 @@ import { normalizePersistedSettings } from '../features/settings/settingsSchema'
 import { resolveArticleBriefContent } from '../lib/articleSummary';
 import { aiDigestCompose, type AiDigestComposeArticle } from '../server/ai/aiDigestCompose';
 import { aiDigestRerank, type AiDigestRerankItem } from '../server/ai/aiDigestRerank';
-import { insertArticleIgnoreDuplicate } from '../server/repositories/articlesRepo';
+import {
+  insertArticleIgnoreDuplicate,
+  pruneFeedArticlesToLimit,
+} from '../server/repositories/articlesRepo';
 import {
   getAiDigestConfigByFeedId,
   getAiDigestRunById,
@@ -38,6 +41,7 @@ type AiDigestGenerateDeps = {
   aiDigestCompose: typeof aiDigestCompose;
   sanitizeContent: typeof sanitizeContent;
   insertArticleIgnoreDuplicate: typeof insertArticleIgnoreDuplicate;
+  pruneFeedArticlesToLimit: typeof pruneFeedArticlesToLimit;
   queryArticleIdByDedupeKey: (pool: Pool, input: { feedId: string; dedupeKey: string }) => Promise<string | null>;
   replaceAiDigestRunSources: typeof replaceAiDigestRunSources;
 };
@@ -55,6 +59,7 @@ const defaultDeps: AiDigestGenerateDeps = {
   aiDigestCompose,
   sanitizeContent,
   insertArticleIgnoreDuplicate,
+  pruneFeedArticlesToLimit,
   replaceAiDigestRunSources,
   queryArticleIdByDedupeKey: async (pool, input) => {
     const { rows } = await pool.query<{ id: string }>(
@@ -330,6 +335,7 @@ async function executeAiDigestRun(input: {
   const settings = normalizePersistedSettings(rawSettings);
   const model = settings.ai.model.trim() || DEFAULT_DIGEST_MODEL;
   const apiBaseUrl = settings.ai.apiBaseUrl.trim() || DEFAULT_DIGEST_API_BASE_URL;
+  const maxStoredArticlesPerFeed = settings.rss.maxStoredArticlesPerFeed;
 
   const selected = await pickTopNArticles({
     deps: input.deps,
@@ -374,6 +380,14 @@ async function executeAiDigestRun(input: {
     created?.id ?? input.run.articleId ?? (await input.deps.queryArticleIdByDedupeKey(input.pool, { feedId: input.run.feedId, dedupeKey }));
   if (!articleId) {
     throw new Error('Failed to persist AI digest article');
+  }
+
+  if (created) {
+    await input.deps.pruneFeedArticlesToLimit(
+      input.pool,
+      input.run.feedId,
+      maxStoredArticlesPerFeed,
+    );
   }
 
   await input.deps.replaceAiDigestRunSources(input.pool, {

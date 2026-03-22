@@ -1,4 +1,6 @@
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
+
+type DbClient = Pool | PoolClient;
 
 export type ArticleFilterStatus = 'pending' | 'passed' | 'filtered' | 'error';
 
@@ -43,7 +45,7 @@ export interface ArticleRow {
 }
 
 export async function insertArticleIgnoreDuplicate(
-  pool: Pool,
+  pool: DbClient,
   input: {
     feedId: string;
     dedupeKey: string;
@@ -156,7 +158,7 @@ export async function insertArticleIgnoreDuplicate(
 }
 
 export async function getArticleById(
-  pool: Pool,
+  pool: DbClient,
   id: string,
 ): Promise<ArticleRow | null> {
   const { rows } = await pool.query<ArticleRow>(
@@ -208,7 +210,7 @@ export async function getArticleById(
 }
 
 export async function setArticleRead(
-  pool: Pool,
+  pool: DbClient,
   id: string,
   isRead: boolean,
 ): Promise<void> {
@@ -225,7 +227,7 @@ export async function setArticleRead(
 }
 
 export async function setArticleStarred(
-  pool: Pool,
+  pool: DbClient,
   id: string,
   isStarred: boolean,
 ): Promise<void> {
@@ -242,7 +244,7 @@ export async function setArticleStarred(
 }
 
 export async function markAllRead(
-  pool: Pool,
+  pool: DbClient,
   input: { feedId?: string },
 ): Promise<number> {
   const params: string[] = [];
@@ -288,7 +290,7 @@ export async function setArticleFilterPending(pool: Pool, id: string): Promise<v
 }
 
 export async function setArticleFilterResult(
-  pool: Pool,
+  pool: DbClient,
   id: string,
   input: {
     filterStatus: Extract<ArticleFilterStatus, 'passed' | 'filtered' | 'error'>;
@@ -316,6 +318,76 @@ export async function setArticleFilterResult(
       input.filterErrorMessage ?? null,
     ],
   );
+}
+
+export async function pruneFeedArticlesToLimit(
+  db: DbClient,
+  feedId: string,
+  maxStoredArticlesPerFeed: number,
+): Promise<{ deletedCount: number }> {
+  const res = await db.query(
+    `
+      with overflow as (
+        select greatest(count(*)::int - $2::int, 0) as overflow_count
+        from articles
+        where feed_id = $1
+      ),
+      deletable as (
+        select id
+        from articles
+        where feed_id = $1
+          and is_starred = false
+        order by coalesce(published_at, fetched_at) asc, id asc
+        limit (select overflow_count from overflow)
+      )
+      delete from articles
+      where id in (select id from deletable)
+    `,
+    [feedId, maxStoredArticlesPerFeed],
+  );
+
+  return { deletedCount: res.rowCount ?? 0 };
+}
+
+export async function pruneAllFeedsArticlesToLimit(
+  db: DbClient,
+  maxStoredArticlesPerFeed: number,
+): Promise<{ deletedCount: number }> {
+  const res = await db.query(
+    `
+      with overflow as (
+        select
+          feed_id,
+          greatest(count(*)::int - $1::int, 0) as overflow_count
+        from articles
+        group by feed_id
+        having count(*) > $1::int
+      ),
+      ranked_unstarred as (
+        select
+          a.id,
+          a.feed_id,
+          row_number() over (
+            partition by a.feed_id
+            order by coalesce(a.published_at, a.fetched_at) asc, a.id asc
+          ) as delete_rank
+        from articles a
+        join overflow o on o.feed_id = a.feed_id
+        where a.is_starred = false
+      ),
+      deletable as (
+        select r.id
+        from ranked_unstarred r
+        join overflow o on o.feed_id = r.feed_id
+        where r.delete_rank <= o.overflow_count
+      )
+      delete from articles
+      where id in (select id from deletable)
+    `,
+    [maxStoredArticlesPerFeed],
+  );
+
+  return { deletedCount: res.rowCount ?? 0 };
 }
 
 export async function setArticleFulltext(

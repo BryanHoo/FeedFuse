@@ -10,6 +10,7 @@ import {
 import {
   getArticleById,
   insertArticleIgnoreDuplicate,
+  pruneFeedArticlesToLimit,
   recordArticleTitleTranslationFailure,
   setArticleTitleTranslation,
 } from '../server/repositories/articlesRepo';
@@ -187,6 +188,10 @@ async function fetchAndIngestFeed(boss: PgBoss, feedId: string, input?: { force?
         filterJob,
         getQueueSendOptions(JOB_ARTICLE_FILTER, { articleId: created.id }),
       );
+    }
+
+    if (inserted > 0) {
+      await pruneFeedArticlesToLimit(pool, feedId, uiSettings.rss.maxStoredArticlesPerFeed);
     }
 
     return { inserted };

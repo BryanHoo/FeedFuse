@@ -145,6 +145,7 @@ describe('runAiDigestGenerate', () => {
     writeSystemLogMock.mockReset();
     const replaceAiDigestRunSourcesMock = vi.fn().mockResolvedValue(undefined);
     const insertArticleIgnoreDuplicateMock = vi.fn().mockResolvedValue({ id: 'digest-article-1' });
+    const pruneFeedArticlesToLimitMock = vi.fn().mockResolvedValue({ deletedCount: 0 });
     const pool = { query: vi.fn() } as unknown as Pool;
 
     const { runAiDigestGenerate } = await import('./aiDigestGenerate');
@@ -196,14 +197,15 @@ describe('runAiDigestGenerate', () => {
         updateAiDigestRun: vi.fn().mockResolvedValue(undefined),
         updateAiDigestConfigLastWindowEndAt: vi.fn().mockResolvedValue(undefined),
         getAiApiKey: vi.fn().mockResolvedValue('k'),
-        getUiSettings: vi.fn().mockResolvedValue({}),
+        getUiSettings: vi.fn().mockResolvedValue({ rss: { maxStoredArticlesPerFeed: 1000 } }),
         aiDigestRerank: vi.fn().mockResolvedValue(['candidate-1', 'candidate-2']),
         aiDigestCompose: vi.fn().mockResolvedValue({ title: 'Digest', html: '<p>digest</p>' }),
         sanitizeContent: vi.fn().mockReturnValue('<p>digest</p>'),
         insertArticleIgnoreDuplicate: insertArticleIgnoreDuplicateMock,
         queryArticleIdByDedupeKey: vi.fn().mockResolvedValue('digest-article-1'),
         replaceAiDigestRunSources: replaceAiDigestRunSourcesMock,
-      },
+        pruneFeedArticlesToLimit: pruneFeedArticlesToLimitMock,
+      } as never,
     });
 
     expect(replaceAiDigestRunSourcesMock).toHaveBeenCalledWith(
@@ -225,6 +227,7 @@ describe('runAiDigestGenerate', () => {
         filterErrorMessage: null,
       }),
     );
+    expect(pruneFeedArticlesToLimitMock).toHaveBeenCalledWith(pool, 'feed-ai', 1000);
     expect(writeSystemLogMock).toHaveBeenNthCalledWith(
       1,
       pool,
@@ -240,6 +243,7 @@ describe('runAiDigestGenerate', () => {
   it('stores a text summary for generated AI digest articles', async () => {
     writeSystemLogMock.mockReset();
     const insertArticleIgnoreDuplicateMock = vi.fn().mockResolvedValue({ id: 'digest-article-2' });
+    const pruneFeedArticlesToLimitMock = vi.fn().mockResolvedValue({ deletedCount: 0 });
     const pool = { query: vi.fn() } as unknown as Pool;
 
     const { runAiDigestGenerate } = await import('./aiDigestGenerate');
@@ -292,9 +296,10 @@ describe('runAiDigestGenerate', () => {
           .fn()
           .mockReturnValue('<h1>Digest</h1><p>这是 AI 解读摘要。</p><p>后续段落。</p>'),
         insertArticleIgnoreDuplicate: insertArticleIgnoreDuplicateMock,
+        pruneFeedArticlesToLimit: pruneFeedArticlesToLimitMock,
         queryArticleIdByDedupeKey: vi.fn().mockResolvedValue('digest-article-2'),
         replaceAiDigestRunSources: vi.fn().mockResolvedValue(undefined),
-      },
+      } as never,
     });
 
     expect(insertArticleIgnoreDuplicateMock).toHaveBeenCalledWith(

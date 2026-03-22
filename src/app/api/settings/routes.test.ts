@@ -12,6 +12,7 @@ const pool = {
 const getUiSettingsMock = vi.fn();
 const updateUiSettingsMock = vi.fn();
 const updateAllFeedsFetchIntervalMinutesMock = vi.fn();
+const pruneAllFeedsArticlesToLimitMock = vi.fn();
 const writeSystemLogMock = vi.fn();
 
 vi.mock('../../../server/db/pool', () => ({
@@ -39,6 +40,13 @@ vi.mock('../../../../server/repositories/feedsRepo', () => ({
     updateAllFeedsFetchIntervalMinutesMock(...args),
 }));
 
+vi.mock('../../../server/repositories/articlesRepo', () => ({
+  pruneAllFeedsArticlesToLimit: (...args: unknown[]) => pruneAllFeedsArticlesToLimitMock(...args),
+}));
+vi.mock('../../../../server/repositories/articlesRepo', () => ({
+  pruneAllFeedsArticlesToLimit: (...args: unknown[]) => pruneAllFeedsArticlesToLimitMock(...args),
+}));
+
 vi.mock('../../../server/logging/systemLogger', () => ({
   writeSystemLog: (...args: unknown[]) => writeSystemLogMock(...args),
 }));
@@ -51,6 +59,7 @@ describe('/api/settings', () => {
     getUiSettingsMock.mockReset();
     updateUiSettingsMock.mockReset();
     updateAllFeedsFetchIntervalMinutesMock.mockReset();
+    pruneAllFeedsArticlesToLimitMock.mockReset();
     writeSystemLogMock.mockReset();
     client.query.mockReset().mockResolvedValue({ rows: [] });
     client.release.mockReset();
@@ -98,6 +107,32 @@ describe('/api/settings', () => {
     expect(json.data.logging).toEqual({ enabled: true, retentionDays: 14, minLevel: 'warning' });
   });
 
+  it('PUT prunes existing feed articles when rss.maxStoredArticlesPerFeed changes', async () => {
+    getUiSettingsMock.mockResolvedValue({ rss: { fetchIntervalMinutes: 30, maxStoredArticlesPerFeed: 500 } });
+
+    const payload = {
+      rss: { fetchIntervalMinutes: 30, maxStoredArticlesPerFeed: 1000 },
+    };
+    const normalized = normalizePersistedSettings(payload);
+    updateUiSettingsMock.mockResolvedValue(normalized);
+
+    const mod = await import('./route');
+    const res = await mod.PUT(
+      new Request('http://localhost/api/settings', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      }),
+    );
+    const json = await res.json();
+
+    expect(pruneAllFeedsArticlesToLimitMock).toHaveBeenCalledWith(client, 1000);
+    expect(json.ok).toBe(true);
+    expect(
+      (json.data.rss as { maxStoredArticlesPerFeed?: number }).maxStoredArticlesPerFeed,
+    ).toBe(1000);
+  });
+
   it('PUT does not update all feeds when only general.theme changes', async () => {
     getUiSettingsMock.mockResolvedValue({ rss: { fetchIntervalMinutes: 30 }, general: { theme: 'dark' } });
 
@@ -117,6 +152,7 @@ describe('/api/settings', () => {
 
     expect(updateUiSettingsMock).toHaveBeenCalledWith(client, normalized);
     expect(updateAllFeedsFetchIntervalMinutesMock).not.toHaveBeenCalled();
+    expect(pruneAllFeedsArticlesToLimitMock).not.toHaveBeenCalled();
     expect(json.ok).toBe(true);
     expect(json.data.general.theme).toBe('light');
   });

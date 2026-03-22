@@ -89,6 +89,7 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
     useState<OpmlTransferResultSummary | null>(null);
   const lastAutosaveStatusRef = useRef<keyof typeof autosaveStatusMeta>('idle');
   const lastSavedNotifyAtRef = useRef(0);
+  const rssSnapshotReloadPendingRef = useRef(false);
   const draft = useSettingsStore((state) => state.draft);
   const hydratePersistedSettings = useSettingsStore((state) => state.hydratePersistedSettings);
   const loadDraft = useSettingsStore((state) => state.loadDraft);
@@ -104,6 +105,9 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
     hasErrors,
   });
 
+  const reloadCurrentSnapshot = () =>
+    useAppStore.getState().loadSnapshot({ view: useAppStore.getState().selectedView });
+
   useEffect(() => {
     const previous = lastAutosaveStatusRef.current;
     const current = autosave.status;
@@ -113,6 +117,11 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
       if (now - lastSavedNotifyAtRef.current >= 30000) {
         toast.success('设置已自动保存');
         lastSavedNotifyAtRef.current = now;
+      }
+
+      if (rssSnapshotReloadPendingRef.current) {
+        rssSnapshotReloadPendingRef.current = false;
+        void reloadCurrentSnapshot();
       }
     }
 
@@ -132,10 +141,17 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
     onClose();
   };
 
-  const handleDraftChange = (updater: Parameters<typeof updateDraft>[0]) => {
+  const handleDraftChange = (
+    section: SettingsSectionKey,
+    updater: Parameters<typeof updateDraft>[0],
+  ) => {
     updateDraft((nextDraft) => {
       updater(nextDraft);
     });
+    if (section === 'rss') {
+      // RSS filters and feed-level retention affect what the current snapshot should show.
+      rssSnapshotReloadPendingRef.current = true;
+    }
     setDraftVersion((value) => value + 1);
   };
 
@@ -165,7 +181,7 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
       const result = await importOpml({ content, fileName: file.name });
       setLastOpmlImportResult(result);
       toast.success('OPML 导入完成');
-      await useAppStore.getState().loadSnapshot({ view: useAppStore.getState().selectedView });
+      await reloadCurrentSnapshot();
     } finally {
       setOpmlImporting(false);
     }
@@ -278,12 +294,15 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
                   <div className="min-h-0 min-w-0 flex-1 px-4 py-5 md:px-6 md:py-6">
                     <div className="flex h-full min-h-0 w-full flex-col">
                       <TabsContent value="general" className="mt-0 h-full overflow-y-auto">
-                        <GeneralSettingsPanel draft={draft} onChange={handleDraftChange} />
+                        <GeneralSettingsPanel
+                          draft={draft}
+                          onChange={(updater) => handleDraftChange('general', updater)}
+                        />
                       </TabsContent>
                       <TabsContent value="rss" className="mt-0 h-full overflow-y-auto">
                         <RssSettingsPanel
                           draft={draft}
-                          onChange={handleDraftChange}
+                          onChange={(updater) => handleDraftChange('rss', updater)}
                           opmlImporting={opmlImporting}
                           opmlExporting={opmlExporting}
                           lastOpmlImportResult={lastOpmlImportResult}
@@ -292,10 +311,17 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
                         />
                       </TabsContent>
                       <TabsContent value="ai" className="mt-0 h-full overflow-y-auto">
-                        <AISettingsPanel draft={draft} onChange={handleDraftChange} errors={validationErrors} />
+                        <AISettingsPanel
+                          draft={draft}
+                          onChange={(updater) => handleDraftChange('ai', updater)}
+                          errors={validationErrors}
+                        />
                       </TabsContent>
                       <TabsContent value="logging" className="mt-0 h-full min-h-0">
-                        <LogsSettingsPanel draft={draft} onChange={handleDraftChange} />
+                        <LogsSettingsPanel
+                          draft={draft}
+                          onChange={(updater) => handleDraftChange('logging', updater)}
+                        />
                       </TabsContent>
                     </div>
                   </div>

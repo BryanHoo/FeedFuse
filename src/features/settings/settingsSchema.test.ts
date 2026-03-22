@@ -92,6 +92,23 @@ describe('settingsSchema normalize', () => {
     });
   });
 
+  it('adds rss maxStoredArticlesPerFeed default and falls back invalid values', () => {
+    const defaults = normalizePersistedSettings({});
+    expect(
+      (defaults.rss as unknown as { maxStoredArticlesPerFeed?: number }).maxStoredArticlesPerFeed,
+    ).toBe(500);
+
+    const explicit = normalizePersistedSettings({ rss: { maxStoredArticlesPerFeed: 1000 } });
+    expect(
+      (explicit.rss as unknown as { maxStoredArticlesPerFeed?: number }).maxStoredArticlesPerFeed,
+    ).toBe(1000);
+
+    const invalid = normalizePersistedSettings({ rss: { maxStoredArticlesPerFeed: 999 } });
+    expect(
+      (invalid.rss as unknown as { maxStoredArticlesPerFeed?: number }).maxStoredArticlesPerFeed,
+    ).toBe(500);
+  });
+
   it('normalizes rss articleFilter fields and migrates legacy global keywords', () => {
     const normalized = normalizePersistedSettings({
       rss: {

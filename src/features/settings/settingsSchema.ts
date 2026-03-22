@@ -46,6 +46,7 @@ const defaultAISettings: AIPersistedSettings = {
 const defaultRssSettings: RssSettings = {
   sources: [],
   fetchIntervalMinutes: 30,
+  maxStoredArticlesPerFeed: 500,
   articleFilter: {
     keyword: {
       enabled: false,
@@ -242,10 +243,16 @@ function normalizeRssSettings(input: Record<string, unknown>): RssSettings {
     [5, 15, 30, 60, 120] as const,
     defaultRssSettings.fetchIntervalMinutes
   );
+  const maxStoredArticlesPerFeed = readNumberEnum(
+    rssInput.maxStoredArticlesPerFeed,
+    [100, 200, 500, 1000, 2000] as const,
+    defaultRssSettings.maxStoredArticlesPerFeed,
+  );
 
   return {
     sources,
     fetchIntervalMinutes,
+    maxStoredArticlesPerFeed,
     articleFilter: normalizeArticleFilter(rssInput),
   };
 }
