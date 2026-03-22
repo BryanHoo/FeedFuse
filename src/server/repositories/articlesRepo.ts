@@ -1,8 +1,60 @@
 import type { Pool, PoolClient } from 'pg';
 
-type DbClient = Pool | PoolClient;
+export type DbClient = Pool | PoolClient;
 
 export type ArticleFilterStatus = 'pending' | 'passed' | 'filtered' | 'error';
+export type ArticleDuplicateReason =
+  | 'same_normalized_url'
+  | 'same_title'
+  | 'similar_content';
+
+const articleRowColumnsSql = `
+  id,
+  feed_id as "feedId",
+  dedupe_key as "dedupeKey",
+  title,
+  title_original as "titleOriginal",
+  title_zh as "titleZh",
+  title_translation_model as "titleTranslationModel",
+  title_translation_attempts as "titleTranslationAttempts",
+  title_translation_error as "titleTranslationError",
+  title_translated_at as "titleTranslatedAt",
+  link,
+  author,
+  published_at as "publishedAt",
+  fetched_at as "fetchedAt",
+  content_html as "contentHtml",
+  content_full_html as "contentFullHtml",
+  content_full_fetched_at as "contentFullFetchedAt",
+  content_full_error as "contentFullError",
+  content_full_source_url as "contentFullSourceUrl",
+  preview_image_url as "previewImageUrl",
+  ai_summary as "aiSummary",
+  ai_summary_model as "aiSummaryModel",
+  ai_summarized_at as "aiSummarizedAt",
+  ai_translation_bilingual_html as "aiTranslationBilingualHtml",
+  ai_translation_zh_html as "aiTranslationZhHtml",
+  ai_translation_model as "aiTranslationModel",
+  ai_translated_at as "aiTranslatedAt",
+  summary,
+  source_language as "sourceLanguage",
+  normalized_title as "normalizedTitle",
+  normalized_link as "normalizedLink",
+  content_fingerprint as "contentFingerprint",
+  duplicate_of_article_id as "duplicateOfArticleId",
+  duplicate_reason as "duplicateReason",
+  duplicate_score as "duplicateScore",
+  duplicate_checked_at as "duplicateCheckedAt",
+  filter_status as "filterStatus",
+  is_filtered as "isFiltered",
+  filtered_by as "filteredBy",
+  filter_evaluated_at as "filterEvaluatedAt",
+  filter_error_message as "filterErrorMessage",
+  is_read as "isRead",
+  read_at as "readAt",
+  is_starred as "isStarred",
+  starred_at as "starredAt"
+`;
 
 export interface ArticleRow {
   id: string;
@@ -18,6 +70,7 @@ export interface ArticleRow {
   link: string | null;
   author: string | null;
   publishedAt: string | null;
+  fetchedAt: string;
   contentHtml: string | null;
   contentFullHtml: string | null;
   contentFullFetchedAt: string | null;
@@ -33,6 +86,13 @@ export interface ArticleRow {
   aiTranslatedAt: string | null;
   summary: string | null;
   sourceLanguage: string | null;
+  normalizedTitle: string | null;
+  normalizedLink: string | null;
+  contentFingerprint: string | null;
+  duplicateOfArticleId: string | null;
+  duplicateReason: ArticleDuplicateReason | null;
+  duplicateScore: number | null;
+  duplicateCheckedAt: string | null;
   filterStatus: ArticleFilterStatus;
   isFiltered: boolean;
   filteredBy: string[];
@@ -96,44 +156,7 @@ export async function insertArticleIgnoreDuplicate(
       )
       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       on conflict (feed_id, dedupe_key) do nothing
-      returning
-        id,
-        feed_id as "feedId",
-        dedupe_key as "dedupeKey",
-        title,
-        title_original as "titleOriginal",
-        title_zh as "titleZh",
-        title_translation_model as "titleTranslationModel",
-        title_translation_attempts as "titleTranslationAttempts",
-        title_translation_error as "titleTranslationError",
-        title_translated_at as "titleTranslatedAt",
-        link,
-        author,
-        published_at as "publishedAt",
-        content_html as "contentHtml",
-        content_full_html as "contentFullHtml",
-        content_full_fetched_at as "contentFullFetchedAt",
-        content_full_error as "contentFullError",
-        content_full_source_url as "contentFullSourceUrl",
-        preview_image_url as "previewImageUrl",
-        ai_summary as "aiSummary",
-        ai_summary_model as "aiSummaryModel",
-        ai_summarized_at as "aiSummarizedAt",
-        ai_translation_bilingual_html as "aiTranslationBilingualHtml",
-        ai_translation_zh_html as "aiTranslationZhHtml",
-        ai_translation_model as "aiTranslationModel",
-        ai_translated_at as "aiTranslatedAt",
-        summary,
-        source_language as "sourceLanguage",
-        filter_status as "filterStatus",
-        is_filtered as "isFiltered",
-        filtered_by as "filteredBy",
-        filter_evaluated_at as "filterEvaluatedAt",
-        filter_error_message as "filterErrorMessage",
-        is_read as "isRead",
-        read_at as "readAt",
-        is_starred as "isStarred",
-        starred_at as "starredAt"
+      returning ${articleRowColumnsSql}
     `,
     [
       input.feedId,
@@ -163,44 +186,7 @@ export async function getArticleById(
 ): Promise<ArticleRow | null> {
   const { rows } = await pool.query<ArticleRow>(
     `
-      select
-        id,
-        feed_id as "feedId",
-        dedupe_key as "dedupeKey",
-        title,
-        title_original as "titleOriginal",
-        title_zh as "titleZh",
-        title_translation_model as "titleTranslationModel",
-        title_translation_attempts as "titleTranslationAttempts",
-        title_translation_error as "titleTranslationError",
-        title_translated_at as "titleTranslatedAt",
-        link,
-        author,
-        published_at as "publishedAt",
-        content_html as "contentHtml",
-        content_full_html as "contentFullHtml",
-        content_full_fetched_at as "contentFullFetchedAt",
-        content_full_error as "contentFullError",
-        content_full_source_url as "contentFullSourceUrl",
-        preview_image_url as "previewImageUrl",
-        ai_summary as "aiSummary",
-        ai_summary_model as "aiSummaryModel",
-        ai_summarized_at as "aiSummarizedAt",
-        ai_translation_bilingual_html as "aiTranslationBilingualHtml",
-        ai_translation_zh_html as "aiTranslationZhHtml",
-        ai_translation_model as "aiTranslationModel",
-        ai_translated_at as "aiTranslatedAt",
-        summary,
-        source_language as "sourceLanguage",
-        filter_status as "filterStatus",
-        is_filtered as "isFiltered",
-        filtered_by as "filteredBy",
-        filter_evaluated_at as "filterEvaluatedAt",
-        filter_error_message as "filterErrorMessage",
-        is_read as "isRead",
-        read_at as "readAt",
-        is_starred as "isStarred",
-        starred_at as "starredAt"
+      select ${articleRowColumnsSql}
       from articles
       where id = $1
     `,
@@ -281,6 +267,13 @@ export async function setArticleFilterPending(pool: Pool, id: string): Promise<v
         filter_status = 'pending',
         is_filtered = false,
         filtered_by = '{}'::text[],
+        normalized_title = null,
+        normalized_link = null,
+        content_fingerprint = null,
+        duplicate_of_article_id = null,
+        duplicate_reason = null,
+        duplicate_score = null,
+        duplicate_checked_at = null,
         filter_evaluated_at = null,
         filter_error_message = null
       where id = $1
@@ -297,6 +290,12 @@ export async function setArticleFilterResult(
     isFiltered: boolean;
     filteredBy: string[];
     filterErrorMessage?: string | null;
+    normalizedTitle?: string | null;
+    normalizedLink?: string | null;
+    contentFingerprint?: string | null;
+    duplicateOfArticleId?: string | null;
+    duplicateReason?: ArticleDuplicateReason | null;
+    duplicateScore?: number | null;
   },
 ): Promise<void> {
   await pool.query(
@@ -307,7 +306,14 @@ export async function setArticleFilterResult(
         is_filtered = $3,
         filtered_by = $4,
         filter_evaluated_at = now(),
-        filter_error_message = $5
+        filter_error_message = $5,
+        normalized_title = $6,
+        normalized_link = $7,
+        content_fingerprint = $8,
+        duplicate_of_article_id = $9,
+        duplicate_reason = $10,
+        duplicate_score = $11,
+        duplicate_checked_at = now()
       where id = $1
     `,
     [
@@ -316,8 +322,38 @@ export async function setArticleFilterResult(
       input.isFiltered,
       input.filteredBy,
       input.filterErrorMessage ?? null,
+      input.normalizedTitle ?? null,
+      input.normalizedLink ?? null,
+      input.contentFingerprint ?? null,
+      input.duplicateOfArticleId ?? null,
+      input.duplicateReason ?? null,
+      input.duplicateScore ?? null,
     ],
   );
+}
+
+export async function listArticleDuplicateCandidates(
+  pool: DbClient,
+  input: { articleId: string; publishedAt: string | null; fetchedAt: string },
+): Promise<ArticleRow[]> {
+  const { rows } = await pool.query<ArticleRow>(
+    `
+      -- Only compare against records that already existed so a newer article never replaces an earlier representative.
+      select ${articleRowColumnsSql}
+      from articles
+      where id <> $1
+        and (fetched_at < $3 or (fetched_at = $3 and id < $1::bigint))
+        and coalesce(published_at, fetched_at) >= coalesce($2::timestamptz, $3::timestamptz) - interval '72 hours'
+        and coalesce(published_at, fetched_at) <= coalesce($2::timestamptz, $3::timestamptz) + interval '72 hours'
+      order by fetched_at asc, id asc
+    `,
+    [
+      input.articleId,
+      input.publishedAt,
+      input.fetchedAt,
+    ],
+  );
+  return rows;
 }
 
 export async function pruneFeedArticlesToLimit(
