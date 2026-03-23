@@ -1,5 +1,10 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
+import { normalizePersistedSettings } from '../../../../../features/settings/settingsSchema';
+import {
+  isAiRuntimeConfigComplete,
+  resolveSharedAiConfig,
+} from '../../../../../server/ai/runtimeConfig';
 import { getPool } from '../../../../../server/db/pool';
 import { ok, fail } from '../../../../../server/http/apiResponse';
 import { NotFoundError, ValidationError } from '../../../../../server/http/errors';
@@ -16,7 +21,7 @@ import {
   upsertTaskQueued,
 } from '../../../../../server/repositories/articleTasksRepo';
 import { getFeedFullTextOnOpenEnabled } from '../../../../../server/repositories/feedsRepo';
-import { getAiApiKey } from '../../../../../server/repositories/settingsRepo';
+import { getAiApiKey, getUiSettings } from '../../../../../server/repositories/settingsRepo';
 import { writeSystemLog } from '../../../../../server/logging/systemLogger';
 import { getQueueSendOptions } from '../../../../../server/queue/contracts';
 import { enqueueWithResult } from '../../../../../server/queue/queue';
@@ -157,9 +162,20 @@ export async function POST(
     const article = await getArticleById(pool, articleId);
     if (!article) return fail(new NotFoundError('Article not found'));
 
-    const aiApiKey = await getAiApiKey(pool);
+    const [aiApiKey, uiSettings] = await Promise.all([
+      getAiApiKey(pool),
+      getUiSettings(pool),
+    ]);
     if (!aiApiKey.trim()) {
       return ok({ enqueued: false, reason: 'missing_api_key' });
+    }
+
+    const sharedAiConfig = resolveSharedAiConfig({
+      settings: normalizePersistedSettings(uiSettings),
+      aiApiKey,
+    });
+    if (!isAiRuntimeConfigComplete(sharedAiConfig)) {
+      return ok({ enqueued: false, reason: 'missing_ai_config' });
     }
 
     const existingSession = await getActiveAiSummarySessionByArticleId(pool, articleId);

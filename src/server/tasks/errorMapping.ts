@@ -54,8 +54,8 @@ export function mapTaskError(input: {
   if (/429|rate limit/i.test(safe)) {
     return result('ai_rate_limited', '请求太频繁了，请稍后重试');
   }
-  if (/401|unauthorized|api key/i.test(safe)) {
-    return result('ai_invalid_config', 'AI 配置无效，请检查 API 密钥');
+  if (/401|unauthorized|api key|Missing (AI|translation) configuration/i.test(safe)) {
+    return result('ai_invalid_config', 'AI 配置无效，请检查 AI 设置');
   }
   if (/Invalid .*response/i.test(safe)) {
     return result('ai_bad_response', 'AI 返回结果异常，请稍后重试');

@@ -54,6 +54,9 @@ describe('/api/rss/validate', () => {
       valid: true,
       siteUrl: 'https://example.com/',
     });
+    expect(isSafeExternalUrlMock).toHaveBeenCalledWith('https://example.com/rss.xml', {
+      allowUnresolvedHostname: true,
+    });
   });
 
   it('returns success without siteUrl when feed.link missing', async () => {
@@ -103,6 +106,30 @@ describe('/api/rss/validate', () => {
         valid: false,
         reason: 'not_feed',
         message: '响应不是合法的 RSS/Atom 源',
+      },
+    });
+  });
+
+  it('returns dns_error when upstream hostname cannot be resolved', async () => {
+    const dnsError = Object.assign(new Error('getaddrinfo ENOTFOUND www.ruanyifeng.com'), {
+      code: 'ENOTFOUND',
+    });
+    fetchRssXmlMock.mockRejectedValue(dnsError);
+
+    const mod = await import('./route');
+    const response = await mod.GET(
+      new Request(
+        'http://localhost/api/rss/validate?url=https%3A%2F%2Fwww.ruanyifeng.com%2Fblog%2Fatom.xml',
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      ok: true,
+      data: {
+        valid: false,
+        reason: 'dns_error',
+        message: '域名无法解析，请检查网络或 DNS 设置',
       },
     });
   });

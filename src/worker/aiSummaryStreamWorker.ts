@@ -1,6 +1,10 @@
 import crypto from 'node:crypto';
 import type { Pool } from 'pg';
 import { normalizePersistedSettings } from '../features/settings/settingsSchema';
+import {
+  isAiRuntimeConfigComplete,
+  resolveSharedAiConfig,
+} from '../server/ai/runtimeConfig';
 import { streamSummarizeText, type StreamSummarizeTextInput } from '../server/ai/streamSummarizeText';
 import { getArticleById, setArticleAiSummary, type ArticleRow } from '../server/repositories/articlesRepo';
 import {
@@ -18,8 +22,6 @@ import { getAiApiKey, getUiSettings } from '../server/repositories/settingsRepo'
 import { mapTaskError } from '../server/tasks/errorMapping';
 import { runArticleTaskWithStatus } from './articleTaskStatus';
 
-const DEFAULT_SUMMARY_MODEL = 'gpt-4o-mini';
-const DEFAULT_SUMMARY_API_BASE_URL = 'https://api.openai.com/v1';
 const MAX_SUMMARY_SOURCE_LENGTH = 16_000;
 
 type RunArticleTaskWithStatusFn = typeof runArticleTaskWithStatus;
@@ -249,10 +251,15 @@ export async function runAiSummaryStreamWorker(
         });
         sessionIdForFailure = session.id;
 
-        const uiSettings = await deps.getUiSettings(input.pool);
-        const normalizedSettings = normalizePersistedSettings(uiSettings);
-        const model = normalizedSettings.ai.model.trim() || DEFAULT_SUMMARY_MODEL;
-        const apiBaseUrl = normalizedSettings.ai.apiBaseUrl.trim() || DEFAULT_SUMMARY_API_BASE_URL;
+        const sharedAiConfig = resolveSharedAiConfig({
+          settings: normalizePersistedSettings(await deps.getUiSettings(input.pool)),
+          aiApiKey,
+        });
+        if (!isAiRuntimeConfigComplete(sharedAiConfig)) {
+          throw new Error('Missing AI configuration');
+        }
+
+        const { model, apiBaseUrl, apiKey } = sharedAiConfig;
 
         draftText = session.draftText ?? '';
         await deps.insertAiSummaryEvent(input.pool, {
@@ -266,7 +273,7 @@ export async function runAiSummaryStreamWorker(
 
         for await (const deltaText of await deps.streamSummarizeText({
           apiBaseUrl,
-          apiKey: aiApiKey,
+          apiKey,
           model,
           text: sourceText,
         })) {

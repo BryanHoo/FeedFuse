@@ -17,6 +17,7 @@ import { normalizeFeedAutoTriggerFlags } from '../../../../lib/feedAutoTriggerPo
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+const feedUrlSafetyOptions = { allowUnresolvedHostname: true } as const;
 
 const paramsSchema = z.object({
   id: numericIdSchema,
@@ -108,7 +109,7 @@ export async function PATCH(
     }
     if (
       typeof bodyParsed.data.url !== 'undefined' &&
-      !(await isSafeExternalUrl(bodyParsed.data.url))
+      !(await isSafeExternalUrl(bodyParsed.data.url, feedUrlSafetyOptions))
     ) {
       return fail(new ValidationError('Invalid request body', { url: 'Unsafe URL' }));
     }

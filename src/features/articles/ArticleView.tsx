@@ -1080,7 +1080,7 @@ export default function ArticleView({
 
             {!aiSummaryText && aiSummaryMissingApiKey ? (
               <div className="mb-4 rounded-xl border border-border/70 bg-muted/35 px-4 py-3 text-sm text-muted-foreground">
-                请先在设置中配置 AI API 密钥，才能生成摘要
+                请先在设置中完成 AI 配置，才能生成摘要
               </div>
             ) : null}
 
@@ -1149,7 +1149,7 @@ export default function ArticleView({
 
             {!hasAiTranslationContent && aiTranslationMissingApiKey ? (
               <div className="mb-4 rounded-xl border border-border/70 bg-muted/35 px-4 py-3 text-sm text-muted-foreground">
-                请先在设置中配置 AI API 密钥，才能翻译文章
+                请先在设置中完成 AI 配置，才能翻译文章
               </div>
             ) : null}
 

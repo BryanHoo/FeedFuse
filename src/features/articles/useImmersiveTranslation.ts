@@ -341,7 +341,10 @@ export function useImmersiveTranslation(
       const enqueueResult = await api.enqueueArticleAiTranslate(articleId, { force });
       if (!isCurrentRequest(articleId, token)) return;
 
-      if (enqueueResult.reason === 'missing_api_key') {
+      if (
+        enqueueResult.reason === 'missing_api_key' ||
+        enqueueResult.reason === 'missing_ai_config'
+      ) {
         setLoadingState(false);
         setMissingApiKeyState(true);
         return;

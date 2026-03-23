@@ -11,6 +11,7 @@ type RssValidationErrorCode =
   | 'unauthorized'
   | 'timeout'
   | 'not_feed'
+  | 'dns_error'
   | 'network_error';
 
 type RssValidationResultData =
@@ -27,6 +28,7 @@ type RssValidationResultData =
     };
 
 const parser = new Parser();
+const feedUrlSafetyOptions = { allowUnresolvedHostname: true } as const;
 
 function detectKind(xml: string): 'rss' | 'atom' {
   const head = xml.trimStart().slice(0, 2000).toLowerCase();
@@ -36,6 +38,39 @@ function detectKind(xml: string): 'rss' | 'atom' {
 
 function toJson(result: RssValidationResultData) {
   return ok(result);
+}
+
+function isDnsResolutionError(err: unknown): boolean {
+  const visited = new Set<object>();
+  let current: unknown = err;
+
+  while (typeof current === 'object' && current !== null && !visited.has(current)) {
+    visited.add(current);
+
+    const code = (current as { code?: unknown }).code;
+    if (
+      code === 'ENOTFOUND' ||
+      code === 'EAI_AGAIN' ||
+      code === 'EAI_FAIL' ||
+      code === 'EAI_NONAME'
+    ) {
+      return true;
+    }
+
+    const message = (current as { message?: unknown }).message;
+    if (
+      typeof message === 'string' &&
+      /(?:getaddrinfo|dns).*(?:enotfound|eai_again|eai_fail|eai_noname)|(?:enotfound|eai_again|eai_fail|eai_noname)/i.test(
+        message,
+      )
+    ) {
+      return true;
+    }
+
+    current = (current as { cause?: unknown }).cause;
+  }
+
+  return false;
 }
 
 function normalizeHttpUrl(value: unknown): string | null {
@@ -69,12 +104,14 @@ export async function GET(request: Request) {
     });
   }
 
-  if (!(await isSafeExternalUrl(urlParam))) {
+  const normalizedUrl = url.toString();
+
+  if (!(await isSafeExternalUrl(normalizedUrl, feedUrlSafetyOptions))) {
     return toJson({ valid: false, reason: 'invalid_url', message: '链接格式不正确' });
   }
 
   try {
-    const res = await fetchRssXml(urlParam, {
+    const res = await fetchRssXml(normalizedUrl, {
       timeoutMs: 10_000,
       userAgent: 'FeedFuse RSS Validator',
     });
@@ -128,6 +165,13 @@ export async function GET(request: Request) {
         valid: false,
         reason: 'timeout',
         message: '校验超时，请稍后重试',
+      });
+    }
+    if (isDnsResolutionError(err)) {
+      return toJson({
+        valid: false,
+        reason: 'dns_error',
+        message: '域名无法解析，请检查网络或 DNS 设置',
       });
     }
     return toJson({

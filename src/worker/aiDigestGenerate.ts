@@ -116,8 +116,8 @@ function mapDigestError(err: unknown): { errorCode: string; errorMessage: string
   if (/429|rate limit/i.test(text)) {
     return { errorCode: 'ai_rate_limited', errorMessage: '请求太频繁了，请稍后重试' };
   }
-  if (/401|unauthorized|api key/i.test(text)) {
-    return { errorCode: 'ai_invalid_config', errorMessage: 'AI 配置无效，请检查 API 密钥' };
+  if (/401|unauthorized|api key|Missing AI configuration/i.test(text)) {
+    return { errorCode: 'ai_invalid_config', errorMessage: 'AI 配置无效，请检查 AI 设置' };
   }
   if (/Invalid .*response/i.test(text)) {
     return { errorCode: 'ai_bad_response', errorMessage: 'AI 返回结果异常，请稍后重试' };

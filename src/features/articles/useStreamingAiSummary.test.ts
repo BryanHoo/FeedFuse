@@ -304,6 +304,29 @@ describe('useStreamingAiSummary', () => {
     expect(result.current.session?.errorMessage).toBe('请求太频繁了，请稍后重试');
   });
 
+  it('marks missingApiKey when enqueue returns missing_ai_config', async () => {
+    const api: StreamingAiSummaryApi = {
+      enqueueArticleAiSummary: vi.fn().mockResolvedValue({
+        enqueued: false,
+        reason: 'missing_ai_config',
+      }),
+      getArticleAiSummarySnapshot: vi.fn(),
+      createArticleAiSummaryEventSource: vi.fn(),
+    };
+
+    const { result } = renderHook(() =>
+      useStreamingAiSummary({ articleId: 'article-1', api }),
+    );
+
+    await act(async () => {
+      await result.current.requestSummary();
+    });
+
+    expect(result.current.loading).toBe(false);
+    expect(result.current.missingApiKey).toBe(true);
+    expect(api.getArticleAiSummarySnapshot).not.toHaveBeenCalled();
+  });
+
   it('marks session failed when stream has no terminal events for a long time', async () => {
     vi.useFakeTimers();
     try {

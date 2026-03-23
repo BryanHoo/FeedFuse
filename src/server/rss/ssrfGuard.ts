@@ -1,6 +1,13 @@
 import ipaddr from 'ipaddr.js';
 import { lookup } from 'node:dns/promises';
 
+const DOCKER_HOST_ALIAS = 'host.docker.internal';
+const RESERVED_HOSTNAME_SUFFIXES = ['.localhost', '.local', '.test', '.example', '.invalid'];
+
+export interface SafeExternalUrlOptions {
+  allowUnresolvedHostname?: boolean;
+}
+
 function isAllowedIp(ip: string, options?: { allowLoopback?: boolean }): boolean {
   if (!ipaddr.isValid(ip)) return false;
   const addr = ipaddr.parse(ip);
@@ -10,7 +17,26 @@ function isAllowedIp(ip: string, options?: { allowLoopback?: boolean }): boolean
   return false;
 }
 
-export async function isSafeExternalUrl(value: string): Promise<boolean> {
+function looksLikePublicHostname(hostname: string): boolean {
+  if (!hostname.includes('.')) return false;
+  if (!/^[a-z0-9.-]+$/i.test(hostname)) return false;
+
+  const labels = hostname.split('.');
+  if (
+    labels.some((label) => label.length === 0 || label.startsWith('-') || label.endsWith('-'))
+  ) {
+    return false;
+  }
+
+  return !RESERVED_HOSTNAME_SUFFIXES.some(
+    (suffix) => hostname === suffix.slice(1) || hostname.endsWith(suffix),
+  );
+}
+
+export async function isSafeExternalUrl(
+  value: string,
+  options?: SafeExternalUrlOptions,
+): Promise<boolean> {
   let url: URL;
   try {
     url = new URL(value);
@@ -23,6 +49,11 @@ export async function isSafeExternalUrl(value: string): Promise<boolean> {
 
   const hostname = url.hostname.toLowerCase();
   if (!hostname) return false;
+
+  // Docker users may enter the host alias directly; treat it the same as localhost.
+  if (hostname === DOCKER_HOST_ALIAS) {
+    return true;
+  }
 
   if (hostname === 'localhost' || hostname.endsWith('.localhost')) {
     return true;
@@ -42,6 +73,8 @@ export async function isSafeExternalUrl(value: string): Promise<boolean> {
     }
     return true;
   } catch {
-    return false;
+    // Some feed URLs are reachable via container/proxy networking even when
+    // local DNS lookup fails inside Node. Let explicit callers opt into that fallback.
+    return options?.allowUnresolvedHostname === true && looksLikePublicHostname(hostname);
   }
 }

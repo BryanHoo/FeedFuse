@@ -429,7 +429,10 @@ export function useStreamingAiSummary(
           : await api.enqueueArticleAiSummary(articleId);
         if (!isCurrentRequest(articleId, token)) return;
 
-        if (enqueueResult.reason === 'missing_api_key') {
+        if (
+          enqueueResult.reason === 'missing_api_key' ||
+          enqueueResult.reason === 'missing_ai_config'
+        ) {
           setLocalStates((current) => ({
             ...current,
             [articleId]: {

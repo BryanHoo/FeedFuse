@@ -26,6 +26,11 @@ describe('ssrfGuard', () => {
     await expect(isSafeExternalUrl('http://localhost/feed')).resolves.toBe(true);
   });
 
+  it('accepts Docker host alias', async () => {
+    lookupMock.mockResolvedValue([{ address: '192.168.65.254', family: 4 }]);
+    await expect(isSafeExternalUrl('http://host.docker.internal/feed')).resolves.toBe(true);
+  });
+
   it('rejects non-http protocols', async () => {
     await expect(isSafeExternalUrl('ftp://example.com/feed')).resolves.toBe(false);
   });
@@ -42,6 +47,20 @@ describe('ssrfGuard', () => {
   it('accepts domains resolving to public ip', async () => {
     lookupMock.mockResolvedValue([{ address: '1.1.1.1', family: 4 }]);
     await expect(isSafeExternalUrl('https://public.test/feed')).resolves.toBe(true);
+  });
+
+  it('keeps rejecting unresolved hostnames by default', async () => {
+    lookupMock.mockRejectedValue(new Error('getaddrinfo ENOTFOUND public.example'));
+    await expect(isSafeExternalUrl('https://public.example/feed')).resolves.toBe(false);
+  });
+
+  it('accepts unresolved public hostnames when explicitly allowed', async () => {
+    lookupMock.mockRejectedValue(new Error('getaddrinfo ENOTFOUND feeds.ruanyifeng.com'));
+    await expect(
+      isSafeExternalUrl('https://feeds.ruanyifeng.com/feed', {
+        allowUnresolvedHostname: true,
+      }),
+    ).resolves.toBe(true);
   });
 
   it('rejects domains with any unsafe ip', async () => {

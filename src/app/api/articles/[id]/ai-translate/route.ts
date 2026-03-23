@@ -5,7 +5,10 @@ import { NotFoundError, ValidationError } from '../../../../../server/http/error
 import { numericIdSchema } from '../../../../../server/http/idSchemas';
 import { normalizePersistedSettings } from '../../../../../features/settings/settingsSchema';
 import { evaluateArticleBodyTranslationEligibility } from '../../../../../server/ai/articleTranslationEligibility';
-import { resolveTranslationConfig } from '../../../../../server/ai/translationConfig';
+import {
+  isTranslationConfigComplete,
+  resolveTranslationConfig,
+} from '../../../../../server/ai/translationConfig';
 import { extractImmersiveSegments, hashSourceHtml } from '../../../../../server/ai/immersiveTranslationSession';
 import { getArticleById, type ArticleRow } from '../../../../../server/repositories/articlesRepo';
 import {
@@ -171,6 +174,9 @@ export async function POST(
 
     if (!translationConfig.apiKey.trim()) {
       return ok({ enqueued: false, reason: 'missing_api_key' });
+    }
+    if (!isTranslationConfigComplete(translationConfig)) {
+      return ok({ enqueued: false, reason: 'missing_ai_config' });
     }
 
     const feedBodyTranslateEnabled = await getFeedBodyTranslateEnabled(pool, article.feedId);

@@ -78,6 +78,11 @@ function HookHarness(input: { articleId: string; api: ImmersiveTranslationApi })
     ),
     React.createElement(
       'div',
+      { 'data-testid': 'missing-config' },
+      immersive.missingApiKey ? 'true' : 'false',
+    ),
+    React.createElement(
+      'div',
       { 'data-testid': 'timed-out' },
       immersive.timedOut ? 'true' : 'false',
     ),
@@ -367,5 +372,26 @@ describe('useImmersiveTranslation', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('marks missingApiKey when enqueue returns missing_ai_config', async () => {
+    const api: ImmersiveTranslationApi = {
+      enqueueArticleAiTranslate: vi.fn().mockResolvedValue({
+        enqueued: false,
+        reason: 'missing_ai_config',
+      }),
+      getArticleAiTranslateSnapshot: vi.fn(),
+      retryArticleAiTranslateSegment: vi.fn(),
+      createArticleAiTranslateEventSource: vi.fn(),
+    };
+
+    render(React.createElement(HookHarness, { articleId: 'article-1', api }));
+    fireEvent.click(screen.getByRole('button', { name: 'start' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('loading').textContent).toBe('false');
+    });
+    expect(screen.getByTestId('missing-config').textContent).toBe('true');
+    expect(api.getArticleAiTranslateSnapshot).not.toHaveBeenCalled();
   });
 });

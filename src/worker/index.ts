@@ -28,7 +28,10 @@ import { fetchFulltextAndStore } from '../server/fulltext/fetchFulltextAndStore'
 import { translateSegmentsInBatches } from '../server/ai/bilingualHtmlTranslator';
 import { articleFilterJudge } from '../server/ai/articleFilterJudge';
 import { translateTitle } from '../server/ai/translateTitle';
-import { resolveTranslationConfig } from '../server/ai/translationConfig';
+import {
+  isTranslationConfigComplete,
+  resolveTranslationConfig,
+} from '../server/ai/translationConfig';
 import { startBoss } from '../server/queue/boss';
 import { bootstrapQueues } from '../server/queue/bootstrap';
 import { getQueueSendOptions, QUEUE_CONTRACTS } from '../server/queue/contracts';
@@ -61,8 +64,6 @@ import { runSystemLogCleanup } from './systemLogCleanup';
 
 const DEFAULT_TRANSLATION_MODEL = 'gpt-4o-mini';
 const DEFAULT_TRANSLATION_API_BASE_URL = 'https://api.openai.com/v1';
-const DEFAULT_TITLE_TRANSLATION_MODEL = 'gpt-4o-mini';
-const DEFAULT_TITLE_TRANSLATION_API_BASE_URL = 'https://api.openai.com/v1';
 
 function sha256(value: string): string {
   return crypto.createHash('sha256').update(value).digest('hex');
@@ -482,10 +483,11 @@ async function main() {
             aiApiKey,
             translationApiKey,
           });
-          const model = resolved.model || DEFAULT_TRANSLATION_MODEL;
-          const apiBaseUrl = resolved.apiBaseUrl || DEFAULT_TRANSLATION_API_BASE_URL;
-          const apiKey = resolved.apiKey.trim();
-          if (!apiKey) throw new Error('Missing translation API key');
+          if (!resolved.apiKey.trim()) throw new Error('Missing translation API key');
+          if (!isTranslationConfigComplete(resolved)) {
+            throw new Error('Missing translation configuration');
+          }
+          const { model, apiBaseUrl, apiKey } = resolved;
 
           await runImmersiveTranslateSession({
             pool,
@@ -554,10 +556,9 @@ async function main() {
         aiApiKey,
         translationApiKey,
       });
-      const model = resolved.model || DEFAULT_TITLE_TRANSLATION_MODEL;
-      const apiBaseUrl = resolved.apiBaseUrl || DEFAULT_TITLE_TRANSLATION_API_BASE_URL;
-      const apiKey = resolved.apiKey.trim();
-      if (!apiKey) continue;
+      if (!resolved.apiKey.trim()) continue;
+      if (!isTranslationConfigComplete(resolved)) continue;
+      const { model, apiBaseUrl, apiKey } = resolved;
 
       try {
         const translatedTitle = await translateTitle({

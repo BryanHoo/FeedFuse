@@ -1,9 +1,9 @@
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { useRef } from 'react';
-import type { SettingsDraft } from '../../../store/settingsStore';
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useRef } from "react";
+import type { SettingsDraft } from "../../../store/settingsStore";
 
 interface AISettingsPanelProps {
   draft: SettingsDraft;
@@ -15,22 +15,27 @@ function resolveApiKeyStatus(
   apiKey: string,
   hasApiKey: boolean,
   clearApiKey: boolean,
-): { label: string; variant: Parameters<typeof Badge>[0]['variant'] } {
-  if (clearApiKey) return { label: '待清除', variant: 'destructive' };
-  if (apiKey.trim()) return { label: '待保存', variant: 'secondary' };
-  if (hasApiKey) return { label: '已配置', variant: 'secondary' };
-  return { label: '未配置', variant: 'outline' };
+): { label: string; variant: Parameters<typeof Badge>[0]["variant"] } {
+  if (clearApiKey) return { label: "待清除", variant: "destructive" };
+  if (apiKey.trim()) return { label: "待保存", variant: "secondary" };
+  if (hasApiKey) return { label: "已配置", variant: "secondary" };
+  return { label: "未配置", variant: "outline" };
 }
 
-export default function AISettingsPanel({ draft, onChange, errors }: AISettingsPanelProps) {
+export default function AISettingsPanel({
+  draft,
+  onChange,
+  errors,
+}: AISettingsPanelProps) {
   const ai = draft.persisted.ai;
   const translation = ai.translation;
   const apiKey = draft.session.ai.apiKey;
   const hasApiKey = draft.session.ai.hasApiKey;
   const clearApiKey = draft.session.ai.clearApiKey;
-  const translationApiKey = draft.session.ai.translationApiKey ?? '';
+  const translationApiKey = draft.session.ai.translationApiKey ?? "";
   const hasTranslationApiKey = draft.session.ai.hasTranslationApiKey ?? false;
-  const clearTranslationApiKey = draft.session.ai.clearTranslationApiKey ?? false;
+  const clearTranslationApiKey =
+    draft.session.ai.clearTranslationApiKey ?? false;
 
   const apiKeyInputRef = useRef<HTMLInputElement>(null);
   const translationApiKeyInputRef = useRef<HTMLInputElement>(null);
@@ -46,6 +51,31 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
     <section>
       <div className="overflow-hidden rounded-lg border border-border bg-background">
         <div className="flex flex-col divide-y divide-border">
+          <div className="px-4 py-3.5">
+            <div className="rounded-lg border border-border/70 bg-muted/35 p-3">
+              <p className="text-sm font-medium text-foreground">
+                如何填写 AI 配置
+              </p>
+              <ul className="mt-2 space-y-1.5 text-xs text-muted-foreground">
+                <li>
+                  OpenAI：
+                  <code className="rounded bg-background px-1 py-0.5 font-mono text-[11px] text-foreground">
+                    gpt-4o-mini
+                  </code>
+                  、{" "}
+                  <code className="rounded bg-background px-1 py-0.5 font-mono text-[11px] text-foreground">
+                    https://api.openai.com/v1
+                  </code>
+                  和你的 API key。
+                </li>
+                <li>
+                  兼容
+                  OpenAI：模型、地址（通常带`/v1`）、密钥按服务商提供的值填写。
+                </li>
+              </ul>
+            </div>
+          </div>
+
           <div className="px-4 py-3.5">
             <Label htmlFor="ai-model" className="mb-2 block">
               AI 模型
@@ -84,8 +114,10 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
               }
               placeholder="例如：https://api.openai.com/v1…"
             />
-            {errors['ai.apiBaseUrl'] ? (
-              <p className="mt-1.5 text-xs text-destructive">{errors['ai.apiBaseUrl']}</p>
+            {errors["ai.apiBaseUrl"] ? (
+              <p className="mt-1.5 text-xs text-destructive">
+                {errors["ai.apiBaseUrl"]}
+              </p>
             ) : null}
           </div>
 
@@ -104,7 +136,7 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
               defaultValue={apiKey}
               onBlur={(event) => {
                 if (!apiKey.trim() && hasApiKey && !clearApiKey) {
-                  event.currentTarget.value = '';
+                  event.currentTarget.value = "";
                 }
               }}
               onChange={(event) =>
@@ -118,26 +150,26 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
             <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs text-muted-foreground">
                 {hasApiKey
-                  ? '保留当前密钥可留空；如需删除，请点击“删除已保存的密钥”。'
-                  : '暂不设置可留空，稍后再补充。'}
+                  ? "保留当前密钥可留空；如需删除，请点击“删除已保存的密钥”。"
+                  : "暂不设置可留空，稍后再补充。"}
               </p>
               {hasApiKey ? (
                 <Button
                   type="button"
                   size="sm"
-                  variant={clearApiKey ? 'outline' : 'destructive'}
+                  variant={clearApiKey ? "outline" : "destructive"}
                   className="h-8"
                   onClick={() =>
                     onChange((nextDraft) => {
                       if (apiKeyInputRef.current) {
-                        apiKeyInputRef.current.value = '';
+                        apiKeyInputRef.current.value = "";
                       }
-                      nextDraft.session.ai.apiKey = '';
+                      nextDraft.session.ai.apiKey = "";
                       nextDraft.session.ai.clearApiKey = !clearApiKey;
                     })
                   }
                 >
-                  {clearApiKey ? '保留已保存的密钥' : '删除已保存的密钥'}
+                  {clearApiKey ? "保留已保存的密钥" : "删除已保存的密钥"}
                 </Button>
               ) : null}
             </div>
@@ -157,15 +189,15 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
                   onClick={() =>
                     onChange((nextDraft) => {
                       nextDraft.persisted.ai.translation.useSharedAi = true;
-                      nextDraft.session.ai.translationApiKey = '';
+                      nextDraft.session.ai.translationApiKey = "";
                       nextDraft.session.ai.clearTranslationApiKey = false;
                       if (translationApiKeyInputRef.current) {
-                        translationApiKeyInputRef.current.value = '';
+                        translationApiKeyInputRef.current.value = "";
                       }
                     })
                   }
                   aria-pressed={translation.useSharedAi}
-                  variant={translation.useSharedAi ? 'default' : 'outline'}
+                  variant={translation.useSharedAi ? "default" : "outline"}
                   size="compact"
                   className="px-3"
                 >
@@ -179,7 +211,7 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
                     })
                   }
                   aria-pressed={!translation.useSharedAi}
-                  variant={!translation.useSharedAi ? 'default' : 'outline'}
+                  variant={!translation.useSharedAi ? "default" : "outline"}
                   size="compact"
                   className="px-3"
                 >
@@ -188,7 +220,9 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              {translation.useSharedAi ? '当前：翻译复用上方主 AI 配置。' : '当前：翻译使用下方单独配置。'}
+              {translation.useSharedAi
+                ? "当前：翻译复用上方主 AI 配置。"
+                : "当前：翻译使用下方单独配置。"}
             </p>
           </div>
 
@@ -206,7 +240,8 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
                   value={translation.model}
                   onChange={(event) =>
                     onChange((nextDraft) => {
-                      nextDraft.persisted.ai.translation.model = event.target.value;
+                      nextDraft.persisted.ai.translation.model =
+                        event.target.value;
                     })
                   }
                   placeholder="例如：gpt-4o-mini…"
@@ -214,7 +249,10 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
               </div>
 
               <div className="px-4 py-3.5">
-                <Label htmlFor="ai-translation-api-base-url" className="mb-2 block">
+                <Label
+                  htmlFor="ai-translation-api-base-url"
+                  className="mb-2 block"
+                >
                   翻译 API 地址
                 </Label>
                 <Input
@@ -227,20 +265,25 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
                   value={translation.apiBaseUrl}
                   onChange={(event) =>
                     onChange((nextDraft) => {
-                      nextDraft.persisted.ai.translation.apiBaseUrl = event.target.value;
+                      nextDraft.persisted.ai.translation.apiBaseUrl =
+                        event.target.value;
                     })
                   }
                   placeholder="例如：https://api.openai.com/v1…"
                 />
-                {errors['ai.translation.apiBaseUrl'] ? (
-                  <p className="mt-1.5 text-xs text-destructive">{errors['ai.translation.apiBaseUrl']}</p>
+                {errors["ai.translation.apiBaseUrl"] ? (
+                  <p className="mt-1.5 text-xs text-destructive">
+                    {errors["ai.translation.apiBaseUrl"]}
+                  </p>
                 ) : null}
               </div>
 
               <div className="px-4 py-3.5">
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <Label htmlFor="ai-translation-api-key">翻译 API 密钥</Label>
-                  <Badge variant={translationApiKeyStatus.variant}>{translationApiKeyStatus.label}</Badge>
+                  <Badge variant={translationApiKeyStatus.variant}>
+                    {translationApiKeyStatus.label}
+                  </Badge>
                 </div>
                 <Input
                   id="ai-translation-api-key"
@@ -251,13 +294,18 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
                   ref={translationApiKeyInputRef}
                   defaultValue={translationApiKey}
                   onBlur={(event) => {
-                    if (!translationApiKey.trim() && hasTranslationApiKey && !clearTranslationApiKey) {
-                      event.currentTarget.value = '';
+                    if (
+                      !translationApiKey.trim() &&
+                      hasTranslationApiKey &&
+                      !clearTranslationApiKey
+                    ) {
+                      event.currentTarget.value = "";
                     }
                   }}
                   onChange={(event) =>
                     onChange((nextDraft) => {
-                      nextDraft.session.ai.translationApiKey = event.target.value;
+                      nextDraft.session.ai.translationApiKey =
+                        event.target.value;
                       nextDraft.session.ai.clearTranslationApiKey = false;
                     })
                   }
@@ -266,26 +314,31 @@ export default function AISettingsPanel({ draft, onChange, errors }: AISettingsP
                 <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-xs text-muted-foreground">
                     {hasTranslationApiKey
-                      ? '保留当前翻译密钥可留空；如需删除，请点击“删除已保存的翻译密钥”。'
-                      : '暂不设置可留空，稍后再补充。'}
+                      ? "保留当前翻译密钥可留空；如需删除，请点击“删除已保存的翻译密钥”。"
+                      : "暂不设置可留空，稍后再补充。"}
                   </p>
                   {hasTranslationApiKey ? (
                     <Button
                       type="button"
                       size="sm"
-                      variant={clearTranslationApiKey ? 'outline' : 'destructive'}
+                      variant={
+                        clearTranslationApiKey ? "outline" : "destructive"
+                      }
                       className="h-8"
                       onClick={() =>
                         onChange((nextDraft) => {
                           if (translationApiKeyInputRef.current) {
-                            translationApiKeyInputRef.current.value = '';
+                            translationApiKeyInputRef.current.value = "";
                           }
-                          nextDraft.session.ai.translationApiKey = '';
-                          nextDraft.session.ai.clearTranslationApiKey = !clearTranslationApiKey;
+                          nextDraft.session.ai.translationApiKey = "";
+                          nextDraft.session.ai.clearTranslationApiKey =
+                            !clearTranslationApiKey;
                         })
                       }
                     >
-                      {clearTranslationApiKey ? '保留已保存的翻译密钥' : '删除已保存的翻译密钥'}
+                      {clearTranslationApiKey
+                        ? "保留已保存的翻译密钥"
+                        : "删除已保存的翻译密钥"}
                     </Button>
                   ) : null}
                 </div>

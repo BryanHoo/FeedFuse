@@ -1,3 +1,5 @@
+import { isAiRuntimeConfigComplete, type AiRuntimeConfig } from './runtimeConfig';
+
 export interface TranslationConfigInput {
   settings: {
     ai: {
@@ -14,11 +16,7 @@ export interface TranslationConfigInput {
   translationApiKey: string;
 }
 
-export interface TranslationRuntimeConfig {
-  model: string;
-  apiBaseUrl: string;
-  apiKey: string;
-}
+export interface TranslationRuntimeConfig extends AiRuntimeConfig {}
 
 function trim(value: string): string {
   return value.trim();
@@ -42,4 +40,8 @@ export function resolveTranslationConfig(
     apiBaseUrl: trim(input.settings.ai.translation.apiBaseUrl),
     apiKey: trim(input.translationApiKey),
   };
+}
+
+export function isTranslationConfigComplete(config: TranslationRuntimeConfig): boolean {
+  return isAiRuntimeConfigComplete(config);
 }

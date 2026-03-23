@@ -11,6 +11,7 @@ import { normalizeFeedAutoTriggerFlags } from '../../../lib/feedAutoTriggerPolic
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+const feedUrlSafetyOptions = { allowUnresolvedHostname: true } as const;
 
 const categoryInputShape = {
   categoryId: numericIdSchema.nullable().optional(),
@@ -19,18 +20,18 @@ const categoryInputShape = {
 
 const createFeedBodySchema = z
   .object({
-  title: z.string().trim().min(1),
-  url: z.string().trim().min(1).url(),
-  siteUrl: z.string().trim().url().nullable().optional(),
-  ...categoryInputShape,
-  fullTextOnOpenEnabled: z.boolean().optional(),
-  fullTextOnFetchEnabled: z.boolean().optional(),
-  aiSummaryOnOpenEnabled: z.boolean().optional(),
-  aiSummaryOnFetchEnabled: z.boolean().optional(),
-  bodyTranslateOnFetchEnabled: z.boolean().optional(),
-  bodyTranslateOnOpenEnabled: z.boolean().optional(),
-  titleTranslateEnabled: z.boolean().optional(),
-  bodyTranslateEnabled: z.boolean().optional(),
+    title: z.string().trim().min(1),
+    url: z.string().trim().min(1).url(),
+    siteUrl: z.string().trim().url().nullable().optional(),
+    ...categoryInputShape,
+    fullTextOnOpenEnabled: z.boolean().optional(),
+    fullTextOnFetchEnabled: z.boolean().optional(),
+    aiSummaryOnOpenEnabled: z.boolean().optional(),
+    aiSummaryOnFetchEnabled: z.boolean().optional(),
+    bodyTranslateOnFetchEnabled: z.boolean().optional(),
+    bodyTranslateOnOpenEnabled: z.boolean().optional(),
+    titleTranslateEnabled: z.boolean().optional(),
+    bodyTranslateEnabled: z.boolean().optional(),
   })
   .refine((value) => !(value.categoryId && value.categoryName), {
     path: ['categoryName'],
@@ -105,7 +106,7 @@ export async function POST(request: Request) {
     if (!parsed.success) {
       return fail(new ValidationError('Invalid request body', zodIssuesToFields(parsed.error)));
     }
-    if (!(await isSafeExternalUrl(parsed.data.url))) {
+    if (!(await isSafeExternalUrl(parsed.data.url, feedUrlSafetyOptions))) {
       return fail(new ValidationError('Invalid request body', { url: 'Unsafe URL' }));
     }
 

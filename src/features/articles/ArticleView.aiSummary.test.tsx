@@ -978,7 +978,7 @@ describe('ArticleView ai summary', () => {
     getArticleTasksMock.mockResolvedValue({
       fulltext: { type: 'fulltext', status: 'idle', jobId: null, requestedAt: null, startedAt: null, finishedAt: null, attempts: 0, errorCode: null, errorMessage: null, rawErrorMessage: null },
       ai_summary: { type: 'ai_summary', status: 'failed', jobId: 'job-summary-1', requestedAt: null, startedAt: null, finishedAt: null, attempts: 1, errorCode: 'ai_rate_limited', errorMessage: '请求太频繁了，请稍后重试', rawErrorMessage: '429 rate limit' },
-      ai_translate: { type: 'ai_translate', status: 'failed', jobId: 'job-translate-1', requestedAt: null, startedAt: null, finishedAt: null, attempts: 1, errorCode: 'ai_invalid_config', errorMessage: 'AI 配置无效，请检查 API 密钥', rawErrorMessage: '401 unauthorized' },
+      ai_translate: { type: 'ai_translate', status: 'failed', jobId: 'job-translate-1', requestedAt: null, startedAt: null, finishedAt: null, attempts: 1, errorCode: 'ai_invalid_config', errorMessage: 'AI 配置无效，请检查 AI 设置', rawErrorMessage: '401 unauthorized' },
     });
 
     await seedArticleViewState({

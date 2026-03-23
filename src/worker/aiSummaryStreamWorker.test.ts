@@ -67,7 +67,13 @@ describe('aiSummaryStreamWorker', () => {
             updatedAt: '2026-03-09T00:00:00.000Z',
           }) as never,
         getAiApiKey: async () => 'sk-test',
-        getUiSettings: async () => ({} as never),
+        getUiSettings: async () =>
+          ({
+            ai: {
+              model: 'gpt-4o-mini',
+              apiBaseUrl: 'https://ai.example.com/v1',
+            },
+          }) as never,
         getFeedFullTextOnOpenEnabled: async () => false,
         runArticleTaskWithStatus: runArticleTaskWithStatusMock,
         streamSummarizeText: async function* () {
@@ -178,7 +184,13 @@ describe('aiSummaryStreamWorker', () => {
               updatedAt: '2026-03-09T00:00:00.000Z',
             }) as never,
           getAiApiKey: async () => 'sk-test',
-          getUiSettings: async () => ({} as never),
+          getUiSettings: async () =>
+            ({
+              ai: {
+                model: 'gpt-4o-mini',
+                apiBaseUrl: 'https://ai.example.com/v1',
+              },
+            }) as never,
           getFeedFullTextOnOpenEnabled: async () => false,
           runArticleTaskWithStatus: async ({ fn }) => fn(),
           streamSummarizeText: async function* () {
@@ -306,6 +318,111 @@ describe('aiSummaryStreamWorker', () => {
           sessionId: 'session-1',
           errorCode: 'ai_invalid_config',
           rawErrorMessage: 'Missing AI API key',
+        }),
+      }),
+    );
+  });
+
+  it('emits session.failed when shared AI config is incomplete before streaming starts', async () => {
+    const insertEventMock = vi.fn().mockResolvedValue(undefined);
+    const failSessionMock = vi.fn().mockResolvedValue(undefined);
+
+    const mod = await import('./aiSummaryStreamWorker');
+
+    await expect(
+      mod.runAiSummaryStreamWorker({
+        pool: {} as never,
+        articleId: 'article-1',
+        sessionId: 'session-1',
+        jobId: 'job-1',
+        deps: {
+          getArticleById: async () =>
+            ({
+              id: 'article-1',
+              feedId: 'feed-1',
+              contentHtml: '<p>hello</p>',
+              contentFullHtml: null,
+              contentFullError: null,
+              summary: null,
+              aiSummary: null,
+            }) as never,
+          getAiSummarySessionById: async () =>
+            ({
+              id: 'session-1',
+              articleId: 'article-1',
+              sourceTextHash: 'hash-1',
+              status: 'queued',
+              draftText: '已有草稿',
+              finalText: null,
+              model: null,
+              jobId: 'job-1',
+              errorCode: null,
+              errorMessage: null,
+              rawErrorMessage: null,
+              supersededBySessionId: null,
+              startedAt: '2026-03-09T00:00:00.000Z',
+              finishedAt: null,
+              createdAt: '2026-03-09T00:00:00.000Z',
+              updatedAt: '2026-03-09T00:00:00.000Z',
+            }) as never,
+          getActiveAiSummarySessionByArticleId: async () => null,
+          upsertAiSummarySession: async () =>
+            ({
+              id: 'session-1',
+              articleId: 'article-1',
+              sourceTextHash: 'hash-1',
+              status: 'queued',
+              draftText: '已有草稿',
+              finalText: null,
+              model: null,
+              jobId: 'job-1',
+              errorCode: null,
+              errorMessage: null,
+              rawErrorMessage: null,
+              supersededBySessionId: null,
+              startedAt: '2026-03-09T00:00:00.000Z',
+              finishedAt: null,
+              createdAt: '2026-03-09T00:00:00.000Z',
+              updatedAt: '2026-03-09T00:00:00.000Z',
+            }) as never,
+          getAiApiKey: async () => 'sk-test',
+          getUiSettings: async () =>
+            ({
+              ai: {
+                model: '',
+                apiBaseUrl: '',
+              },
+            }) as never,
+          getFeedFullTextOnOpenEnabled: async () => false,
+          runArticleTaskWithStatus: async ({ fn }) => fn(),
+          streamSummarizeText: async function* () {
+            yield '不会执行';
+          },
+          updateAiSummarySessionDraft: vi.fn().mockResolvedValue(undefined),
+          insertAiSummaryEvent: insertEventMock,
+          completeAiSummarySession: vi.fn().mockResolvedValue(undefined),
+          failAiSummarySession: failSessionMock,
+          setArticleAiSummary: vi.fn().mockResolvedValue(undefined),
+        },
+      }),
+    ).rejects.toThrow('Missing AI configuration');
+
+    expect(failSessionMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        sessionId: 'session-1',
+        errorCode: 'ai_invalid_config',
+        rawErrorMessage: 'Missing AI configuration',
+      }),
+    );
+    expect(insertEventMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        eventType: 'session.failed',
+        payload: expect.objectContaining({
+          sessionId: 'session-1',
+          errorCode: 'ai_invalid_config',
+          rawErrorMessage: 'Missing AI configuration',
         }),
       }),
     );

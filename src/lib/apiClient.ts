@@ -223,6 +223,7 @@ export type RssValidationErrorCode =
   | 'unauthorized'
   | 'timeout'
   | 'not_feed'
+  | 'dns_error'
   | 'network_error';
 
 export interface RssValidationResult {

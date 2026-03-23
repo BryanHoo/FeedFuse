@@ -15,6 +15,7 @@ const updateUiSettingsMock = vi.fn();
 
 const enqueueMock = vi.fn();
 const enqueueWithResultMock = vi.fn();
+const isSafeExternalUrlMock = vi.fn();
 
 vi.mock('../../../server/db/pool', () => ({
   getPool: () => pool,
@@ -74,6 +75,12 @@ vi.mock('../../../../server/queue/queue', () => ({
   enqueue: (...args: unknown[]) => enqueueMock(...args),
   enqueueWithResult: (...args: unknown[]) => enqueueWithResultMock(...args),
 }));
+vi.mock('../../../server/rss/ssrfGuard', () => ({
+  isSafeExternalUrl: (...args: unknown[]) => isSafeExternalUrlMock(...args),
+}));
+vi.mock('../../../../server/rss/ssrfGuard', () => ({
+  isSafeExternalUrl: (...args: unknown[]) => isSafeExternalUrlMock(...args),
+}));
 
 const feedId = '1001';
 const categoryId = '2001';
@@ -89,6 +96,8 @@ describe('/api/feeds', () => {
     updateUiSettingsMock.mockReset();
     enqueueMock.mockReset();
     enqueueWithResultMock.mockReset();
+    isSafeExternalUrlMock.mockReset();
+    isSafeExternalUrlMock.mockResolvedValue(true);
   });
 
   it('GET returns feeds with unreadCount', async () => {
@@ -161,6 +170,9 @@ describe('/api/feeds', () => {
         aiSummaryOnOpenEnabled: true,
       }),
     );
+    expect(isSafeExternalUrlMock).toHaveBeenCalledWith('https://1.1.1.1/rss.xml', {
+      allowUnresolvedHostname: true,
+    });
     expect(json.ok).toBe(true);
     expect(json.data.url).toBe('https://1.1.1.1/rss.xml');
     expect(json.data.fullTextOnFetchEnabled).toBe(true);
@@ -337,6 +349,8 @@ describe('/api/feeds', () => {
   });
 
   it('POST validates and rejects unsafe urls', async () => {
+    isSafeExternalUrlMock.mockResolvedValue(false);
+
     const mod = await import('./route');
     const res = await mod.POST(
       new Request('http://localhost/api/feeds', {
@@ -648,6 +662,8 @@ describe('/api/feeds', () => {
   });
 
   it('PATCH rejects unsafe url', async () => {
+    isSafeExternalUrlMock.mockResolvedValue(false);
+
     const mod = await import('./[id]/route');
     const res = await mod.PATCH(
       new Request(`http://localhost/api/feeds/${feedId}`, {
@@ -663,6 +679,45 @@ describe('/api/feeds', () => {
     expect(json.error.code).toBe('validation_error');
     expect(json.error.fields.url).toBeTruthy();
     expect(updateFeedWithCategoryResolutionMock).not.toHaveBeenCalled();
+  });
+
+  it('PATCH validates feed url with unresolved-host fallback', async () => {
+    updateFeedWithCategoryResolutionMock.mockResolvedValue({
+      id: feedId,
+      title: 'Updated',
+      url: 'https://feeds.ruanyifeng.com/atom.xml',
+      siteUrl: null,
+      iconUrl: null,
+      enabled: true,
+      fullTextOnOpenEnabled: false,
+      fullTextOnFetchEnabled: false,
+      aiSummaryOnOpenEnabled: false,
+      aiSummaryOnFetchEnabled: false,
+      bodyTranslateOnFetchEnabled: false,
+      bodyTranslateOnOpenEnabled: false,
+      titleTranslateEnabled: false,
+      bodyTranslateEnabled: false,
+      articleListDisplayMode: 'card',
+      categoryId: null,
+      fetchIntervalMinutes: 30,
+    });
+
+    const mod = await import('./[id]/route');
+    const res = await mod.PATCH(
+      new Request(`http://localhost/api/feeds/${feedId}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ url: 'https://feeds.ruanyifeng.com/atom.xml' }),
+      }),
+      { params: Promise.resolve({ id: feedId }) },
+    );
+    const json = await res.json();
+
+    expect(json.ok).toBe(true);
+    expect(isSafeExternalUrlMock).toHaveBeenCalledWith(
+      'https://feeds.ruanyifeng.com/atom.xml',
+      { allowUnresolvedHostname: true },
+    );
   });
 
   it('PATCH returns conflict on duplicate url', async () => {

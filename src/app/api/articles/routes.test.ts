@@ -252,7 +252,17 @@ describe('/api/articles', () => {
 
     getTranslationSessionByArticleIdMock.mockResolvedValue(null);
     getArticleTasksByArticleIdMock.mockResolvedValue([]);
-    getUiSettingsMock.mockResolvedValue({});
+    getUiSettingsMock.mockResolvedValue({
+      ai: {
+        model: 'gpt-4o-mini',
+        apiBaseUrl: 'https://ai.example.com/v1',
+        translation: {
+          useSharedAi: true,
+          model: '',
+          apiBaseUrl: '',
+        },
+      },
+    });
     getTranslationApiKeyMock.mockResolvedValue('');
     upsertTranslationSessionMock.mockResolvedValue({
       id: 'session-id-1',
@@ -1088,6 +1098,48 @@ describe('/api/articles', () => {
     const json = await res.json();
     expect(json.ok).toBe(true);
     expect(json.data).toEqual({ enqueued: false, reason: 'missing_api_key' });
+  });
+
+  it('POST /:id/ai-summary returns missing_ai_config when shared AI config is incomplete', async () => {
+    getAiApiKeyMock.mockResolvedValue('sk-test');
+    getUiSettingsMock.mockResolvedValue({
+      ai: {
+        model: '',
+        apiBaseUrl: '',
+      },
+    });
+    getArticleByIdMock.mockResolvedValue({
+      id: articleId,
+      feedId,
+      dedupeKey: 'guid:1',
+      title: 'Hello',
+      link: 'https://example.com/a',
+      author: null,
+      publishedAt: null,
+      contentHtml: '<p>rss</p>',
+      contentFullHtml: null,
+      contentFullFetchedAt: null,
+      contentFullError: null,
+      contentFullSourceUrl: null,
+      aiSummary: null,
+      aiSummaryModel: null,
+      aiSummarizedAt: null,
+      summary: null,
+      isRead: false,
+      readAt: null,
+      isStarred: false,
+      starredAt: null,
+    });
+
+    const mod = await import('./[id]/ai-summary/route');
+    const res = await mod.POST(new Request(`http://localhost/api/articles/${articleId}/ai-summary`), {
+      params: Promise.resolve({ id: articleId }),
+    });
+    const json = await res.json();
+
+    expect(json.ok).toBe(true);
+    expect(json.data).toEqual({ enqueued: false, reason: 'missing_ai_config' });
+    expect(enqueueWithResultMock).not.toHaveBeenCalled();
   });
 
   it('GET /:id/ai-summary returns active summary session snapshot', async () => {
@@ -2063,6 +2115,65 @@ describe('/api/articles', () => {
 
     expect(json.ok).toBe(true);
     expect(json.data).toEqual({ enqueued: false, reason: 'missing_api_key' });
+    expect(enqueueWithResultMock).not.toHaveBeenCalled();
+  });
+
+  it('POST /:id/ai-translate returns missing_ai_config when dedicated translation config is incomplete', async () => {
+    getAiApiKeyMock.mockResolvedValue('sk-shared-present');
+    getTranslationApiKeyMock.mockResolvedValue('sk-dedicated-present');
+    getUiSettingsMock.mockResolvedValue({
+      ai: {
+        model: 'gpt-4o-mini',
+        apiBaseUrl: 'https://ai.example.com/v1',
+        translation: {
+          useSharedAi: false,
+          model: '',
+          apiBaseUrl: '',
+        },
+      },
+    });
+    getFeedBodyTranslateEnabledMock.mockResolvedValue(true);
+    getArticleByIdMock.mockResolvedValue({
+      id: articleId,
+      feedId,
+      dedupeKey: 'guid:1',
+      title: 'Hello',
+      titleOriginal: 'Hello',
+      titleZh: null,
+      titleTranslationModel: null,
+      titleTranslationAttempts: 0,
+      titleTranslationError: null,
+      titleTranslatedAt: null,
+      link: 'https://example.com/a',
+      author: null,
+      publishedAt: null,
+      contentHtml: '<p>rss</p>',
+      contentFullHtml: null,
+      contentFullFetchedAt: null,
+      contentFullError: null,
+      contentFullSourceUrl: null,
+      aiSummary: null,
+      aiSummaryModel: null,
+      aiSummarizedAt: null,
+      aiTranslationBilingualHtml: null,
+      aiTranslationZhHtml: null,
+      aiTranslationModel: null,
+      aiTranslatedAt: null,
+      summary: null,
+      isRead: false,
+      readAt: null,
+      isStarred: false,
+      starredAt: null,
+    });
+
+    const mod = await import('./[id]/ai-translate/route');
+    const res = await mod.POST(new Request(`http://localhost/api/articles/${articleId}/ai-translate`), {
+      params: Promise.resolve({ id: articleId }),
+    });
+    const json = await res.json();
+
+    expect(json.ok).toBe(true);
+    expect(json.data).toEqual({ enqueued: false, reason: 'missing_ai_config' });
     expect(enqueueWithResultMock).not.toHaveBeenCalled();
   });
 
