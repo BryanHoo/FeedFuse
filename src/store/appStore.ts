@@ -415,6 +415,18 @@ function mergeSnapshotPage(
   return Array.from(byId.values());
 }
 
+function preserveSelectedArticleInVisibleSnapshot(
+  articles: Article[],
+  selectedArticle?: Article,
+): Article[] {
+  if (!selectedArticle || articles.some((article) => article.id === selectedArticle.id)) {
+    return articles;
+  }
+
+  // Keep the current selection visible even when the refreshed snapshot omits it.
+  return [...articles, selectedArticle];
+}
+
 const initialReaderSelection = readReaderSelectionFromUrl();
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -583,12 +595,15 @@ export const useAppStore = create<AppState>((set, get) => ({
         const existingArticleById = new Map(
           existingArticles.map((article) => [article.id, article]),
         );
-        const articles = snapshot.articles.items.map((item) =>
-          mergeSnapshotArticleWithExistingDetails(
-            mapSnapshotArticleItem(item),
-            existingArticleById.get(item.id),
-            articleDetailCache[item.id],
+        const articles = preserveSelectedArticleInVisibleSnapshot(
+          snapshot.articles.items.map((item) =>
+            mergeSnapshotArticleWithExistingDetails(
+              mapSnapshotArticleItem(item),
+              existingArticleById.get(item.id),
+              articleDetailCache[item.id],
+            ),
           ),
+          isVisibleView ? preservedSelectedArticle : undefined,
         );
         const articleSnapshotCache = {
           ...state.articleSnapshotCache,

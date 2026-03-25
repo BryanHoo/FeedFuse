@@ -2058,6 +2058,95 @@ describe('appStore api integration', () => {
     ).toBe(false);
   });
 
+  it('keeps selected article in the visible snapshot when unread-only refresh omits it', async () => {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(getFetchCallUrl(input), 'https://example.com');
+      const method = getFetchCallMethod(input, init);
+
+      if (url.pathname === '/api/reader/snapshot' && method === 'GET') {
+        expect(url.searchParams.get('unreadOnly')).toBe('true');
+
+        return jsonResponse({
+          ok: true,
+          data: {
+            categories: [],
+            feeds: [createSnapshotFeed('feed-1', 'Example', 1)],
+            articles: {
+              items: [createSnapshotArticle('art-2', 'feed-1', 'Unread Article')],
+              nextCursor: null,
+            },
+          },
+        });
+      }
+
+      if (url.pathname === '/api/articles/art-1' && method === 'GET') {
+        throw new Error('Selected article should stay in the visible snapshot without re-fetching');
+      }
+
+      throw new Error(`Unexpected fetch: ${method} ${url.pathname}`);
+    });
+
+    useAppStore.setState({
+      selectedView: 'all',
+      selectedArticleId: 'art-1',
+      showUnreadOnly: true,
+      feeds: [
+        {
+          id: 'feed-1',
+          title: 'Example',
+          url: 'https://example.com/feed-1.xml',
+          siteUrl: 'https://example.com/feed-1',
+          icon: undefined,
+          unreadCount: 1,
+          enabled: true,
+          fullTextOnOpenEnabled: false,
+          aiSummaryOnOpenEnabled: false,
+          aiSummaryOnFetchEnabled: false,
+          bodyTranslateOnFetchEnabled: false,
+          bodyTranslateOnOpenEnabled: false,
+          titleTranslateEnabled: false,
+          bodyTranslateEnabled: false,
+          articleListDisplayMode: 'card',
+          categoryId: null,
+          category: null,
+          fetchStatus: null,
+          fetchError: null,
+        },
+      ],
+      articles: [
+        {
+          id: 'art-1',
+          feedId: 'feed-1',
+          title: 'Selected Read Article',
+          titleOriginal: 'Selected Read Article',
+          content: '<p>Loaded article body</p>',
+          summary: 'Old summary',
+          author: 'Author',
+          publishedAt: '2026-03-09T10:00:00.000Z',
+          link: 'https://example.com/articles/art-1',
+          isRead: true,
+          isStarred: false,
+          bodyTranslationEligible: true,
+          bodyTranslationBlockedReason: null,
+        },
+      ],
+      articleDetailCache: {},
+      articleSnapshotCache: {},
+      snapshotLoading: false,
+    });
+
+    await useAppStore.getState().loadSnapshot({ view: 'all' });
+    await flushPromises();
+
+    const articleIds = useAppStore.getState().articles.map((article) => article.id);
+    expect(articleIds).toEqual(expect.arrayContaining(['art-1', 'art-2']));
+    expect(useAppStore.getState().articles.find((article) => article.id === 'art-1')).toMatchObject({
+      id: 'art-1',
+      content: '<p>Loaded article body</p>',
+      isRead: true,
+    });
+  });
+
   it('keeps aiDigestSources when snapshot refresh merges selected article details', async () => {
     fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
       const url = getFetchCallUrl(input);
