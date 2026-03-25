@@ -745,7 +745,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   addFeed: async (payload) => {
-    const created = await createFeed(payload);
+    const created = await createFeed(payload, { notifyOnError: false });
     const categories = get().categories;
     const mapped = mapFeedDto(created, categories);
 
@@ -759,7 +759,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
 
     try {
-      await refreshFeed(created.id);
+      await refreshFeed(created.id, { notifyOnError: false });
 
       for (let attempt = 0; attempt < ADD_FEED_SNAPSHOT_POLL_MAX_ATTEMPTS; attempt += 1) {
         if (get().selectedView !== created.id) return;
@@ -782,7 +782,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   addAiDigest: async (payload) => {
-    const created = await createAiDigest(payload);
+    const created = await createAiDigest(payload, { notifyOnError: false });
     const categories = get().categories;
     const mapped = mapFeedDto(created, categories);
 
@@ -794,13 +794,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
 
     // AI digest feed creation should not trigger RSS refresh; it only needs a snapshot reload.
-    await get().loadSnapshot({ view: mapped.id });
+    try {
+      await get().loadSnapshot({ view: mapped.id });
+    } catch (err) {
+      console.error(err);
+    }
   },
 
   getAiDigestConfig: async (feedId) => getAiDigestConfigRequest(feedId),
 
   updateAiDigest: async (feedId, payload) => {
-    const updated = await patchAiDigestRequest(feedId, payload);
+    const updated = await patchAiDigestRequest(feedId, payload, {
+      notifyOnError: false,
+    });
     set((state) => {
       const categoryNameById = new Map(state.categories.map((category) => [category.id, category.name]));
 
@@ -831,11 +837,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       };
     });
 
-    await get().loadSnapshot({ view: get().selectedView });
+    try {
+      await get().loadSnapshot({ view: get().selectedView });
+    } catch (err) {
+      console.error(err);
+    }
   },
 
   updateFeed: async (feedId, patch) => {
-    const updated = await patchFeed(feedId, patch);
+    const updated = await patchFeed(feedId, patch, { notifyOnError: false });
     set((state) => {
       const categoryNameById = new Map(state.categories.map((category) => [category.id, category.name]));
 
@@ -866,11 +876,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       };
     });
 
-    await get().loadSnapshot({ view: get().selectedView });
+    try {
+      await get().loadSnapshot({ view: get().selectedView });
+    } catch (err) {
+      console.error(err);
+    }
   },
 
   removeFeed: async (feedId) => {
-    await deleteFeed(feedId);
+    await deleteFeed(feedId, { notifyOnError: false });
 
     let nextSelectedView: ViewType = get().selectedView;
     set((state) => {
@@ -889,7 +903,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       };
     });
 
-    await get().loadSnapshot({ view: nextSelectedView });
+    try {
+      await get().loadSnapshot({ view: nextSelectedView });
+    } catch (err) {
+      console.error(err);
+    }
   },
 
   toggleStar: (articleId) => {

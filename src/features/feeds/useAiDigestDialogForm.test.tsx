@@ -4,6 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Feed } from '../../types';
 import { useAiDigestDialogForm } from './useAiDigestDialogForm';
 
+const { runImmediateOperationMock } = vi.hoisted(() => ({
+  runImmediateOperationMock: vi.fn(),
+}));
+
 const addAiDigestMock = vi.fn().mockResolvedValue(undefined);
 const getAiDigestConfigMock = vi.fn().mockResolvedValue({
   feedId: 'digest-1',
@@ -27,6 +31,18 @@ vi.mock('../../store/appStore', () => ({
       updateAiDigest: updateAiDigestMock,
     }),
 }));
+
+vi.mock('../notifications/userOperationNotifier', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../notifications/userOperationNotifier')>();
+
+  return {
+    ...actual,
+    runImmediateOperation: (input: Parameters<typeof actual.runImmediateOperation>[0]) => {
+      runImmediateOperationMock(input);
+      return actual.runImmediateOperation(input);
+    },
+  };
+});
 
 function createFeed(input: Pick<Feed, 'id' | 'kind' | 'title'>): Feed {
   return {
@@ -58,6 +74,7 @@ describe('useAiDigestDialogForm', () => {
     addAiDigestMock.mockClear();
     getAiDigestConfigMock.mockClear();
     updateAiDigestMock.mockClear();
+    runImmediateOperationMock.mockReset();
   });
 
   it('submits selectedFeedIds only', async () => {
@@ -91,6 +108,9 @@ describe('useAiDigestDialogForm', () => {
     );
     expect(addAiDigestMock).not.toHaveBeenCalledWith(
       expect.objectContaining({ selectedCategoryIds: expect.anything() }),
+    );
+    expect(runImmediateOperationMock).toHaveBeenCalledWith(
+      expect.objectContaining({ actionKey: 'aiDigest.create' }),
     );
   });
 
@@ -139,6 +159,9 @@ describe('useAiDigestDialogForm', () => {
         intervalMinutes: 120,
         selectedFeedIds: ['rss-1'],
       }),
+    );
+    expect(runImmediateOperationMock).toHaveBeenCalledWith(
+      expect.objectContaining({ actionKey: 'aiDigest.update' }),
     );
   });
 });

@@ -8,6 +8,10 @@ import { deriveFeedIconUrl } from '../../../server/rss/deriveFeedIconUrl';
 import { isSafeExternalUrl } from '../../../server/rss/ssrfGuard';
 import { createFeedWithCategoryResolution } from '../../../server/services/feedCategoryLifecycleService';
 import { normalizeFeedAutoTriggerFlags } from '../../../lib/feedAutoTriggerPolicy';
+import {
+  writeUserOperationFailedLog,
+  writeUserOperationSucceededLog,
+} from '../../../server/logging/userOperationLogger';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -73,6 +77,16 @@ function isForeignKeyViolation(
   );
 }
 
+const operationSource = 'app/api/feeds';
+
+async function writeFeedCreateFailure(err: unknown) {
+  await writeUserOperationFailedLog(getPool(), {
+    actionKey: 'feed.create',
+    source: operationSource,
+    err,
+  });
+}
+
 export async function GET() {
   try {
     const pool = getPool();
@@ -104,10 +118,14 @@ export async function POST(request: Request) {
     const json = await request.json().catch(() => null);
     const parsed = createFeedBodySchema.safeParse(json);
     if (!parsed.success) {
-      return fail(new ValidationError('Invalid request body', zodIssuesToFields(parsed.error)));
+      const error = new ValidationError('Invalid request body', zodIssuesToFields(parsed.error));
+      await writeFeedCreateFailure(error);
+      return fail(error);
     }
     if (!(await isSafeExternalUrl(parsed.data.url, feedUrlSafetyOptions))) {
-      return fail(new ValidationError('Invalid request body', { url: 'Unsafe URL' }));
+      const error = new ValidationError('Invalid request body', { url: 'Unsafe URL' });
+      await writeFeedCreateFailure(error);
+      return fail(error);
     }
 
     const pool = getPool();
@@ -125,15 +143,25 @@ export async function POST(request: Request) {
       titleTranslateEnabled: parsed.data.titleTranslateEnabled ?? false,
       bodyTranslateEnabled: parsed.data.bodyTranslateEnabled ?? false,
     }));
+    await writeUserOperationSucceededLog(pool, {
+      actionKey: 'feed.create',
+      source: operationSource,
+      context: { feedId: created.id },
+    });
 
     return ok({ ...created, unreadCount: 0 });
   } catch (err) {
     if (isUniqueViolation(err, 'feeds_url_unique')) {
-      return fail(new ConflictError('Feed already exists', { url: 'duplicate' }));
+      const error = new ConflictError('Feed already exists', { url: 'duplicate' });
+      await writeFeedCreateFailure(error);
+      return fail(error);
     }
     if (isForeignKeyViolation(err, 'feeds_category_id_fkey')) {
-      return fail(new ValidationError('Invalid request body', { categoryId: 'not_found' }));
+      const error = new ValidationError('Invalid request body', { categoryId: 'not_found' });
+      await writeFeedCreateFailure(error);
+      return fail(error);
     }
+    await writeFeedCreateFailure(err);
     return fail(err);
   }
 }

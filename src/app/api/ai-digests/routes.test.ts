@@ -4,13 +4,17 @@ import { JOB_AI_DIGEST_GENERATE } from '../../../server/queue/jobs';
 
 const pool = { connect: vi.fn(), query: vi.fn() };
 const createAiDigestWithCategoryResolutionMock = vi.fn();
+const updateAiDigestWithCategoryResolutionMock = vi.fn();
 
 const getAiApiKeyMock = vi.fn();
+const getUiSettingsMock = vi.fn();
 const getAiDigestConfigByFeedIdMock = vi.fn();
 const createAiDigestRunMock = vi.fn();
 const getAiDigestRunByFeedIdAndWindowStartAtMock = vi.fn();
 const updateAiDigestRunMock = vi.fn();
 const enqueueWithResultMock = vi.fn();
+const writeUserOperationSucceededLogMock = vi.fn();
+const writeUserOperationFailedLogMock = vi.fn();
 
 vi.mock('../../../server/db/pool', () => ({ getPool: () => pool }));
 vi.mock('../../../../server/db/pool', () => ({ getPool: () => pool }));
@@ -19,20 +23,27 @@ vi.mock('../../../../../server/db/pool', () => ({ getPool: () => pool }));
 vi.mock('../../../server/services/aiDigestLifecycleService', () => ({
   createAiDigestWithCategoryResolution: (...args: unknown[]) =>
     createAiDigestWithCategoryResolutionMock(...args),
+  updateAiDigestWithCategoryResolution: (...args: unknown[]) =>
+    updateAiDigestWithCategoryResolutionMock(...args),
 }));
 vi.mock('../../../../server/services/aiDigestLifecycleService', () => ({
   createAiDigestWithCategoryResolution: (...args: unknown[]) =>
     createAiDigestWithCategoryResolutionMock(...args),
+  updateAiDigestWithCategoryResolution: (...args: unknown[]) =>
+    updateAiDigestWithCategoryResolutionMock(...args),
 }));
 
 vi.mock('../../../server/repositories/settingsRepo', () => ({
   getAiApiKey: (...args: unknown[]) => getAiApiKeyMock(...args),
+  getUiSettings: (...args: unknown[]) => getUiSettingsMock(...args),
 }));
 vi.mock('../../../../server/repositories/settingsRepo', () => ({
   getAiApiKey: (...args: unknown[]) => getAiApiKeyMock(...args),
+  getUiSettings: (...args: unknown[]) => getUiSettingsMock(...args),
 }));
 vi.mock('../../../../../server/repositories/settingsRepo', () => ({
   getAiApiKey: (...args: unknown[]) => getAiApiKeyMock(...args),
+  getUiSettings: (...args: unknown[]) => getUiSettingsMock(...args),
 }));
 
 vi.mock('../../../server/repositories/aiDigestRepo', () => ({
@@ -66,12 +77,30 @@ vi.mock('../../../../server/queue/queue', () => ({
 vi.mock('../../../../../server/queue/queue', () => ({
   enqueueWithResult: (...args: unknown[]) => enqueueWithResultMock(...args),
 }));
+vi.mock('../../../server/logging/userOperationLogger', () => ({
+  writeUserOperationSucceededLog: (...args: unknown[]) =>
+    writeUserOperationSucceededLogMock(...args),
+  writeUserOperationFailedLog: (...args: unknown[]) => writeUserOperationFailedLogMock(...args),
+}));
+vi.mock('../../../../server/logging/userOperationLogger', () => ({
+  writeUserOperationSucceededLog: (...args: unknown[]) =>
+    writeUserOperationSucceededLogMock(...args),
+  writeUserOperationFailedLog: (...args: unknown[]) => writeUserOperationFailedLogMock(...args),
+}));
+vi.mock('../../../../../server/logging/userOperationLogger', () => ({
+  writeUserOperationSucceededLog: (...args: unknown[]) =>
+    writeUserOperationSucceededLogMock(...args),
+  writeUserOperationFailedLog: (...args: unknown[]) => writeUserOperationFailedLogMock(...args),
+}));
 
 describe('/api/ai-digests', () => {
   beforeEach(() => {
     pool.connect.mockReset();
     pool.query.mockReset();
     createAiDigestWithCategoryResolutionMock.mockReset();
+    updateAiDigestWithCategoryResolutionMock.mockReset();
+    writeUserOperationSucceededLogMock.mockReset();
+    writeUserOperationFailedLogMock.mockReset();
   });
 
   it('POST creates ai_digest feed and returns unreadCount=0', async () => {
@@ -140,11 +169,59 @@ describe('/api/ai-digests', () => {
 
     expect(res.status).toBe(400);
   });
+
+  it('PATCH writes aiDigest.update success log through the shared helper', async () => {
+    updateAiDigestWithCategoryResolutionMock.mockResolvedValue({
+      id: '1001',
+      kind: 'ai_digest',
+      title: 'Updated Digest',
+      url: 'http://localhost/__feedfuse_ai_digest__/1001',
+      siteUrl: null,
+      iconUrl: null,
+      enabled: true,
+      fullTextOnOpenEnabled: false,
+      aiSummaryOnOpenEnabled: false,
+      aiSummaryOnFetchEnabled: false,
+      bodyTranslateOnFetchEnabled: false,
+      bodyTranslateOnOpenEnabled: false,
+      titleTranslateEnabled: false,
+      bodyTranslateEnabled: false,
+      articleListDisplayMode: 'card',
+      categoryId: null,
+      fetchIntervalMinutes: 30,
+      lastFetchStatus: null,
+      lastFetchError: null,
+    });
+
+    const mod = await import('./[feedId]/route');
+    const res = await mod.PATCH(
+      new Request('http://localhost/api/ai-digests/1001', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          title: 'Updated Digest',
+          prompt: '新的提示词',
+          intervalMinutes: 60,
+          selectedFeedIds: ['1002'],
+        }),
+      }),
+      { params: Promise.resolve({ feedId: '1001' }) },
+    );
+    const json = await res.json();
+
+    expect(json.ok).toBe(true);
+    expect(writeUserOperationSucceededLogMock).toHaveBeenCalledWith(
+      pool,
+      expect.objectContaining({ actionKey: 'aiDigest.update' }),
+    );
+  });
 });
 
 describe('/api/ai-digests/:feedId/generate', () => {
   beforeEach(() => {
     getAiApiKeyMock.mockReset();
+    getUiSettingsMock.mockReset();
+    getUiSettingsMock.mockResolvedValue({});
     getAiDigestConfigByFeedIdMock.mockReset();
     createAiDigestRunMock.mockReset();
     getAiDigestRunByFeedIdAndWindowStartAtMock.mockReset();
@@ -192,7 +269,7 @@ describe('/api/ai-digests/:feedId/generate', () => {
     expect(json.data.enqueued).toBe(true);
     expect(enqueueWithResultMock).toHaveBeenCalledWith(
       JOB_AI_DIGEST_GENERATE,
-      { runId: '5001' },
+      expect.objectContaining({ runId: '5001', sharedConfigFingerprint: expect.any(String) }),
       getQueueSendOptions(JOB_AI_DIGEST_GENERATE, { runId: '5001' }),
     );
   });

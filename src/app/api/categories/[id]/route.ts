@@ -11,6 +11,10 @@ import {
   deleteCategory,
   updateCategory,
 } from '../../../../server/repositories/categoriesRepo';
+import {
+  writeUserOperationFailedLog,
+  writeUserOperationSucceededLog,
+} from '../../../../server/logging/userOperationLogger';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -51,6 +55,27 @@ function isUniqueViolation(
   );
 }
 
+const patchOperationSource = 'app/api/categories/[id]';
+const deleteOperationSource = 'app/api/categories/[id]';
+
+async function writeCategoryUpdateFailure(err: unknown, context?: Record<string, unknown>) {
+  await writeUserOperationFailedLog(getPool(), {
+    actionKey: 'category.update',
+    source: patchOperationSource,
+    err,
+    context,
+  });
+}
+
+async function writeCategoryDeleteFailure(err: unknown, context?: Record<string, unknown>) {
+  await writeUserOperationFailedLog(getPool(), {
+    actionKey: 'category.delete',
+    source: deleteOperationSource,
+    err,
+    context,
+  });
+}
+
 export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> },
@@ -59,25 +84,39 @@ export async function PATCH(
     const params = await context.params;
     const paramsParsed = paramsSchema.safeParse(params);
     if (!paramsParsed.success) {
-      return fail(
-        new ValidationError('Invalid route params', zodIssuesToFields(paramsParsed.error)),
-      );
+      const error = new ValidationError('Invalid route params', zodIssuesToFields(paramsParsed.error));
+      await writeCategoryUpdateFailure(error);
+      return fail(error);
     }
 
     const json = await request.json().catch(() => null);
     const bodyParsed = patchBodySchema.safeParse(json);
     if (!bodyParsed.success) {
-      return fail(new ValidationError('Invalid request body', zodIssuesToFields(bodyParsed.error)));
+      const error = new ValidationError('Invalid request body', zodIssuesToFields(bodyParsed.error));
+      await writeCategoryUpdateFailure(error, { categoryId: paramsParsed.data.id });
+      return fail(error);
     }
 
     const pool = getPool();
     const updated = await updateCategory(pool, paramsParsed.data.id, bodyParsed.data);
-    if (!updated) return fail(new NotFoundError('Category not found'));
+    if (!updated) {
+      const error = new NotFoundError('Category not found');
+      await writeCategoryUpdateFailure(error, { categoryId: paramsParsed.data.id });
+      return fail(error);
+    }
+    await writeUserOperationSucceededLog(pool, {
+      actionKey: 'category.update',
+      source: patchOperationSource,
+      context: { categoryId: updated.id },
+    });
     return ok(updated);
   } catch (err) {
     if (isUniqueViolation(err, 'categories_name_unique')) {
-      return fail(new ConflictError('Category already exists', { name: 'duplicate' }));
+      const error = new ConflictError('Category already exists', { name: 'duplicate' });
+      await writeCategoryUpdateFailure(error);
+      return fail(error);
     }
+    await writeCategoryUpdateFailure(err);
     return fail(err);
   }
 }
@@ -90,17 +129,27 @@ export async function DELETE(
     const params = await context.params;
     const paramsParsed = paramsSchema.safeParse(params);
     if (!paramsParsed.success) {
-      return fail(
-        new ValidationError('Invalid route params', zodIssuesToFields(paramsParsed.error)),
-      );
+      const error = new ValidationError('Invalid route params', zodIssuesToFields(paramsParsed.error));
+      await writeCategoryDeleteFailure(error);
+      return fail(error);
     }
 
     const pool = getPool();
     const deleted = await deleteCategory(pool, paramsParsed.data.id);
-    if (!deleted) return fail(new NotFoundError('Category not found'));
+    if (!deleted) {
+      const error = new NotFoundError('Category not found');
+      await writeCategoryDeleteFailure(error, { categoryId: paramsParsed.data.id });
+      return fail(error);
+    }
+    await writeUserOperationSucceededLog(pool, {
+      actionKey: 'category.delete',
+      source: deleteOperationSource,
+      context: { categoryId: paramsParsed.data.id },
+    });
 
     return ok({ deleted: true });
   } catch (err) {
+    await writeCategoryDeleteFailure(err);
     return fail(err);
   }
 }

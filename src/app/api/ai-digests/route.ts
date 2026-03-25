@@ -4,6 +4,10 @@ import { ok, fail } from '../../../server/http/apiResponse';
 import { ValidationError } from '../../../server/http/errors';
 import { numericIdSchema } from '../../../server/http/idSchemas';
 import { createAiDigestWithCategoryResolution } from '../../../server/services/aiDigestLifecycleService';
+import {
+  writeUserOperationFailedLog,
+  writeUserOperationSucceededLog,
+} from '../../../server/logging/userOperationLogger';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -41,26 +45,44 @@ function zodIssuesToFields(error: z.ZodError): Record<string, string> {
   return fields;
 }
 
+const operationSource = 'app/api/ai-digests';
+
+async function writeAiDigestCreateFailure(err: unknown) {
+  await writeUserOperationFailedLog(getPool(), {
+    actionKey: 'aiDigest.create',
+    source: operationSource,
+    err,
+  });
+}
+
 export async function POST(request: Request) {
   try {
     const json = await request.json().catch(() => null);
     if (json && typeof json === 'object' && 'selectedCategoryIds' in (json as Record<string, unknown>)) {
-      return fail(
-        new ValidationError('Invalid request body', {
-          selectedCategoryIds: 'selectedCategoryIds is not allowed',
-        }),
-      );
+      const error = new ValidationError('Invalid request body', {
+        selectedCategoryIds: 'selectedCategoryIds is not allowed',
+      });
+      await writeAiDigestCreateFailure(error);
+      return fail(error);
     }
 
     const parsed = bodySchema.safeParse(json);
     if (!parsed.success) {
-      return fail(new ValidationError('Invalid request body', zodIssuesToFields(parsed.error)));
+      const error = new ValidationError('Invalid request body', zodIssuesToFields(parsed.error));
+      await writeAiDigestCreateFailure(error);
+      return fail(error);
     }
 
     const pool = getPool();
     const created = await createAiDigestWithCategoryResolution(pool, parsed.data);
+    await writeUserOperationSucceededLog(pool, {
+      actionKey: 'aiDigest.create',
+      source: operationSource,
+      context: { feedId: created.id },
+    });
     return ok({ ...created, unreadCount: 0 });
   } catch (err) {
+    await writeAiDigestCreateFailure(err);
     return fail(err);
   }
 }

@@ -3,7 +3,7 @@ import { ApiError } from "@/lib/apiClient";
 import { mapApiErrorToUserMessage } from "@/lib/mapApiErrorToUserMessage";
 import type { Category, Feed } from "../../types";
 import { useAppStore } from "../../store/appStore";
-import { toast } from "../toast/toast";
+import { runImmediateOperation } from "../notifications/userOperationNotifier";
 
 export const AI_DIGEST_INTERVAL_OPTIONS_MINUTES = [
   60, 120, 240, 480, 1440,
@@ -242,23 +242,29 @@ export function useAiDigestDialogForm(input: UseAiDigestDialogFormInput) {
           return;
         }
 
-        await updateAiDigest(input.feedId, {
-          title: trimmedTitle,
-          prompt: trimmedPrompt,
-          intervalMinutes,
-          selectedFeedIds,
-          ...categoryPayload,
+        await runImmediateOperation({
+          actionKey: "aiDigest.update",
+          execute: () =>
+            updateAiDigest(input.feedId!, {
+              title: trimmedTitle,
+              prompt: trimmedPrompt,
+              intervalMinutes,
+              selectedFeedIds,
+              ...categoryPayload,
+            }),
         });
-        toast.success("已更新 AI 解读源");
       } else {
-        await addAiDigest({
-          title: trimmedTitle,
-          prompt: trimmedPrompt,
-          intervalMinutes,
-          selectedFeedIds,
-          ...categoryPayload,
+        await runImmediateOperation({
+          actionKey: "aiDigest.create",
+          execute: () =>
+            addAiDigest({
+              title: trimmedTitle,
+              prompt: trimmedPrompt,
+              intervalMinutes,
+              selectedFeedIds,
+              ...categoryPayload,
+            }),
         });
-        toast.success("已创建 AI 解读源");
       }
 
       input.onOpenChange(false);

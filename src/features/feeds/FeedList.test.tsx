@@ -2,6 +2,10 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { Profiler, useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const { runImmediateOperationMock } = vi.hoisted(() => ({
+  runImmediateOperationMock: vi.fn(),
+}));
+
 vi.mock('../articles/ArticleView', () => ({
   default: function MockArticleView({
     onTitleVisibilityChange,
@@ -22,6 +26,18 @@ vi.mock('../articles/ArticleView', () => ({
     );
   },
 }));
+
+vi.mock('../notifications/userOperationNotifier', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../notifications/userOperationNotifier')>();
+
+  return {
+    ...actual,
+    runImmediateOperation: (input: Parameters<typeof actual.runImmediateOperation>[0]) => {
+      runImmediateOperationMock(input);
+      return actual.runImmediateOperation(input);
+    },
+  };
+});
 
 import ReaderLayout from '../reader/ReaderLayout';
 import FeedList from './FeedList';
@@ -156,6 +172,7 @@ describe('FeedList manage', () => {
   }
 
   beforeEach(() => {
+    runImmediateOperationMock.mockReset();
     lastPatchBody = null;
     lastReorderBody = null;
     useAppStore.setState({
@@ -507,7 +524,7 @@ describe('FeedList manage', () => {
       expect(useAppStore.getState().feeds[0]?.title).toBe('My Feed Updated');
     });
 
-    expect(screen.getByText('订阅源已更新')).toBeInTheDocument();
+    expect(screen.getByText('已更新订阅源')).toBeInTheDocument();
   });
 
   it('uses same form fields as add flow and pre-fills existing values in edit flow', async () => {
@@ -1092,6 +1109,9 @@ describe('FeedList manage', () => {
         ],
       });
     });
+    expect(runImmediateOperationMock).toHaveBeenCalledWith(
+      expect.objectContaining({ actionKey: 'category.reorder' }),
+    );
   });
 
   it('keeps uncategorized fallback semantics after deleting a category', async () => {
@@ -1344,6 +1364,9 @@ describe('FeedList manage', () => {
       expect(lastPatchBody).toEqual({ categoryId: 'cat-tech' });
     });
     expect(screen.getByText('已移动到「科技」')).toBeInTheDocument();
+    expect(runImmediateOperationMock).toHaveBeenCalledWith(
+      expect.objectContaining({ actionKey: 'feed.moveToCategory' }),
+    );
   });
 
   it('moves feed to uncategorized from context submenu', async () => {
@@ -1467,6 +1490,9 @@ describe('FeedList manage', () => {
     });
 
     expect(screen.getByText('已停用订阅源')).toBeInTheDocument();
+    expect(runImmediateOperationMock).toHaveBeenCalledWith(
+      expect.objectContaining({ actionKey: 'feed.disable' }),
+    );
   });
 
   it('deletes feed and falls back selectedView to all', async () => {
@@ -1484,6 +1510,9 @@ describe('FeedList manage', () => {
     });
 
     expect(screen.getByText('已删除订阅源')).toBeInTheDocument();
+    expect(runImmediateOperationMock).toHaveBeenCalledWith(
+      expect.objectContaining({ actionKey: 'feed.delete' }),
+    );
   });
 
   it('wraps long feed titles in delete confirmation description', async () => {
@@ -1589,7 +1618,7 @@ describe('FeedList manage', () => {
     fireEvent.contextMenu(screen.getByRole('button', { name: /My Feed.*2/ }));
     fireEvent.click(await screen.findByRole('menuitem', { name: '停用' }));
 
-    expect(await screen.findByText('更新失败，请稍后重试')).toBeInTheDocument();
+    expect(await screen.findByText('停用订阅源失败：更新失败，请稍后重试')).toBeInTheDocument();
     expect(screen.queryByText('操作失败：输入不合法。')).not.toBeInTheDocument();
   });
 

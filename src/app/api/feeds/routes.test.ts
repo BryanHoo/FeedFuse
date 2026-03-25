@@ -16,6 +16,8 @@ const updateUiSettingsMock = vi.fn();
 const enqueueMock = vi.fn();
 const enqueueWithResultMock = vi.fn();
 const isSafeExternalUrlMock = vi.fn();
+const writeUserOperationSucceededLogMock = vi.fn();
+const writeUserOperationFailedLogMock = vi.fn();
 
 vi.mock('../../../server/db/pool', () => ({
   getPool: () => pool,
@@ -81,6 +83,16 @@ vi.mock('../../../server/rss/ssrfGuard', () => ({
 vi.mock('../../../../server/rss/ssrfGuard', () => ({
   isSafeExternalUrl: (...args: unknown[]) => isSafeExternalUrlMock(...args),
 }));
+vi.mock('../../../server/logging/userOperationLogger', () => ({
+  writeUserOperationSucceededLog: (...args: unknown[]) =>
+    writeUserOperationSucceededLogMock(...args),
+  writeUserOperationFailedLog: (...args: unknown[]) => writeUserOperationFailedLogMock(...args),
+}));
+vi.mock('../../../../server/logging/userOperationLogger', () => ({
+  writeUserOperationSucceededLog: (...args: unknown[]) =>
+    writeUserOperationSucceededLogMock(...args),
+  writeUserOperationFailedLog: (...args: unknown[]) => writeUserOperationFailedLogMock(...args),
+}));
 
 const feedId = '1001';
 const categoryId = '2001';
@@ -97,6 +109,8 @@ describe('/api/feeds', () => {
     enqueueMock.mockReset();
     enqueueWithResultMock.mockReset();
     isSafeExternalUrlMock.mockReset();
+    writeUserOperationSucceededLogMock.mockReset();
+    writeUserOperationFailedLogMock.mockReset();
     isSafeExternalUrlMock.mockResolvedValue(true);
   });
 
@@ -465,6 +479,10 @@ describe('/api/feeds', () => {
     expect(json.data.enabled).toBe(false);
     expect(json.data.title).toBe('Updated');
     expect(json.data.fullTextOnFetchEnabled).toBe(true);
+    expect(writeUserOperationSucceededLogMock).toHaveBeenCalledWith(
+      pool,
+      expect.objectContaining({ actionKey: 'feed.update' }),
+    );
   });
 
   it('PATCH accepts numeric route id', async () => {

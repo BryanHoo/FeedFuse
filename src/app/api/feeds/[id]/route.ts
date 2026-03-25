@@ -14,6 +14,10 @@ import {
   updateFeedWithCategoryResolution,
 } from '../../../../server/services/feedCategoryLifecycleService';
 import { normalizeFeedAutoTriggerFlags } from '../../../../lib/feedAutoTriggerPolicy';
+import {
+  writeUserOperationFailedLog,
+  writeUserOperationSucceededLog,
+} from '../../../../server/logging/userOperationLogger';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -89,29 +93,78 @@ function isUniqueViolation(
   );
 }
 
+const patchOperationSource = 'app/api/feeds/[id]';
+const deleteOperationSource = 'app/api/feeds/[id]';
+
+function resolveFeedPatchActionKey(input: Record<string, unknown>) {
+  const keys = Object.keys(input);
+  if (keys.length === 1 && keys[0] === 'enabled' && typeof input.enabled === 'boolean') {
+    return input.enabled ? 'feed.enable' : 'feed.disable';
+  }
+  if (
+    keys.length > 0 &&
+    keys.every((key) => key === 'categoryId' || key === 'categoryName')
+  ) {
+    return 'feed.moveToCategory';
+  }
+  if (keys.length === 1 && keys[0] === 'articleListDisplayMode') {
+    return 'feed.articleListDisplayMode.update';
+  }
+  return 'feed.update';
+}
+
+async function writeFeedPatchFailure(
+  actionKey: ReturnType<typeof resolveFeedPatchActionKey>,
+  err: unknown,
+  context?: Record<string, unknown>,
+) {
+  await writeUserOperationFailedLog(getPool(), {
+    actionKey,
+    source: patchOperationSource,
+    err,
+    context,
+  });
+}
+
+async function writeFeedDeleteFailure(err: unknown, context?: Record<string, unknown>) {
+  await writeUserOperationFailedLog(getPool(), {
+    actionKey: 'feed.delete',
+    source: deleteOperationSource,
+    err,
+    context,
+  });
+}
+
 export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
+  let actionKey: ReturnType<typeof resolveFeedPatchActionKey> = 'feed.update';
+
   try {
     const params = await context.params;
     const paramsParsed = paramsSchema.safeParse(params);
     if (!paramsParsed.success) {
-      return fail(
-        new ValidationError('Invalid route params', zodIssuesToFields(paramsParsed.error)),
-      );
+      const error = new ValidationError('Invalid route params', zodIssuesToFields(paramsParsed.error));
+      await writeFeedPatchFailure(actionKey, error);
+      return fail(error);
     }
 
     const json = await request.json().catch(() => null);
     const bodyParsed = patchBodySchema.safeParse(json);
     if (!bodyParsed.success) {
-      return fail(new ValidationError('Invalid request body', zodIssuesToFields(bodyParsed.error)));
+      const error = new ValidationError('Invalid request body', zodIssuesToFields(bodyParsed.error));
+      await writeFeedPatchFailure(actionKey, error, { feedId: paramsParsed.data.id });
+      return fail(error);
     }
+    actionKey = resolveFeedPatchActionKey(bodyParsed.data);
     if (
       typeof bodyParsed.data.url !== 'undefined' &&
       !(await isSafeExternalUrl(bodyParsed.data.url, feedUrlSafetyOptions))
     ) {
-      return fail(new ValidationError('Invalid request body', { url: 'Unsafe URL' }));
+      const error = new ValidationError('Invalid request body', { url: 'Unsafe URL' });
+      await writeFeedPatchFailure(actionKey, error, { feedId: paramsParsed.data.id });
+      return fail(error);
     }
 
     const input = normalizeFeedAutoTriggerFlags({
@@ -123,15 +176,29 @@ export async function PATCH(
 
     const pool = getPool();
     const updated = await updateFeedWithCategoryResolution(pool, paramsParsed.data.id, input);
-    if (!updated) return fail(new NotFoundError('Feed not found'));
+    if (!updated) {
+      const error = new NotFoundError('Feed not found');
+      await writeFeedPatchFailure(actionKey, error, { feedId: paramsParsed.data.id });
+      return fail(error);
+    }
+    await writeUserOperationSucceededLog(pool, {
+      actionKey,
+      source: patchOperationSource,
+      context: { feedId: updated.id },
+    });
     return ok(updated);
   } catch (err) {
     if (isUniqueViolation(err, 'feeds_url_unique')) {
-      return fail(new ConflictError('Feed already exists', { url: 'duplicate' }));
+      const error = new ConflictError('Feed already exists', { url: 'duplicate' });
+      await writeFeedPatchFailure(actionKey, error);
+      return fail(error);
     }
     if (isForeignKeyViolation(err, 'feeds_category_id_fkey')) {
-      return fail(new ValidationError('Invalid request body', { categoryId: 'not_found' }));
+      const error = new ValidationError('Invalid request body', { categoryId: 'not_found' });
+      await writeFeedPatchFailure(actionKey, error);
+      return fail(error);
     }
+    await writeFeedPatchFailure(actionKey, err);
     return fail(err);
   }
 }
@@ -144,17 +211,27 @@ export async function DELETE(
     const params = await context.params;
     const paramsParsed = paramsSchema.safeParse(params);
     if (!paramsParsed.success) {
-      return fail(
-        new ValidationError('Invalid route params', zodIssuesToFields(paramsParsed.error)),
-      );
+      const error = new ValidationError('Invalid route params', zodIssuesToFields(paramsParsed.error));
+      await writeFeedDeleteFailure(error);
+      return fail(error);
     }
 
     const pool = getPool();
     const deleted = await deleteFeedAndCleanupCategory(pool, paramsParsed.data.id);
-    if (!deleted) return fail(new NotFoundError('Feed not found'));
+    if (!deleted) {
+      const error = new NotFoundError('Feed not found');
+      await writeFeedDeleteFailure(error, { feedId: paramsParsed.data.id });
+      return fail(error);
+    }
+    await writeUserOperationSucceededLog(pool, {
+      actionKey: 'feed.delete',
+      source: deleteOperationSource,
+      context: { feedId: paramsParsed.data.id },
+    });
 
     return ok({ deleted: true });
   } catch (err) {
+    await writeFeedDeleteFailure(err);
     return fail(err);
   }
 }

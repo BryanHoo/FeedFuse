@@ -32,7 +32,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { deleteCategory, patchCategory, reorderCategories } from '@/lib/apiClient';
 import { READER_PANE_HOVER_BACKGROUND_CLASS_NAME } from '@/lib/designSystem';
-import { toast } from '../toast/toast';
+import { runImmediateOperation } from '../notifications/userOperationNotifier';
 import { cn } from '@/lib/utils';
 import { AI_DIGEST_VIEW_ID } from '@/lib/view';
 import { useHydratedSelectedView } from '../reader/useHydratedSelectedView';
@@ -260,6 +260,14 @@ export default function FeedList({
   );
   const renderedSelectedView = useHydratedSelectedView(selectedView, initialSelectedView);
 
+  const loadSnapshotSilently = async (view: ViewType) => {
+    try {
+      await loadSnapshot({ view });
+    } catch {
+      // Snapshot refresh after a successful write should stay silent.
+    }
+  };
+
   const moveCategory = async (categoryId: string, direction: 'up' | 'down') => {
     const categoryIndex = categoryMaster.findIndex((category) => category.id === categoryId);
     if (categoryIndex < 0) return;
@@ -272,40 +280,42 @@ export default function FeedList({
     if (!category) return;
     nextOrder.splice(targetIndex, 0, category);
 
-    try {
-      await reorderCategories(nextOrder.map((item, index) => ({ id: item.id, position: index })));
-      await loadSnapshot({ view: selectedView });
-      toast.success('已更新分类顺序');
-    } catch {
-      // apiClient handles failure notifications globally
-    }
+    await runImmediateOperation({
+      actionKey: 'category.reorder',
+      execute: () =>
+        reorderCategories(
+          nextOrder.map((item, index) => ({ id: item.id, position: index })),
+          { notifyOnError: false },
+        ),
+    });
+    await loadSnapshotSilently(selectedView);
   };
 
   const renameCategory = async (name: string) => {
     if (!activeRenameCategory) return;
 
-    await patchCategory(activeRenameCategory.id, { name });
-    await loadSnapshot({ view: selectedView });
-    toast.success('已更新分类');
+    await runImmediateOperation({
+      actionKey: 'category.update',
+      execute: () =>
+        patchCategory(activeRenameCategory.id, { name }, { notifyOnError: false }),
+    });
+    await loadSnapshotSilently(selectedView);
   };
 
   const handleDeleteCategory = async (categoryId: string) => {
-    try {
-      await deleteCategory(categoryId);
-      await loadSnapshot({ view: selectedView });
-      toast.success('已删除分类');
-    } catch {
-      // apiClient handles failure notifications globally
-    }
+    await runImmediateOperation({
+      actionKey: 'category.delete',
+      execute: () => deleteCategory(categoryId, { notifyOnError: false }),
+    });
+    await loadSnapshotSilently(selectedView);
   };
 
   const moveFeedToCategory = async (feedId: string, categoryId: string | null, categoryName: string) => {
-    try {
-      await updateFeed(feedId, { categoryId });
-      toast.success(`已移动到「${categoryName}」`);
-    } catch {
-      // apiClient handles failure notifications globally
-    }
+    await runImmediateOperation({
+      actionKey: 'feed.moveToCategory',
+      context: { categoryName },
+      execute: () => updateFeed(feedId, { categoryId }),
+    });
   };
 
   const toggleFilteredArticlesVisibility = async (feedId: string) => {
@@ -719,10 +729,12 @@ export default function FeedList({
                             onSelect={() => {
                               void (async () => {
                                 try {
-                                  await updateFeed(feed.id, { enabled: !feed.enabled });
-                                  toast.success(feed.enabled ? '已停用订阅源' : '已启用订阅源');
+                                  await runImmediateOperation({
+                                    actionKey: feed.enabled ? 'feed.disable' : 'feed.enable',
+                                    execute: () => updateFeed(feed.id, { enabled: !feed.enabled }),
+                                  });
                                 } catch {
-                                  // apiClient handles failure notifications globally
+                                  // notifier already handled the failure toast
                                 }
                               })();
                             }}
@@ -876,11 +888,13 @@ export default function FeedList({
                 if (!deleteFeedId) return;
                 void (async () => {
                   try {
-                    await removeFeed(deleteFeedId);
+                    await runImmediateOperation({
+                      actionKey: 'feed.delete',
+                      execute: () => removeFeed(deleteFeedId),
+                    });
                     setDeleteFeedId(null);
-                    toast.success('已删除订阅源');
                   } catch {
-                    // apiClient handles failure notifications globally
+                    // notifier already handled the failure toast
                   }
                 })();
               }}

@@ -1,8 +1,9 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { ApiError } from '@/lib/apiClient';
 import { mapApiErrorToUserMessage } from '@/lib/mapApiErrorToUserMessage';
+import type { UserOperationActionKey } from '@/lib/userOperationCatalog';
 import type { Category } from '../../types';
-import { toast } from '../toast/toast';
+import { runImmediateOperation } from '../notifications/userOperationNotifier';
 import type {
   FeedDialogInitialValues,
   FeedDialogSubmitPayload,
@@ -11,11 +12,11 @@ import type {
 import { validateRssUrl } from './services/rssValidationService';
 
 interface UseFeedDialogFormOptions {
+  actionKey: UserOperationActionKey;
   categories: Category[];
   initialValues?: Partial<FeedDialogInitialValues>;
   onSubmit: (payload: FeedDialogSubmitPayload) => Promise<void>;
   onOpenChange: (open: boolean) => void;
-  successMessage: string;
 }
 
 interface FieldErrors {
@@ -136,11 +137,11 @@ function resolveUrlFieldError({
 }
 
 export function useFeedDialogForm({
+  actionKey,
   categories,
   initialValues,
   onSubmit,
   onOpenChange,
-  successMessage,
 }: UseFeedDialogFormOptions) {
   const urlInputRef = useRef<HTMLInputElement | null>(null);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
@@ -241,13 +242,16 @@ export function useFeedDialogForm({
       setServerFieldErrors({});
 
       try {
-        await onSubmit({
-          title: trimmedTitle,
-          url: trimmedUrl,
-          siteUrl: validatedSiteUrl,
-          ...resolveCategoryPayload(categoryOptions, categoryInput),
+        await runImmediateOperation({
+          actionKey,
+          execute: () =>
+            onSubmit({
+              title: trimmedTitle,
+              url: trimmedUrl,
+              siteUrl: validatedSiteUrl,
+              ...resolveCategoryPayload(categoryOptions, categoryInput),
+            }),
         });
-        toast.success(successMessage);
         onOpenChange(false);
       } catch (error) {
         if (error instanceof ApiError) {

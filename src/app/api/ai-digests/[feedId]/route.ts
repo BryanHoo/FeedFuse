@@ -5,6 +5,10 @@ import { NotFoundError, ValidationError } from '../../../../server/http/errors';
 import { numericIdSchema } from '../../../../server/http/idSchemas';
 import { getAiDigestConfigByFeedId } from '../../../../server/repositories/aiDigestRepo';
 import { updateAiDigestWithCategoryResolution } from '../../../../server/services/aiDigestLifecycleService';
+import {
+  writeUserOperationFailedLog,
+  writeUserOperationSucceededLog,
+} from '../../../../server/logging/userOperationLogger';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -59,6 +63,17 @@ function isForeignKeyViolation(
   );
 }
 
+const patchOperationSource = 'app/api/ai-digests/[feedId]';
+
+async function writeAiDigestUpdateFailure(err: unknown, context?: Record<string, unknown>) {
+  await writeUserOperationFailedLog(getPool(), {
+    actionKey: 'aiDigest.update',
+    source: patchOperationSource,
+    err,
+    context,
+  });
+}
+
 export async function GET(
   _request: Request,
   context: { params: Promise<{ feedId: string }> },
@@ -97,23 +112,25 @@ export async function PATCH(
     const params = await context.params;
     const paramsParsed = paramsSchema.safeParse(params);
     if (!paramsParsed.success) {
-      return fail(
-        new ValidationError('Invalid route params', zodIssuesToFields(paramsParsed.error)),
-      );
+      const error = new ValidationError('Invalid route params', zodIssuesToFields(paramsParsed.error));
+      await writeAiDigestUpdateFailure(error);
+      return fail(error);
     }
 
     const json = await request.json().catch(() => null);
     if (json && typeof json === 'object' && 'selectedCategoryIds' in (json as Record<string, unknown>)) {
-      return fail(
-        new ValidationError('Invalid request body', {
-          selectedCategoryIds: 'selectedCategoryIds is not allowed',
-        }),
-      );
+      const error = new ValidationError('Invalid request body', {
+        selectedCategoryIds: 'selectedCategoryIds is not allowed',
+      });
+      await writeAiDigestUpdateFailure(error, { feedId: paramsParsed.data.feedId });
+      return fail(error);
     }
 
     const parsed = patchBodySchema.safeParse(json);
     if (!parsed.success) {
-      return fail(new ValidationError('Invalid request body', zodIssuesToFields(parsed.error)));
+      const error = new ValidationError('Invalid request body', zodIssuesToFields(parsed.error));
+      await writeAiDigestUpdateFailure(error, { feedId: paramsParsed.data.feedId });
+      return fail(error);
     }
 
     const pool = getPool();
@@ -122,14 +139,24 @@ export async function PATCH(
       ...parsed.data,
     });
     if (!updated) {
-      return fail(new NotFoundError('AI digest feed not found'));
+      const error = new NotFoundError('AI digest feed not found');
+      await writeAiDigestUpdateFailure(error, { feedId: paramsParsed.data.feedId });
+      return fail(error);
     }
+    await writeUserOperationSucceededLog(pool, {
+      actionKey: 'aiDigest.update',
+      source: patchOperationSource,
+      context: { feedId: updated.id },
+    });
 
     return ok(updated);
   } catch (err) {
     if (isForeignKeyViolation(err, 'feeds_category_id_fkey')) {
-      return fail(new ValidationError('Invalid request body', { categoryId: 'not_found' }));
+      const error = new ValidationError('Invalid request body', { categoryId: 'not_found' });
+      await writeAiDigestUpdateFailure(error);
+      return fail(error);
     }
+    await writeAiDigestUpdateFailure(err);
     return fail(err);
   }
 }

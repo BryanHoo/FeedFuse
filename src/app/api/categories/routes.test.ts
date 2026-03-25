@@ -7,6 +7,8 @@ const createCategoryMock = vi.fn();
 const updateCategoryMock = vi.fn();
 const deleteCategoryMock = vi.fn();
 const reorderCategoriesMock = vi.fn();
+const writeUserOperationSucceededLogMock = vi.fn();
+const writeUserOperationFailedLogMock = vi.fn();
 
 vi.mock('../../../server/db/pool', () => ({
   getPool: () => pool,
@@ -29,6 +31,16 @@ vi.mock('../../../../server/repositories/categoriesRepo', () => ({
   deleteCategory: (...args: unknown[]) => deleteCategoryMock(...args),
   reorderCategories: (...args: unknown[]) => reorderCategoriesMock(...args),
 }));
+vi.mock('../../../server/logging/userOperationLogger', () => ({
+  writeUserOperationSucceededLog: (...args: unknown[]) =>
+    writeUserOperationSucceededLogMock(...args),
+  writeUserOperationFailedLog: (...args: unknown[]) => writeUserOperationFailedLogMock(...args),
+}));
+vi.mock('../../../../server/logging/userOperationLogger', () => ({
+  writeUserOperationSucceededLog: (...args: unknown[]) =>
+    writeUserOperationSucceededLogMock(...args),
+  writeUserOperationFailedLog: (...args: unknown[]) => writeUserOperationFailedLogMock(...args),
+}));
 
 const categoryId = '2001';
 
@@ -39,6 +51,8 @@ describe('/api/categories', () => {
     updateCategoryMock.mockReset();
     deleteCategoryMock.mockReset();
     reorderCategoriesMock.mockReset();
+    writeUserOperationSucceededLogMock.mockReset();
+    writeUserOperationFailedLogMock.mockReset();
   });
 
   it('GET returns categories', async () => {
@@ -192,5 +206,9 @@ describe('/api/categories', () => {
     const json = await res.json();
     expect(json.ok).toBe(true);
     expect(json.data[0].position).toBe(0);
+    expect(writeUserOperationSucceededLogMock).toHaveBeenCalledWith(
+      pool,
+      expect.objectContaining({ actionKey: 'category.reorder' }),
+    );
   });
 });

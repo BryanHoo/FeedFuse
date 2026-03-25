@@ -5,6 +5,10 @@ import { ToastHost } from '../toast/ToastHost';
 import { useAppStore } from '../../store/appStore';
 import { validateRssUrl } from './services/rssValidationService';
 
+const { runImmediateOperationMock } = vi.hoisted(() => ({
+  runImmediateOperationMock: vi.fn(),
+}));
+
 function jsonResponse(payload: unknown) {
   return new Response(JSON.stringify(payload), {
     status: 200,
@@ -64,6 +68,18 @@ vi.mock('./services/rssValidationService', () => ({
   }),
 }));
 
+vi.mock('../notifications/userOperationNotifier', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../notifications/userOperationNotifier')>();
+
+  return {
+    ...actual,
+    runImmediateOperation: (input: Parameters<typeof actual.runImmediateOperation>[0]) => {
+      runImmediateOperationMock(input);
+      return actual.runImmediateOperation(input);
+    },
+  };
+});
+
 describe('AddFeedDialog', () => {
   let nextFeedId = 1;
   let lastCreateFeedBody: Record<string, unknown> | null = null;
@@ -85,6 +101,7 @@ describe('AddFeedDialog', () => {
     nextFeedId = 1;
     lastCreateFeedBody = null;
     createdFeedById = new Map();
+    runImmediateOperationMock.mockReset();
     useAppStore.setState({
       feeds: [],
       categories: [
@@ -655,6 +672,10 @@ describe('AddFeedDialog', () => {
     await waitFor(() => {
       expect(screen.getByText('已添加订阅源')).toBeInTheDocument();
     });
+    expect(screen.queryAllByText('已添加订阅源')).toHaveLength(1);
+    expect(runImmediateOperationMock).toHaveBeenCalledWith(
+      expect.objectContaining({ actionKey: 'feed.create' }),
+    );
   });
 
   it('shows error notification after add feed fails', async () => {
@@ -694,7 +715,11 @@ describe('AddFeedDialog', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '添加订阅源' }));
 
-    expect(await within(screen.getByTestId('notification-viewport')).findByText('订阅源已存在')).toBeInTheDocument();
+    expect(
+      await within(screen.getByTestId('notification-viewport')).findByText(
+        '添加订阅源失败：订阅源已存在',
+      ),
+    ).toBeInTheDocument();
     expect(screen.queryByText('操作失败：数据已存在。')).not.toBeInTheDocument();
   });
 });

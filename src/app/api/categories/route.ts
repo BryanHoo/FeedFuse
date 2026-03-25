@@ -3,6 +3,10 @@ import { getPool } from '../../../server/db/pool';
 import { ok, fail } from '../../../server/http/apiResponse';
 import { ConflictError, ValidationError } from '../../../server/http/errors';
 import { createCategory, listCategories } from '../../../server/repositories/categoriesRepo';
+import {
+  writeUserOperationFailedLog,
+  writeUserOperationSucceededLog,
+} from '../../../server/logging/userOperationLogger';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -33,6 +37,16 @@ function isUniqueViolation(
   );
 }
 
+const operationSource = 'app/api/categories';
+
+async function writeCategoryCreateFailure(err: unknown) {
+  await writeUserOperationFailedLog(getPool(), {
+    actionKey: 'category.create',
+    source: operationSource,
+    err,
+  });
+}
+
 export async function GET() {
   try {
     const pool = getPool();
@@ -48,17 +62,26 @@ export async function POST(request: Request) {
     const json = await request.json().catch(() => null);
     const parsed = createCategoryBodySchema.safeParse(json);
     if (!parsed.success) {
-      return fail(new ValidationError('Invalid request body', zodIssuesToFields(parsed.error)));
+      const error = new ValidationError('Invalid request body', zodIssuesToFields(parsed.error));
+      await writeCategoryCreateFailure(error);
+      return fail(error);
     }
 
     const pool = getPool();
     const created = await createCategory(pool, { name: parsed.data.name });
+    await writeUserOperationSucceededLog(pool, {
+      actionKey: 'category.create',
+      source: operationSource,
+      context: { categoryId: created.id },
+    });
     return ok(created);
   } catch (err) {
     if (isUniqueViolation(err, 'categories_name_unique')) {
-      return fail(new ConflictError('Category already exists', { name: 'duplicate' }));
+      const error = new ConflictError('Category already exists', { name: 'duplicate' });
+      await writeCategoryCreateFailure(error);
+      return fail(error);
     }
+    await writeCategoryCreateFailure(err);
     return fail(err);
   }
 }
-

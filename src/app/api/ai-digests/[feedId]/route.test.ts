@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const pool = {};
 const getAiDigestConfigByFeedIdMock = vi.fn();
 const updateAiDigestWithCategoryResolutionMock = vi.fn();
+const writeUserOperationSucceededLogMock = vi.fn();
+const writeUserOperationFailedLogMock = vi.fn();
 
 vi.mock('../../../../server/db/pool', () => ({ getPool: () => pool }));
 vi.mock('../../../../server/repositories/aiDigestRepo', () => ({
@@ -12,11 +14,19 @@ vi.mock('../../../../server/services/aiDigestLifecycleService', () => ({
   updateAiDigestWithCategoryResolution: (...args: unknown[]) =>
     updateAiDigestWithCategoryResolutionMock(...args),
 }));
+vi.mock('../../../../server/logging/userOperationLogger', () => ({
+  writeUserOperationSucceededLog: (...args: unknown[]) =>
+    writeUserOperationSucceededLogMock(...args),
+  writeUserOperationFailedLog: (...args: unknown[]) =>
+    writeUserOperationFailedLogMock(...args),
+}));
 
 describe('/api/ai-digests/[feedId]', () => {
   beforeEach(() => {
     getAiDigestConfigByFeedIdMock.mockReset();
     updateAiDigestWithCategoryResolutionMock.mockReset();
+    writeUserOperationSucceededLogMock.mockReset();
+    writeUserOperationFailedLogMock.mockReset();
   });
 
   it('GET returns digest config for feedId', async () => {
