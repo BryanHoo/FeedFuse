@@ -197,4 +197,177 @@ describe('ArticleView scroll assist', () => {
 
     expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
   });
+
+  it('keeps the current article mounted when snapshot refresh excludes it from the latest page', async () => {
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof Request
+            ? input.url
+            : input.toString();
+
+      if (url.includes('/api/reader/snapshot')) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              categories: [],
+              feeds: [
+                {
+                  id: 'feed-1',
+                  kind: 'rss',
+                  title: 'Feed 1',
+                  url: 'https://example.com/rss.xml',
+                  siteUrl: 'https://example.com',
+                  iconUrl: null,
+                  enabled: true,
+                  fullTextOnOpenEnabled: false,
+                  fullTextOnFetchEnabled: false,
+                  aiSummaryOnOpenEnabled: false,
+                  aiSummaryOnFetchEnabled: false,
+                  bodyTranslateOnFetchEnabled: false,
+                  bodyTranslateOnOpenEnabled: false,
+                  titleTranslateEnabled: false,
+                  bodyTranslateEnabled: false,
+                  articleListDisplayMode: 'card',
+                  categoryId: 'cat-uncategorized',
+                  fetchIntervalMinutes: 30,
+                  lastFetchStatus: null,
+                  lastFetchError: null,
+                  lastFetchRawError: null,
+                  unreadCount: 1,
+                },
+              ],
+              articles: {
+                items: [
+                  {
+                    id: 'article-2',
+                    feedId: 'feed-1',
+                    title: 'Newest Article',
+                    titleOriginal: 'Newest Article',
+                    titleZh: null,
+                    summary: 'summary',
+                    previewImage: null,
+                    author: null,
+                    publishedAt: '2026-03-08T00:00:00.000Z',
+                    link: 'https://example.com/a2',
+                    filterStatus: 'passed',
+                    isFiltered: false,
+                    filteredBy: [],
+                    isRead: false,
+                    isStarred: false,
+                    bodyTranslationEligible: false,
+                    bodyTranslationBlockedReason: null,
+                  },
+                ],
+                nextCursor: null,
+                totalCount: 2,
+              },
+            },
+          }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          },
+        );
+      }
+
+      if (url.includes('/api/articles/article-1')) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              id: 'article-1',
+              feedId: 'feed-1',
+              dedupeKey: 'article-1',
+              title: 'Article 1',
+              titleOriginal: 'Article 1',
+              titleZh: null,
+              author: null,
+              publishedAt: '2026-03-07T00:00:00.000Z',
+              link: 'https://example.com/a1',
+              contentHtml:
+                '<h2>Overview</h2><p>A</p><h3>Details</h3><p>B</p>',
+              contentFullHtml: null,
+              contentFullFetchedAt: null,
+              contentFullError: null,
+              contentFullSourceUrl: null,
+              aiSummary: null,
+              aiSummaryModel: null,
+              aiSummarizedAt: null,
+              aiSummarySession: null,
+              aiTranslationZhHtml: null,
+              aiTranslationBilingualHtml: null,
+              summary: 'summary',
+              filterStatus: 'passed',
+              isFiltered: false,
+              filteredBy: [],
+              isRead: true,
+              readAt: null,
+              isStarred: false,
+              starredAt: null,
+              bodyTranslationEligible: false,
+              bodyTranslationBlockedReason: null,
+            },
+          }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          },
+        );
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    Object.defineProperty(globalThis, 'fetch', {
+      configurable: true,
+      value: fetchMock,
+    });
+
+    try {
+      await renderArticleView();
+      const scrollContainer = await screen.findByTestId('article-scroll-container');
+
+      Object.defineProperty(scrollContainer, 'scrollHeight', {
+        value: 2400,
+        configurable: true,
+      });
+      Object.defineProperty(scrollContainer, 'clientHeight', {
+        value: 1200,
+        configurable: true,
+      });
+      scrollContainer.scrollTop = 240;
+      fireEvent.scroll(scrollContainer);
+
+      await act(async () => {
+        await useAppStore.getState().loadSnapshot({ view: 'all' });
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(useAppStore.getState().selectedArticleId).toBe('article-1');
+      expect(screen.getByText('Article 1')).toBeInTheDocument();
+      expect(screen.getByTestId('article-scroll-container')).toBe(scrollContainer);
+      expect(scrollContainer.scrollTop).toBe(240);
+      expect(
+        fetchMock.mock.calls.some(([input]) => {
+          const url =
+            typeof input === 'string'
+              ? input
+              : input instanceof Request
+                ? input.url
+                : input.toString();
+          return url.includes('/api/articles/article-1');
+        }),
+      ).toBe(false);
+    } finally {
+      Object.defineProperty(globalThis, 'fetch', {
+        configurable: true,
+        value: originalFetch,
+      });
+    }
+  });
 });

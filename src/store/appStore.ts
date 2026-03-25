@@ -86,6 +86,7 @@ interface AppState {
   feeds: Feed[];
   categories: Category[];
   articles: Article[];
+  articleDetailCache: Record<string, Article>;
   articleSnapshotCache: Record<string, Article[]>;
   showFilteredByFeedId: Record<string, boolean>;
   selectedView: ViewType;
@@ -228,28 +229,110 @@ function resolveCategoryTarget(categories: Category[], input: string): Category 
   );
 }
 
+function hasArticleDetails(article?: Article): boolean {
+  return Boolean(
+    article?.content ||
+      article?.aiSummary ||
+      article?.aiSummarySession !== undefined ||
+      article?.aiTranslationZhHtml ||
+      article?.aiTranslationBilingualHtml ||
+      article?.aiDigestSources?.length,
+  );
+}
+
+function pickDetailedArticle(existingArticle?: Article, cachedArticle?: Article): Article | undefined {
+  if (hasArticleDetails(existingArticle)) {
+    return existingArticle;
+  }
+
+  if (hasArticleDetails(cachedArticle)) {
+    return cachedArticle;
+  }
+
+  return existingArticle ?? cachedArticle;
+}
+
 function mergeSnapshotArticleWithExistingDetails(
   snapshotArticle: Article,
   existingArticle?: Article,
+  cachedArticle?: Article,
 ): Article {
-  if (!existingArticle) {
+  const detailArticle = pickDetailedArticle(existingArticle, cachedArticle);
+  if (!detailArticle) {
     return snapshotArticle;
   }
 
   const aiSummarySession =
     snapshotArticle.aiSummarySession !== undefined
       ? snapshotArticle.aiSummarySession
-      : existingArticle.aiSummarySession;
+      : detailArticle.aiSummarySession;
 
   return {
     ...snapshotArticle,
-    content: existingArticle.content,
-    aiSummary: existingArticle.aiSummary,
+    content: detailArticle.content,
+    aiSummary: detailArticle.aiSummary,
     // Snapshot is authoritative here, including an explicit null that clears stale local session state.
     aiSummarySession,
-    aiTranslationZhHtml: existingArticle.aiTranslationZhHtml,
-    aiTranslationBilingualHtml: existingArticle.aiTranslationBilingualHtml,
-    aiDigestSources: existingArticle.aiDigestSources,
+    aiTranslationZhHtml: detailArticle.aiTranslationZhHtml,
+    aiTranslationBilingualHtml: detailArticle.aiTranslationBilingualHtml,
+    aiDigestSources: detailArticle.aiDigestSources,
+  };
+}
+
+function getArticleFromCollections(
+  articleId: string | null,
+  articles: Article[],
+  articleDetailCache: Record<string, Article>,
+): Article | undefined {
+  if (!articleId) {
+    return undefined;
+  }
+
+  return articles.find((item) => item.id === articleId) ?? articleDetailCache[articleId];
+}
+
+function updateCachedArticle(
+  articleDetailCache: Record<string, Article>,
+  articleId: string,
+  updater: (article: Article) => Article,
+): Record<string, Article> {
+  const cachedArticle = articleDetailCache[articleId];
+  if (!cachedArticle) {
+    return articleDetailCache;
+  }
+
+  return {
+    ...articleDetailCache,
+    [articleId]: updater(cachedArticle),
+  };
+}
+
+export function getSelectedArticleFromState(
+  state: Pick<AppState, 'selectedArticleId' | 'articles' | 'articleDetailCache'>,
+): Article | null {
+  return (
+    getArticleFromCollections(
+      state.selectedArticleId,
+      state.articles,
+      state.articleDetailCache,
+    ) ?? null
+  );
+}
+
+function mergeArticleIntoCollections(
+  state: Pick<AppState, 'articles' | 'articleDetailCache'>,
+  article: Article,
+) {
+  const existingArticle = state.articles.find((item) => item.id === article.id);
+
+  return {
+    articles: existingArticle
+      ? state.articles.map((item) => (item.id === article.id ? { ...item, ...article } : item))
+      : state.articles,
+    articleDetailCache: {
+      ...state.articleDetailCache,
+      [article.id]: article,
+    },
   };
 }
 
@@ -306,12 +389,23 @@ function getSnapshotTotalCount(
     : fallbackCount;
 }
 
-function mergeSnapshotPage(previous: Article[], incoming: Article[]) {
+function mergeSnapshotPage(
+  previous: Article[],
+  incoming: Article[],
+  articleDetailCache: Record<string, Article>,
+) {
   const byId = new Map(previous.map((item) => [item.id, item]));
 
   for (const article of incoming) {
     // Keep expanded article details when a later snapshot page overlaps an existing row.
-    byId.set(article.id, mergeSnapshotArticleWithExistingDetails(article, byId.get(article.id)));
+    byId.set(
+      article.id,
+      mergeSnapshotArticleWithExistingDetails(
+        article,
+        byId.get(article.id),
+        articleDetailCache[article.id],
+      ),
+    );
   }
 
   return Array.from(byId.values());
@@ -323,6 +417,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   feeds: [],
   categories: [uncategorizedCategory],
   articles: [],
+  // Keep article detail independent from paged list snapshots so the reader pane stays stable.
+  articleDetailCache: {},
   articleSnapshotCache: {},
   showFilteredByFeedId: {},
   selectedView: initialReaderSelection.selectedView,
@@ -355,27 +451,35 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   setSelectedArticle: (id, options) => {
     queueReaderSelectionHistoryMode(options?.history ?? (id ? 'push' : 'replace'));
-    set({ selectedArticleId: id });
+    set((state) => {
+      const currentArticle = getArticleFromCollections(
+        id,
+        state.articles,
+        state.articleDetailCache,
+      );
+
+      if (!id || !currentArticle?.content) {
+        return { selectedArticleId: id };
+      }
+
+      return {
+        selectedArticleId: id,
+        articleDetailCache: {
+          ...state.articleDetailCache,
+          [id]: currentArticle,
+        },
+      };
+    });
 
     if (!id) return;
-    const article = get().articles.find((item) => item.id === id);
+    const article = getArticleFromCollections(id, get().articles, get().articleDetailCache);
     if (article?.content) return;
 
     void (async () => {
       try {
         const dto = await getArticle(id, { notifyOnError: false });
         const mapped = mapArticleDto(dto);
-        set((state) => {
-          const existing = state.articles.find((item) => item.id === mapped.id);
-          if (existing) {
-            return {
-              articles: state.articles.map((item) =>
-                item.id === mapped.id ? { ...item, ...mapped } : item
-              ),
-            };
-          }
-          return { articles: [mapped, ...state.articles] };
-        });
+        set((state) => mergeArticleIntoCollections(state, mapped));
       } catch (err) {
         console.error(err);
       }
@@ -412,17 +516,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         dto.aiTranslationBilingualHtml?.trim() || dto.aiTranslationZhHtml?.trim(),
       );
       const mapped = mapArticleDto(dto);
-      set((state) => {
-        const existing = state.articles.find((item) => item.id === mapped.id);
-        if (existing) {
-          return {
-            articles: state.articles.map((item) =>
-              item.id === mapped.id ? { ...item, ...mapped } : item
-            ),
-          };
-        }
-        return { articles: [mapped, ...state.articles] };
-      });
+      set((state) => mergeArticleIntoCollections(state, mapped));
       return { hasFulltext, hasFulltextError, hasAiSummary, hasAiTranslation };
     } catch (err) {
       console.error(err);
@@ -468,6 +562,20 @@ export const useAppStore = create<AppState>((set, get) => ({
         const isVisibleView = state.selectedView === view;
         const existingArticles =
           (isVisibleView ? state.articles : state.articleSnapshotCache[view]) ?? [];
+        const preservedSelectedArticle = isVisibleView
+          ? getArticleFromCollections(
+              state.selectedArticleId,
+              existingArticles,
+              state.articleDetailCache,
+            )
+          : undefined;
+        const articleDetailCache =
+          isVisibleView && preservedSelectedArticle?.content
+            ? {
+                ...state.articleDetailCache,
+                [preservedSelectedArticle.id]: preservedSelectedArticle,
+              }
+            : state.articleDetailCache;
         const existingArticleById = new Map(
           existingArticles.map((article) => [article.id, article]),
         );
@@ -475,6 +583,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           mergeSnapshotArticleWithExistingDetails(
             mapSnapshotArticleItem(item),
             existingArticleById.get(item.id),
+            articleDetailCache[item.id],
           ),
         );
         const articleSnapshotCache = {
@@ -488,6 +597,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           categories,
           feeds,
           articles: isVisibleView ? articles : state.articles,
+          articleDetailCache,
           articleSnapshotCache,
           snapshotLoading: isVisibleView ? false : state.snapshotLoading,
           articleListNextCursor: isVisibleView ? nextCursor : state.articleListNextCursor,
@@ -502,7 +612,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (get().selectedView !== view) return;
       const selectedArticleId = get().selectedArticleId;
       if (selectedArticleId) {
-        const selectedArticle = get().articles.find((item) => item.id === selectedArticleId);
+        const { articles, articleDetailCache } = get();
+        const selectedArticle = getArticleFromCollections(
+          selectedArticleId,
+          articles,
+          articleDetailCache,
+        );
         if (!selectedArticle?.content) {
           get().setSelectedArticle(selectedArticleId, { history: 'none' });
         }
@@ -549,7 +664,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         const incomingArticles = snapshot.articles.items.map((item) =>
           mapSnapshotArticleItem(item),
         );
-        const articles = mergeSnapshotPage(currentState.articles, incomingArticles);
+        const articles = mergeSnapshotPage(
+          currentState.articles,
+          incomingArticles,
+          currentState.articleDetailCache,
+        );
         const nextCursor = snapshot.articles.nextCursor ?? null;
 
         return {
@@ -578,13 +697,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
 
   markAsRead: (articleId) => {
-    const article = get().articles.find((item) => item.id === articleId);
+    const article = getArticleFromCollections(articleId, get().articles, get().articleDetailCache);
     if (!article || article.isRead) return;
 
     set((state) => ({
       articles: state.articles.map((item) =>
         item.id === articleId ? { ...item, isRead: true } : item,
       ),
+      articleDetailCache: updateCachedArticle(state.articleDetailCache, articleId, (cachedArticle) => ({
+        ...cachedArticle,
+        isRead: true,
+      })),
       feeds: state.feeds.map((feed) =>
         feed.id === article.feedId
           ? { ...feed, unreadCount: Math.max(0, feed.unreadCount - 1) }
@@ -601,6 +724,15 @@ export const useAppStore = create<AppState>((set, get) => ({
         if (feedId && item.feedId !== feedId) return item;
         return item.isRead ? item : { ...item, isRead: true };
       }),
+      articleDetailCache: Object.fromEntries(
+        Object.entries(state.articleDetailCache).map(([id, article]) => {
+          if (feedId && article.feedId !== feedId) {
+            return [id, article];
+          }
+
+          return [id, article.isRead ? article : { ...article, isRead: true }];
+        }),
+      ),
       feeds: state.feeds.map((feed) => {
         if (!feedId || feed.id === feedId) {
           return { ...feed, unreadCount: 0 };
@@ -748,6 +880,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       return {
         feeds: state.feeds.filter((feed) => feed.id !== feedId),
         articles: state.articles.filter((article) => article.feedId !== feedId),
+        articleDetailCache: Object.fromEntries(
+          Object.entries(state.articleDetailCache).filter(([, article]) => article.feedId !== feedId),
+        ),
         selectedView: nextSelectedView,
         selectedArticleId: nextSelectedArticleId,
         ...INITIAL_ARTICLE_LIST_SESSION,
@@ -758,7 +893,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   toggleStar: (articleId) => {
-    const article = get().articles.find((item) => item.id === articleId);
+    const article = getArticleFromCollections(articleId, get().articles, get().articleDetailCache);
     if (!article) return;
     const nextValue = !article.isStarred;
 
@@ -766,6 +901,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       articles: state.articles.map((item) =>
         item.id === articleId ? { ...item, isStarred: nextValue } : item,
       ),
+      articleDetailCache: updateCachedArticle(state.articleDetailCache, articleId, (cachedArticle) => ({
+        ...cachedArticle,
+        isStarred: nextValue,
+      })),
     }));
 
     void patchArticle(articleId, { isStarred: nextValue }, { notifyOnError: true }).catch(() => {});

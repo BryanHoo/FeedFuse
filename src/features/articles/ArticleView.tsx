@@ -17,7 +17,7 @@ import {
   Sparkles,
   Star,
 } from "lucide-react";
-import { useAppStore } from "../../store/appStore";
+import { getSelectedArticleFromState, useAppStore } from "../../store/appStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import type { ArticleAiDigestSource } from "../../types";
 import {
@@ -70,15 +70,9 @@ export default function ArticleView({
   reserveTopSpace = true,
   renderedAt,
 }: ArticleViewProps = {}) {
-  const article = useAppStore(
-    (state) =>
-      state.articles.find((item) => item.id === state.selectedArticleId) ??
-      null,
-  );
+  const article = useAppStore((state) => getSelectedArticleFromState(state));
   const feed = useAppStore((state) => {
-    const currentArticle = state.articles.find(
-      (item) => item.id === state.selectedArticleId,
-    );
+    const currentArticle = getSelectedArticleFromState(state);
     return currentArticle
       ? (state.feeds.find((item) => item.id === currentArticle.feedId) ?? null)
       : null;

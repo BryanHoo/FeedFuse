@@ -11,7 +11,7 @@ import ArticleList from '../articles/ArticleList';
 import ArticleView from '../articles/ArticleView';
 import FeedList from '../feeds/FeedList';
 import ResizeHandle from './ResizeHandle';
-import { useAppStore } from '../../store/appStore';
+import { getSelectedArticleFromState, useAppStore } from '../../store/appStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import type { ViewType } from '../../types';
 import { Button } from '@/components/ui/button';
@@ -59,7 +59,7 @@ export default function ReaderLayout({ renderedAt, initialSelectedView }: Reader
   const general = useSettingsStore((state) => state.persistedSettings.general);
   const updateReaderLayoutSettings = useSettingsStore((state) => state.updateReaderLayoutSettings);
   const selectedArticleTitle = useAppStore(
-    (state) => state.articles.find((article) => article.id === state.selectedArticleId)?.title ?? '',
+    (state) => getSelectedArticleFromState(state)?.title ?? '',
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
   const selectionKey = `${selectedView}:${selectedArticleId ?? ''}`;
