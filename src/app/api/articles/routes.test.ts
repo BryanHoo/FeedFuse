@@ -29,6 +29,7 @@ const markAiSummarySessionSupersededMock = vi.fn();
 const extractImmersiveSegmentsMock = vi.fn();
 const hashSourceHtmlMock = vi.fn();
 const writeSystemLogMock = vi.fn();
+const writeUserOperationStartedLogMock = vi.fn();
 const writeUserOperationSucceededLogMock = vi.fn();
 const writeUserOperationFailedLogMock = vi.fn();
 
@@ -113,24 +114,32 @@ vi.mock('../../../../../../../../server/logging/systemLogger', () => ({
   writeSystemLog: (...args: unknown[]) => writeSystemLogMock(...args),
 }));
 vi.mock('../../../server/logging/userOperationLogger', () => ({
+  writeUserOperationStartedLog: (...args: unknown[]) =>
+    writeUserOperationStartedLogMock(...args),
   writeUserOperationSucceededLog: (...args: unknown[]) =>
     writeUserOperationSucceededLogMock(...args),
   writeUserOperationFailedLog: (...args: unknown[]) =>
     writeUserOperationFailedLogMock(...args),
 }));
 vi.mock('../../../../../server/logging/userOperationLogger', () => ({
+  writeUserOperationStartedLog: (...args: unknown[]) =>
+    writeUserOperationStartedLogMock(...args),
   writeUserOperationSucceededLog: (...args: unknown[]) =>
     writeUserOperationSucceededLogMock(...args),
   writeUserOperationFailedLog: (...args: unknown[]) =>
     writeUserOperationFailedLogMock(...args),
 }));
 vi.mock('../../../../../../../../../server/logging/userOperationLogger', () => ({
+  writeUserOperationStartedLog: (...args: unknown[]) =>
+    writeUserOperationStartedLogMock(...args),
   writeUserOperationSucceededLog: (...args: unknown[]) =>
     writeUserOperationSucceededLogMock(...args),
   writeUserOperationFailedLog: (...args: unknown[]) =>
     writeUserOperationFailedLogMock(...args),
 }));
 vi.mock('../../../../../../../../server/logging/userOperationLogger', () => ({
+  writeUserOperationStartedLog: (...args: unknown[]) =>
+    writeUserOperationStartedLogMock(...args),
   writeUserOperationSucceededLog: (...args: unknown[]) =>
     writeUserOperationSucceededLogMock(...args),
   writeUserOperationFailedLog: (...args: unknown[]) =>
@@ -279,6 +288,7 @@ describe('/api/articles', () => {
     extractImmersiveSegmentsMock.mockReset();
     hashSourceHtmlMock.mockReset();
     writeSystemLogMock.mockReset();
+    writeUserOperationStartedLogMock.mockReset();
     writeUserOperationSucceededLogMock.mockReset();
     writeUserOperationFailedLogMock.mockReset();
     poolQueryMock.mockReset();
@@ -1579,12 +1589,10 @@ describe('/api/articles', () => {
       type: 'ai_summary',
       jobId: 'job-id-1',
     });
-    expect(writeSystemLogMock).toHaveBeenCalledWith(
+    expect(writeUserOperationStartedLogMock).toHaveBeenCalledWith(
       pool,
       expect.objectContaining({
-        level: 'info',
-        category: 'ai_summary',
-        message: 'AI summary queued',
+        actionKey: 'article.aiSummary.generate',
       }),
     );
   });
@@ -1627,7 +1635,7 @@ describe('/api/articles', () => {
       sessionId: 'summary-session-id-1',
     });
     expect(upsertTaskQueuedMock).not.toHaveBeenCalled();
-    expect(writeSystemLogMock).not.toHaveBeenCalled();
+    expect(writeUserOperationStartedLogMock).not.toHaveBeenCalled();
   });
 
   it('POST /:id/ai-summary force=true keeps the running session when enqueue is duplicate', async () => {
@@ -2837,12 +2845,10 @@ describe('/api/articles', () => {
       type: 'ai_translate',
       jobId: 'job-id-1',
     });
-    expect(writeSystemLogMock).toHaveBeenCalledWith(
+    expect(writeUserOperationStartedLogMock).toHaveBeenCalledWith(
       pool,
       expect.objectContaining({
-        level: 'info',
-        category: 'ai_translate',
-        message: 'AI translation queued',
+        actionKey: 'article.aiTranslate.generate',
       }),
     );
   });
@@ -2894,7 +2900,7 @@ describe('/api/articles', () => {
     expect(json.ok).toBe(true);
     expect(json.data).toEqual({ enqueued: false, reason: 'already_enqueued' });
     expect(upsertTaskQueuedMock).not.toHaveBeenCalled();
-    expect(writeSystemLogMock).not.toHaveBeenCalled();
+    expect(writeUserOperationStartedLogMock).not.toHaveBeenCalled();
   });
 
   it('POST /:id/ai-translate/segments/:index/retry retries failed segment only', async () => {
@@ -2991,12 +2997,10 @@ describe('/api/articles', () => {
       { articleId, sessionId: 'session-id-1', segmentIndex: 1 },
       expect.any(Object),
     );
-    expect(writeSystemLogMock).toHaveBeenCalledWith(
+    expect(writeUserOperationStartedLogMock).toHaveBeenCalledWith(
       pool,
       expect.objectContaining({
-        level: 'warning',
-        category: 'ai_translate',
-        message: 'AI translation segment retry queued',
+        actionKey: 'article.aiTranslate.retrySegment',
       }),
     );
   });
@@ -3076,7 +3080,7 @@ describe('/api/articles', () => {
     expect(json.ok).toBe(true);
     expect(json.data).toEqual({ enqueued: false, reason: 'already_succeeded' });
     expect(enqueueWithResultMock).not.toHaveBeenCalled();
-    expect(writeSystemLogMock).not.toHaveBeenCalled();
+    expect(writeUserOperationStartedLogMock).not.toHaveBeenCalled();
   });
 
   it('ai-translate stream + snapshot + retry APIs keep existing reason semantics', async () => {

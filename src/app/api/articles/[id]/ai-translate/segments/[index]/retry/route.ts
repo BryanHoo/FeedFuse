@@ -9,7 +9,7 @@ import {
   listTranslationSegmentsBySessionId,
   upsertTranslationSegment,
 } from '../../../../../../../../server/repositories/articleTranslationRepo';
-import { writeSystemLog } from '../../../../../../../../server/logging/systemLogger';
+import { writeUserOperationStartedLog } from '../../../../../../../../server/logging/userOperationLogger';
 import { getQueueSendOptions } from '../../../../../../../../server/queue/contracts';
 import { JOB_AI_TRANSLATE } from '../../../../../../../../server/queue/jobs';
 import { enqueueWithResult } from '../../../../../../../../server/queue/queue';
@@ -85,10 +85,8 @@ export async function POST(
       return ok({ enqueued: false, reason: 'already_enqueued' });
     }
 
-    await writeSystemLog(pool, {
-      level: 'warning',
-      category: 'ai_translate',
-      message: 'AI translation segment retry queued',
+    await writeUserOperationStartedLog(pool, {
+      actionKey: 'article.aiTranslate.retrySegment',
       source: 'app/api/articles/[id]/ai-translate/segments/[index]/retry',
       context: {
         articleId,

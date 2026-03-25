@@ -23,7 +23,7 @@ import {
 } from '../../../../../server/repositories/articleTasksRepo';
 import { getFeedFullTextOnOpenEnabled } from '../../../../../server/repositories/feedsRepo';
 import { getAiApiKey, getUiSettings } from '../../../../../server/repositories/settingsRepo';
-import { writeSystemLog } from '../../../../../server/logging/systemLogger';
+import { writeUserOperationStartedLog } from '../../../../../server/logging/userOperationLogger';
 import { getQueueSendOptions } from '../../../../../server/queue/contracts';
 import { enqueueWithResult } from '../../../../../server/queue/queue';
 import { JOB_AI_SUMMARIZE } from '../../../../../server/queue/jobs';
@@ -279,10 +279,8 @@ export async function POST(
       jobId: enqueueResult.jobId,
     });
 
-    await writeSystemLog(pool, {
-      level: 'info',
-      category: 'ai_summary',
-      message: 'AI summary queued',
+    await writeUserOperationStartedLog(pool, {
+      actionKey: 'article.aiSummary.generate',
       source: 'app/api/articles/[id]/ai-summary',
       context: {
         articleId,

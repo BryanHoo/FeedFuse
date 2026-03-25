@@ -6,6 +6,11 @@ import {
   type ArticleAiSummarySessionSnapshotDto,
 } from '../../lib/apiClient';
 import { parseEventPayload } from '../../lib/utils';
+import {
+  beginDeferredOperation,
+  failDeferredOperation,
+  resolveDeferredOperation,
+} from '../notifications/userOperationNotifier';
 
 export interface StreamingAiSummaryApi {
   enqueueArticleAiSummary: typeof enqueueArticleAiSummary;
@@ -87,6 +92,7 @@ export function useStreamingAiSummary(
   const eventSourceRef = useRef<EventSource | null>(null);
   const streamCleanupRef = useRef<(() => void) | null>(null);
   const streamTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const operationTrackingKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     onCompletedRef.current = input.onCompleted;
@@ -96,6 +102,35 @@ export function useStreamingAiSummary(
     articleIdRef.current = input.articleId;
     initialSessionRef.current = input.initialSession ?? null;
   }, [input.articleId, input.initialSession]);
+
+  const beginSummaryOperation = useCallback((trackingKey: string) => {
+    operationTrackingKeyRef.current = trackingKey;
+    beginDeferredOperation({
+      actionKey: 'article.aiSummary.generate',
+      trackingKey,
+    });
+  }, []);
+
+  const resolveSummaryOperation = useCallback(() => {
+    const trackingKey = operationTrackingKeyRef.current;
+    if (!trackingKey) return;
+    operationTrackingKeyRef.current = null;
+    resolveDeferredOperation({
+      actionKey: 'article.aiSummary.generate',
+      trackingKey,
+    });
+  }, []);
+
+  const failSummaryOperation = useCallback((err?: unknown) => {
+    const trackingKey = operationTrackingKeyRef.current;
+    if (!trackingKey) return;
+    operationTrackingKeyRef.current = null;
+    failDeferredOperation({
+      actionKey: 'article.aiSummary.generate',
+      trackingKey,
+      err,
+    });
+  }, []);
 
   const currentLocalState = useMemo(() => {
     if (!input.articleId) return null;
@@ -179,10 +214,11 @@ export function useStreamingAiSummary(
           };
         });
 
+        failSummaryOperation('处理超时，请稍后重试');
         closeStream();
       }, SUMMARY_STREAM_TIMEOUT_MS);
     },
-    [clearStreamTimeout, closeStream, isCurrentRequest],
+    [clearStreamTimeout, closeStream, failSummaryOperation, isCurrentRequest],
   );
 
   const connectStream = useCallback(
@@ -284,6 +320,7 @@ export function useStreamingAiSummary(
             },
           };
         });
+        resolveSummaryOperation();
         closeStream();
         void Promise.resolve(onCompletedRef.current?.(articleId)).catch((err) => {
           console.error(err);
@@ -323,6 +360,11 @@ export function useStreamingAiSummary(
             },
           };
         });
+        failSummaryOperation(
+          typeof payload.errorMessage === 'string'
+            ? payload.errorMessage
+            : '摘要生成失败，请稍后重试',
+        );
         closeStream();
       };
 
@@ -338,7 +380,7 @@ export function useStreamingAiSummary(
         stream.removeEventListener('session.failed', onSessionFailed);
       };
     },
-    [api, armStreamTimeout, closeStream, isCurrentRequest],
+    [api, armStreamTimeout, closeStream, failSummaryOperation, isCurrentRequest, resolveSummaryOperation],
   );
 
   const loadSnapshot = useCallback(
@@ -379,6 +421,7 @@ export function useStreamingAiSummary(
 
     lastArticleIdRef.current = currentArticleId;
     requestTokenRef.current += 1;
+    operationTrackingKeyRef.current = null;
     closeStream();
   }, [closeStream, input.articleId]);
 
@@ -469,7 +512,16 @@ export function useStreamingAiSummary(
         }
 
         if (enqueueResult.enqueued || enqueueResult.reason === 'already_enqueued') {
-          await loadSnapshot(articleId, token);
+          beginSummaryOperation(enqueueResult.sessionId ?? articleId);
+          const snapshot = await loadSnapshot(articleId, token);
+          if (!isCurrentRequest(articleId, token)) return;
+          if (snapshot?.session?.status === 'succeeded') {
+            resolveSummaryOperation();
+          } else if (snapshot?.session?.status === 'failed') {
+            failSummaryOperation(
+              snapshot.session.errorMessage ?? snapshot.session.rawErrorMessage ?? '请稍后重试',
+            );
+          }
           return;
         }
 
@@ -492,7 +544,16 @@ export function useStreamingAiSummary(
         }));
       }
     },
-    [api, closeStream, input.articleId, isCurrentRequest, loadSnapshot],
+    [
+      api,
+      beginSummaryOperation,
+      closeStream,
+      failSummaryOperation,
+      input.articleId,
+      isCurrentRequest,
+      loadSnapshot,
+      resolveSummaryOperation,
+    ],
   );
 
   const clearTransientState = useCallback(() => {

@@ -10,6 +10,11 @@ import {
   type TranslationSessionStatus,
 } from '../../lib/apiClient';
 import { parseEventPayload } from '../../lib/utils';
+import {
+  beginDeferredOperation,
+  failDeferredOperation,
+  resolveDeferredOperation,
+} from '../notifications/userOperationNotifier';
 
 export interface ImmersiveTranslationApi {
   enqueueArticleAiTranslate: typeof enqueueArticleAiTranslate;
@@ -53,6 +58,26 @@ const defaultApi: ImmersiveTranslationApi = {
   createArticleAiTranslateEventSource,
 };
 const TRANSLATION_STREAM_TIMEOUT_MS = 60_000;
+
+function buildTranslationTerminalReason(input: {
+  status: TranslationSessionStatus;
+  failedSegments?: number;
+  errorMessage?: string | null;
+}): string {
+  if (input.errorMessage?.trim()) {
+    return input.errorMessage.trim();
+  }
+
+  if (input.status === 'partial_failed') {
+    const failedSegments =
+      typeof input.failedSegments === 'number' && input.failedSegments > 0
+        ? input.failedSegments
+        : 1;
+    return `${failedSegments} 个片段翻译失败`;
+  }
+
+  return '请稍后重试';
+}
 
 function toSortedSegments(
   segments: ArticleAiTranslateSegmentSnapshotDto[],
@@ -135,6 +160,8 @@ export function useImmersiveTranslation(
   const eventSourceRef = useRef<EventSource | null>(null);
   const streamCleanupRef = useRef<(() => void) | null>(null);
   const streamTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const translationTrackingKeyRef = useRef<string | null>(null);
+  const retryTrackingRef = useRef<{ trackingKey: string; segmentIndex: number } | null>(null);
 
   const ensureStateForArticle = useCallback(
     (articleId: string | null) => {
@@ -169,15 +196,75 @@ export function useImmersiveTranslation(
     return articleIdRef.current === articleId && requestTokenRef.current === token;
   }, []);
 
+  const beginTranslationOperation = useCallback((trackingKey: string) => {
+    translationTrackingKeyRef.current = trackingKey;
+    beginDeferredOperation({
+      actionKey: 'article.aiTranslate.generate',
+      trackingKey,
+    });
+  }, []);
+
+  const resolveTranslationOperation = useCallback(() => {
+    const trackingKey = translationTrackingKeyRef.current;
+    if (!trackingKey) return;
+    translationTrackingKeyRef.current = null;
+    resolveDeferredOperation({
+      actionKey: 'article.aiTranslate.generate',
+      trackingKey,
+    });
+  }, []);
+
+  const failTranslationOperation = useCallback((err?: unknown) => {
+    const trackingKey = translationTrackingKeyRef.current;
+    if (!trackingKey) return;
+    translationTrackingKeyRef.current = null;
+    failDeferredOperation({
+      actionKey: 'article.aiTranslate.generate',
+      trackingKey,
+      err,
+    });
+  }, []);
+
+  const beginRetryOperation = useCallback((trackingKey: string, segmentIndex: number) => {
+    retryTrackingRef.current = { trackingKey, segmentIndex };
+    beginDeferredOperation({
+      actionKey: 'article.aiTranslate.retrySegment',
+      trackingKey,
+    });
+  }, []);
+
+  const resolveRetryOperation = useCallback(() => {
+    const currentRetry = retryTrackingRef.current;
+    if (!currentRetry) return;
+    retryTrackingRef.current = null;
+    resolveDeferredOperation({
+      actionKey: 'article.aiTranslate.retrySegment',
+      trackingKey: currentRetry.trackingKey,
+    });
+  }, []);
+
+  const failRetryOperation = useCallback((err?: unknown) => {
+    const currentRetry = retryTrackingRef.current;
+    if (!currentRetry) return;
+    retryTrackingRef.current = null;
+    failDeferredOperation({
+      actionKey: 'article.aiTranslate.retrySegment',
+      trackingKey: currentRetry.trackingKey,
+      err,
+    });
+  }, []);
+
   const armStreamTimeout = useCallback((articleId: string, token: number) => {
     clearStreamTimeout();
     streamTimeoutRef.current = setTimeout(() => {
       if (!isCurrentRequest(articleId, token)) return;
       setTimedOutState(true);
       setLoadingState(false);
+      failTranslationOperation('处理超时，请稍后重试');
+      failRetryOperation('处理超时，请稍后重试');
       closeStream();
     }, TRANSLATION_STREAM_TIMEOUT_MS);
-  }, [clearStreamTimeout, closeStream, isCurrentRequest]);
+  }, [clearStreamTimeout, closeStream, failRetryOperation, failTranslationOperation, isCurrentRequest]);
 
   const connectStream = useCallback(
     (articleId: string, token: number) => {
@@ -220,6 +307,10 @@ export function useImmersiveTranslation(
             updatedAt: typeof payload.updatedAt === 'string' ? payload.updatedAt : undefined,
           }),
         );
+
+        if (retryTrackingRef.current?.segmentIndex === segmentIndex) {
+          resolveRetryOperation();
+        }
       };
 
       const onSegmentFailed: EventListener = (event) => {
@@ -238,11 +329,27 @@ export function useImmersiveTranslation(
             updatedAt: typeof payload.updatedAt === 'string' ? payload.updatedAt : undefined,
           }),
         );
+
+        if (retryTrackingRef.current?.segmentIndex === segmentIndex) {
+          failRetryOperation(
+            typeof payload.errorMessage === 'string' ? payload.errorMessage : '请稍后重试',
+          );
+        }
       };
 
       const onSessionCompleted: EventListener = (event) => {
         if (!isCurrentRequest(articleId, token)) return;
         const payload = parseEventPayload(event);
+        const nextStatus = parseSessionStatus(payload.status, session?.status ?? 'succeeded');
+        const reason = buildTranslationTerminalReason({
+          status: nextStatus,
+          failedSegments:
+            typeof payload.failedSegments === 'number'
+              ? payload.failedSegments
+              : session?.failedSegments,
+          errorMessage:
+            typeof payload.errorMessage === 'string' ? payload.errorMessage : session?.rawErrorMessage,
+        });
         setSessionState((current) => {
           if (!current) return current;
           return {
@@ -260,13 +367,28 @@ export function useImmersiveTranslation(
           };
         });
         setLoadingState(false);
+        if (nextStatus === 'succeeded') {
+          resolveTranslationOperation();
+          resolveRetryOperation();
+        } else {
+          failTranslationOperation(reason);
+          failRetryOperation(reason);
+        }
         closeStream();
       };
 
-      const onSessionFailed: EventListener = () => {
+      const onSessionFailed: EventListener = (event) => {
         if (!isCurrentRequest(articleId, token)) return;
+        const payload = parseEventPayload(event);
+        const reason = buildTranslationTerminalReason({
+          status: 'failed',
+          errorMessage:
+            typeof payload.errorMessage === 'string' ? payload.errorMessage : session?.rawErrorMessage,
+        });
         setSessionState((current) => (current ? { ...current, status: 'failed' } : current));
         setLoadingState(false);
+        failTranslationOperation(reason);
+        failRetryOperation(reason);
         closeStream();
       };
 
@@ -284,7 +406,19 @@ export function useImmersiveTranslation(
         stream.removeEventListener('session.failed', onSessionFailed);
       };
     },
-    [api, armStreamTimeout, closeStream, isCurrentRequest],
+    [
+      api,
+      armStreamTimeout,
+      closeStream,
+      failRetryOperation,
+      failTranslationOperation,
+      isCurrentRequest,
+      resolveRetryOperation,
+      resolveTranslationOperation,
+      session?.failedSegments,
+      session?.rawErrorMessage,
+      session?.status,
+    ],
   );
 
   const loadSnapshot = useCallback(
@@ -313,6 +447,8 @@ export function useImmersiveTranslation(
   useEffect(() => {
     articleIdRef.current = input.articleId;
     requestTokenRef.current += 1;
+    translationTrackingKeyRef.current = null;
+    retryTrackingRef.current = null;
     closeStream();
   }, [input.articleId, closeStream]);
 
@@ -374,8 +510,23 @@ export function useImmersiveTranslation(
         return;
       }
 
-      await loadSnapshot(articleId, token);
+      beginTranslationOperation(articleId);
+      const snapshot = await loadSnapshot(articleId, token);
       if (!isCurrentRequest(articleId, token)) return;
+      if (snapshot?.session?.status === 'succeeded') {
+        resolveTranslationOperation();
+      } else if (
+        snapshot?.session?.status === 'partial_failed' ||
+        snapshot?.session?.status === 'failed'
+      ) {
+        failTranslationOperation(
+          buildTranslationTerminalReason({
+            status: snapshot.session.status,
+            failedSegments: snapshot.session.failedSegments,
+            errorMessage: snapshot.session.rawErrorMessage,
+          }),
+        );
+      }
       if (autoView) {
         setViewingState(true);
       }
@@ -384,7 +535,16 @@ export function useImmersiveTranslation(
       if (!isCurrentRequest(articleId, token)) return;
       setLoadingState(false);
     }
-  }, [api, ensureStateForArticle, input.articleId, isCurrentRequest, loadSnapshot]);
+  }, [
+    api,
+    beginTranslationOperation,
+    ensureStateForArticle,
+    failTranslationOperation,
+    input.articleId,
+    isCurrentRequest,
+    loadSnapshot,
+    resolveTranslationOperation,
+  ]);
 
   const retrySegment = useCallback(
     async (segmentIndex: number) => {
@@ -399,10 +559,24 @@ export function useImmersiveTranslation(
       setLoadingState(true);
 
       try {
-        await api.retryArticleAiTranslateSegment(articleId, segmentIndex);
+        const enqueueResult = await api.retryArticleAiTranslateSegment(articleId, segmentIndex);
         if (!isCurrentRequest(articleId, token)) return;
-        await loadSnapshot(articleId, token);
+        if (!enqueueResult.enqueued && enqueueResult.reason !== 'already_enqueued') {
+          setLoadingState(false);
+          return;
+        }
+
+        beginRetryOperation(`${articleId}:${segmentIndex}`, segmentIndex);
+        const snapshot = await loadSnapshot(articleId, token);
         if (!isCurrentRequest(articleId, token)) return;
+        const retrySegmentState = snapshot?.segments.find(
+          (segment) => segment.segmentIndex === segmentIndex,
+        );
+        if (retrySegmentState?.status === 'succeeded') {
+          resolveRetryOperation();
+        } else if (retrySegmentState?.status === 'failed') {
+          failRetryOperation(retrySegmentState.errorMessage ?? '请稍后重试');
+        }
         setViewingState(true);
       } catch (err) {
         console.error(err);
@@ -410,7 +584,16 @@ export function useImmersiveTranslation(
         setLoadingState(false);
       }
     },
-    [api, ensureStateForArticle, input.articleId, isCurrentRequest, loadSnapshot],
+    [
+      api,
+      beginRetryOperation,
+      ensureStateForArticle,
+      failRetryOperation,
+      input.articleId,
+      isCurrentRequest,
+      loadSnapshot,
+      resolveRetryOperation,
+    ],
   );
 
   const setViewing = useCallback(

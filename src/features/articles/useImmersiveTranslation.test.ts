@@ -1,8 +1,24 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ImmersiveTranslationApi } from './useImmersiveTranslation';
 import { useImmersiveTranslation } from './useImmersiveTranslation';
+
+const {
+  beginDeferredOperationMock,
+  resolveDeferredOperationMock,
+  failDeferredOperationMock,
+} = vi.hoisted(() => ({
+  beginDeferredOperationMock: vi.fn(),
+  resolveDeferredOperationMock: vi.fn(),
+  failDeferredOperationMock: vi.fn(),
+}));
+
+vi.mock('../notifications/userOperationNotifier', () => ({
+  beginDeferredOperation: (...args: unknown[]) => beginDeferredOperationMock(...args),
+  resolveDeferredOperation: (...args: unknown[]) => resolveDeferredOperationMock(...args),
+  failDeferredOperation: (...args: unknown[]) => failDeferredOperationMock(...args),
+}));
 
 class FakeEventSource {
   private listeners = new Map<string, Set<(event: Event) => void>>();
@@ -83,6 +99,11 @@ function HookHarness(input: { articleId: string; api: ImmersiveTranslationApi })
     ),
     React.createElement(
       'div',
+      { 'data-testid': 'waiting-fulltext' },
+      immersive.waitingFulltext ? 'true' : 'false',
+    ),
+    React.createElement(
+      'div',
       { 'data-testid': 'timed-out' },
       immersive.timedOut ? 'true' : 'false',
     ),
@@ -90,6 +111,12 @@ function HookHarness(input: { articleId: string; api: ImmersiveTranslationApi })
 }
 
 describe('useImmersiveTranslation', () => {
+  beforeEach(() => {
+    beginDeferredOperationMock.mockReset();
+    resolveDeferredOperationMock.mockReset();
+    failDeferredOperationMock.mockReset();
+  });
+
   it('passes force option when requesting translation', async () => {
     const fakeEventSource = new FakeEventSource();
     const enqueueArticleAiTranslate = vi.fn().mockResolvedValue({
@@ -118,6 +145,61 @@ describe('useImmersiveTranslation', () => {
 
     await waitFor(() => {
       expect(enqueueArticleAiTranslate).toHaveBeenCalledWith('article-1', { force: true });
+    });
+  });
+
+  it('treats already_enqueued translation as deferred started and resolves on session.completed', async () => {
+    const fakeEventSource = new FakeEventSource();
+    const api: ImmersiveTranslationApi = {
+      enqueueArticleAiTranslate: vi.fn().mockResolvedValue({
+        enqueued: false,
+        reason: 'already_enqueued',
+      }),
+      getArticleAiTranslateSnapshot: vi.fn().mockResolvedValue({
+        session: {
+          id: 'session-1',
+          articleId: 'article-1',
+          sourceHtmlHash: 'hash-1',
+          status: 'running',
+          totalSegments: 1,
+          translatedSegments: 0,
+          failedSegments: 0,
+          startedAt: '2026-03-04T00:00:00.000Z',
+          finishedAt: null,
+          updatedAt: '2026-03-04T00:00:00.000Z',
+        },
+        segments: [],
+      }),
+      retryArticleAiTranslateSegment: vi.fn().mockResolvedValue({
+        enqueued: true,
+        jobId: 'job-retry-1',
+      }),
+      createArticleAiTranslateEventSource: vi
+        .fn()
+        .mockReturnValue(fakeEventSource as unknown as EventSource),
+    };
+
+    render(React.createElement(HookHarness, { articleId: 'article-1', api }));
+    fireEvent.click(screen.getByRole('button', { name: 'start' }));
+
+    await waitFor(() => {
+      expect(beginDeferredOperationMock).toHaveBeenCalledWith({
+        actionKey: 'article.aiTranslate.generate',
+        trackingKey: 'article-1',
+      });
+    });
+
+    await act(async () => {
+      fakeEventSource.emit('session.completed', {
+        status: 'succeeded',
+        translatedSegments: 1,
+        failedSegments: 0,
+      });
+    });
+
+    expect(resolveDeferredOperationMock).toHaveBeenCalledWith({
+      actionKey: 'article.aiTranslate.generate',
+      trackingKey: 'article-1',
     });
   });
 
@@ -393,5 +475,26 @@ describe('useImmersiveTranslation', () => {
     });
     expect(screen.getByTestId('missing-config').textContent).toBe('true');
     expect(api.getArticleAiTranslateSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('keeps fulltext_pending out of deferred error notifications', async () => {
+    const api: ImmersiveTranslationApi = {
+      enqueueArticleAiTranslate: vi.fn().mockResolvedValue({
+        enqueued: false,
+        reason: 'fulltext_pending',
+      }),
+      getArticleAiTranslateSnapshot: vi.fn(),
+      retryArticleAiTranslateSegment: vi.fn(),
+      createArticleAiTranslateEventSource: vi.fn(),
+    };
+
+    render(React.createElement(HookHarness, { articleId: 'article-1', api }));
+    fireEvent.click(screen.getByRole('button', { name: 'start' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('loading').textContent).toBe('false');
+    });
+    expect(screen.getByTestId('waiting-fulltext').textContent).toBe('true');
+    expect(failDeferredOperationMock).not.toHaveBeenCalled();
   });
 });

@@ -1,7 +1,23 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StreamingAiSummaryApi } from './useStreamingAiSummary';
 import { useStreamingAiSummary } from './useStreamingAiSummary';
+
+const {
+  beginDeferredOperationMock,
+  resolveDeferredOperationMock,
+  failDeferredOperationMock,
+} = vi.hoisted(() => ({
+  beginDeferredOperationMock: vi.fn(),
+  resolveDeferredOperationMock: vi.fn(),
+  failDeferredOperationMock: vi.fn(),
+}));
+
+vi.mock('../notifications/userOperationNotifier', () => ({
+  beginDeferredOperation: (...args: unknown[]) => beginDeferredOperationMock(...args),
+  resolveDeferredOperation: (...args: unknown[]) => resolveDeferredOperationMock(...args),
+  failDeferredOperation: (...args: unknown[]) => failDeferredOperationMock(...args),
+}));
 
 class FakeEventSource {
   private listeners = new Map<string, Set<(event: Event) => void>>();
@@ -43,6 +59,12 @@ class FakeEventSource {
 }
 
 describe('useStreamingAiSummary', () => {
+  beforeEach(() => {
+    beginDeferredOperationMock.mockReset();
+    resolveDeferredOperationMock.mockReset();
+    failDeferredOperationMock.mockReset();
+  });
+
   it('loads summary snapshot and applies SSE delta events', async () => {
     const fakeEventSource = new FakeEventSource();
     const onCompleted = vi.fn();
@@ -105,6 +127,56 @@ describe('useStreamingAiSummary', () => {
     expect(result.current.session?.finalText).toBe('TL;DR\n- 第一条\n- 第二条');
     expect(fakeEventSource.close).toHaveBeenCalled();
     expect(onCompleted).toHaveBeenCalledWith('article-1');
+  });
+
+  it('treats already_enqueued summary as deferred started and resolves on session.completed', async () => {
+    const fakeEventSource = new FakeEventSource();
+    const api: StreamingAiSummaryApi = {
+      enqueueArticleAiSummary: vi.fn().mockResolvedValue({
+        enqueued: false,
+        reason: 'already_enqueued',
+        sessionId: 'session-1',
+      }),
+      getArticleAiSummarySnapshot: vi.fn().mockResolvedValue({
+        session: {
+          id: 'session-1',
+          status: 'running',
+          draftText: '',
+          finalText: null,
+          errorCode: null,
+          errorMessage: null,
+          rawErrorMessage: null,
+          startedAt: '2026-03-09T00:00:00.000Z',
+          finishedAt: null,
+          updatedAt: '2026-03-09T00:00:00.000Z',
+        },
+      }),
+      createArticleAiSummaryEventSource: vi
+        .fn()
+        .mockReturnValue(fakeEventSource as unknown as EventSource),
+    };
+
+    const { result } = renderHook(() =>
+      useStreamingAiSummary({ articleId: 'article-1', api }),
+    );
+
+    await act(async () => {
+      await result.current.requestSummary();
+    });
+
+    expect(beginDeferredOperationMock).toHaveBeenCalledWith({
+      actionKey: 'article.aiSummary.generate',
+      trackingKey: 'session-1',
+    });
+
+    await act(async () => {
+      fakeEventSource.emit('session.completed', { finalText: '摘要完成' });
+    });
+
+    expect(resolveDeferredOperationMock).toHaveBeenCalledWith({
+      actionKey: 'article.aiSummary.generate',
+      trackingKey: 'session-1',
+    });
   });
 
   it('closes old EventSource when articleId changes or unmounts', async () => {

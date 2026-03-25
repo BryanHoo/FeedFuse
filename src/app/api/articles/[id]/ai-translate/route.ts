@@ -34,7 +34,7 @@ import {
   getTranslationApiKey,
   getUiSettings,
 } from '../../../../../server/repositories/settingsRepo';
-import { writeSystemLog } from '../../../../../server/logging/systemLogger';
+import { writeUserOperationStartedLog } from '../../../../../server/logging/userOperationLogger';
 import { getQueueSendOptions } from '../../../../../server/queue/contracts';
 import { enqueueWithResult } from '../../../../../server/queue/queue';
 import { JOB_AI_TRANSLATE } from '../../../../../server/queue/jobs';
@@ -271,10 +271,8 @@ export async function POST(
       jobId: enqueueResult.jobId,
     });
 
-    await writeSystemLog(pool, {
-      level: 'info',
-      category: 'ai_translate',
-      message: 'AI translation queued',
+    await writeUserOperationStartedLog(pool, {
+      actionKey: 'article.aiTranslate.generate',
       source: 'app/api/articles/[id]/ai-translate',
       context: {
         articleId,
