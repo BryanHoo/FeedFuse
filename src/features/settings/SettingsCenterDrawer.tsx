@@ -26,7 +26,11 @@ import LogsSettingsPanel from './panels/LogsSettingsPanel';
 import RssSettingsPanel from './panels/RssSettingsPanel';
 import type { OpmlTransferResultSummary } from './panels/OpmlTransferSection';
 import { useSettingsAutosave } from './useSettingsAutosave';
-import { toast } from '../toast/toast';
+import {
+  runImmediateFailure,
+  runImmediateOperation,
+  runImmediateSuccess,
+} from '../notifications/userOperationNotifier';
 
 interface SettingsCenterDrawerProps {
   onClose: () => void;
@@ -89,6 +93,11 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
     useState<OpmlTransferResultSummary | null>(null);
   const lastAutosaveStatusRef = useRef<keyof typeof autosaveStatusMeta>('idle');
   const lastSavedNotifyAtRef = useRef(0);
+  const lastAutosaveResultRef = useRef<{
+    ok: boolean;
+    err?: unknown;
+    shouldNotify?: boolean;
+  } | null>(null);
   const rssSnapshotReloadPendingRef = useRef(false);
   const draft = useSettingsStore((state) => state.draft);
   const hydratePersistedSettings = useSettingsStore((state) => state.hydratePersistedSettings);
@@ -101,7 +110,11 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
   const hasErrors = validationErrorKeys.length > 0;
   const autosave = useSettingsAutosave({
     draftVersion,
-    saveDraft,
+    saveDraft: async () => {
+      const result = await saveDraft();
+      lastAutosaveResultRef.current = result;
+      return result;
+    },
     hasErrors,
   });
 
@@ -115,13 +128,23 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
     if (current === 'saved' && previous !== 'saved') {
       const now = Date.now();
       if (now - lastSavedNotifyAtRef.current >= 30000) {
-        toast.success('设置已自动保存');
+        runImmediateSuccess({ actionKey: 'settings.save' });
         lastSavedNotifyAtRef.current = now;
       }
 
       if (rssSnapshotReloadPendingRef.current) {
         rssSnapshotReloadPendingRef.current = false;
         void reloadCurrentSnapshot();
+      }
+    }
+
+    if (current === 'error' && previous !== 'error') {
+      const result = lastAutosaveResultRef.current;
+      if (result?.shouldNotify) {
+        runImmediateFailure({
+          actionKey: 'settings.save',
+          err: result.err,
+        });
       }
     }
 
@@ -178,10 +201,17 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
 
     try {
       const content = await file.text();
-      const result = await importOpml({ content, fileName: file.name });
+      const result = await runImmediateOperation({
+        actionKey: 'opml.import',
+        execute: () =>
+          importOpml({ content, fileName: file.name }, { notifyOnError: false }),
+      });
       setLastOpmlImportResult(result);
-      toast.success('OPML 导入完成');
-      await reloadCurrentSnapshot();
+      await reloadCurrentSnapshot().catch((err) => {
+        console.error(err);
+      });
+    } catch (err) {
+      console.error(err);
     } finally {
       setOpmlImporting(false);
     }
@@ -192,16 +222,23 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
 
     let objectUrl: string | null = null;
     try {
-      const result = await exportOpml();
-      const blob = new Blob([result.xml], { type: 'application/xml;charset=utf-8' });
-      objectUrl = URL.createObjectURL(blob);
+      await runImmediateOperation({
+        actionKey: 'opml.export',
+        execute: async () => {
+          const result = await exportOpml({ notifyOnError: false });
+          const blob = new Blob([result.xml], { type: 'application/xml;charset=utf-8' });
+          objectUrl = URL.createObjectURL(blob);
 
-      const anchor = document.createElement('a');
-      anchor.href = objectUrl;
-      anchor.download = result.fileName;
-      anchor.click();
+          const anchor = document.createElement('a');
+          anchor.href = objectUrl;
+          anchor.download = result.fileName;
+          anchor.click();
 
-      toast.success('OPML 已开始下载');
+          return result;
+        },
+      });
+    } catch (err) {
+      console.error(err);
     } finally {
       if (objectUrl) {
         URL.revokeObjectURL(objectUrl);

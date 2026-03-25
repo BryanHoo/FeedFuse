@@ -18,6 +18,10 @@ import {
   patchArticle,
   refreshFeed,
 } from '../lib/apiClient';
+import {
+  runImmediateFailure,
+  runImmediateSuccess,
+} from '../features/notifications/userOperationNotifier';
 
 const READER_SELECTION_VIEW_PARAM = 'view';
 const READER_SELECTION_ARTICLE_PARAM = 'article';
@@ -715,7 +719,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       ),
     }));
 
-    void patchArticle(articleId, { isRead: true }, { notifyOnError: true }).catch(() => {});
+    void patchArticle(articleId, { isRead: true }, { notifyOnError: false })
+      .then(() => {
+        runImmediateSuccess({ actionKey: 'article.markRead' });
+      })
+      .catch((err) => {
+        runImmediateFailure({ actionKey: 'article.markRead', err });
+      });
   },
 
   markAllAsRead: (feedId) => {
@@ -741,7 +751,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       }),
     }));
 
-    void markAllRead(feedId ? { feedId } : {}, { notifyOnError: true }).catch(() => {});
+    void markAllRead(feedId ? { feedId } : {}, { notifyOnError: false })
+      .then(() => {
+        runImmediateSuccess({ actionKey: 'article.markAllRead' });
+      })
+      .catch((err) => {
+        runImmediateFailure({ actionKey: 'article.markAllRead', err });
+      });
   },
 
   addFeed: async (payload) => {
@@ -925,7 +941,20 @@ export const useAppStore = create<AppState>((set, get) => ({
       })),
     }));
 
-    void patchArticle(articleId, { isStarred: nextValue }, { notifyOnError: true }).catch(() => {});
+    void patchArticle(articleId, { isStarred: nextValue }, { notifyOnError: false })
+      .then(() => {
+        runImmediateSuccess({
+          actionKey: 'article.toggleStar',
+          context: { starred: nextValue },
+        });
+      })
+      .catch((err) => {
+        runImmediateFailure({
+          actionKey: 'article.toggleStar',
+          context: { starred: nextValue },
+          err,
+        });
+      });
   },
 
   toggleCategory: (categoryId) =>

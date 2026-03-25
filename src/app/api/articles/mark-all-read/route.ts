@@ -4,6 +4,10 @@ import { ok, fail } from '../../../../server/http/apiResponse';
 import { ValidationError } from '../../../../server/http/errors';
 import { optionalNumericIdSchema } from '../../../../server/http/idSchemas';
 import { markAllRead } from '../../../../server/repositories/articlesRepo';
+import {
+  writeUserOperationFailedLog,
+  writeUserOperationSucceededLog,
+} from '../../../../server/logging/userOperationLogger';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -26,13 +30,29 @@ export async function POST(request: Request) {
     const json = await request.json().catch(() => ({}));
     const parsed = bodySchema.safeParse(json);
     if (!parsed.success) {
-      return fail(new ValidationError('Invalid request body', zodIssuesToFields(parsed.error)));
+      const error = new ValidationError('Invalid request body', zodIssuesToFields(parsed.error));
+      await writeUserOperationFailedLog(getPool(), {
+        actionKey: 'article.markAllRead',
+        source: 'app/api/articles/mark-all-read',
+        err: error,
+      });
+      return fail(error);
     }
 
     const pool = getPool();
     const updatedCount = await markAllRead(pool, { feedId: parsed.data.feedId });
+    await writeUserOperationSucceededLog(pool, {
+      actionKey: 'article.markAllRead',
+      source: 'app/api/articles/mark-all-read',
+      context: { feedId: parsed.data.feedId, updatedCount },
+    });
     return ok({ updatedCount });
   } catch (err) {
+    await writeUserOperationFailedLog(getPool(), {
+      actionKey: 'article.markAllRead',
+      source: 'app/api/articles/mark-all-read',
+      err,
+    });
     return fail(err);
   }
 }

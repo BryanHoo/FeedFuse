@@ -1717,7 +1717,17 @@ describe('ArticleList', () => {
     }
   });
 
-  it('rolls back display mode and relies on global api notification when patchFeed fails', async () => {
+  it('shows one success toast after display mode save resolves', async () => {
+    useAppStore.setState({ selectedView: 'feed-1' });
+
+    renderWithNotifications();
+    fireEvent.click(screen.getByRole('button', { name: TOGGLE_TO_LIST_LABEL }));
+
+    expect(await screen.findByText('已保存文章列表显示方式')).toBeInTheDocument();
+    expect(screen.queryAllByText('已保存文章列表显示方式')).toHaveLength(1);
+  });
+
+  it('rolls back display mode and shows the unified notifier error when patchFeed fails', async () => {
     useAppStore.setState({ selectedView: 'feed-1' });
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
@@ -1735,8 +1745,8 @@ describe('ArticleList', () => {
     await waitFor(() => {
       const feed = useAppStore.getState().feeds.find((item) => item.id === 'feed-1');
       expect(feed?.articleListDisplayMode).toBe('card');
-      expect(screen.getByText('显示模式切换失败，请稍后重试')).toBeInTheDocument();
-      expect(screen.queryByText('操作失败：显示模式切换失败，请稍后重试')).not.toBeInTheDocument();
+      expect(screen.getByText('保存文章列表显示方式失败：显示模式切换失败，请稍后重试')).toBeInTheDocument();
+      expect(screen.queryByText('显示模式切换失败，请稍后重试')).not.toBeInTheDocument();
     });
   });
 

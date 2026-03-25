@@ -17,6 +17,8 @@ const updateAllFeedsFetchIntervalMinutesMock = vi.fn();
 const pruneAllFeedsArticlesToLimitMock = vi.fn();
 const writeSystemLogMock = vi.fn();
 const cleanupAiRuntimeStateMock = vi.fn();
+const writeUserOperationSucceededLogMock = vi.fn();
+const writeUserOperationFailedLogMock = vi.fn();
 
 vi.mock('../../../server/db/pool', () => ({
   getPool: () => pool,
@@ -60,6 +62,18 @@ vi.mock('../../../server/logging/systemLogger', () => ({
 vi.mock('../../../../server/logging/systemLogger', () => ({
   writeSystemLog: (...args: unknown[]) => writeSystemLogMock(...args),
 }));
+vi.mock('../../../server/logging/userOperationLogger', () => ({
+  writeUserOperationSucceededLog: (...args: unknown[]) =>
+    writeUserOperationSucceededLogMock(...args),
+  writeUserOperationFailedLog: (...args: unknown[]) =>
+    writeUserOperationFailedLogMock(...args),
+}));
+vi.mock('../../../../server/logging/userOperationLogger', () => ({
+  writeUserOperationSucceededLog: (...args: unknown[]) =>
+    writeUserOperationSucceededLogMock(...args),
+  writeUserOperationFailedLog: (...args: unknown[]) =>
+    writeUserOperationFailedLogMock(...args),
+}));
 
 vi.mock('../../../server/ai/cleanupAiRuntimeState', () => ({
   cleanupAiRuntimeState: (...args: unknown[]) => cleanupAiRuntimeStateMock(...args),
@@ -77,6 +91,8 @@ describe('/api/settings', () => {
     updateAllFeedsFetchIntervalMinutesMock.mockReset();
     pruneAllFeedsArticlesToLimitMock.mockReset();
     writeSystemLogMock.mockReset();
+    writeUserOperationSucceededLogMock.mockReset();
+    writeUserOperationFailedLogMock.mockReset();
     cleanupAiRuntimeStateMock.mockReset().mockResolvedValue({
       summarySessions: 0,
       translationSessions: 0,
@@ -124,6 +140,10 @@ describe('/api/settings', () => {
 
     expect(updateUiSettingsMock).toHaveBeenCalledWith(client, normalized);
     expect(updateAllFeedsFetchIntervalMinutesMock).toHaveBeenCalledWith(client, 60);
+    expect(writeUserOperationSucceededLogMock).toHaveBeenCalledWith(
+      client,
+      expect.objectContaining({ actionKey: 'settings.save' }),
+    );
     expect(json.ok).toBe(true);
     expect(json.data.rss.fetchIntervalMinutes).toBe(60);
     expect(json.data.logging).toEqual({ enabled: true, retentionDays: 14, minLevel: 'warning' });

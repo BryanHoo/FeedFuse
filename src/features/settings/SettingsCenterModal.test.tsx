@@ -514,13 +514,97 @@ describe('SettingsCenterModal', () => {
     await waitFor(() => {
       expect(screen.getByText('已导入 0 个订阅')).toBeInTheDocument();
     });
+    expect(screen.getByText('OPML 导入完成')).toBeInTheDocument();
+    expect(screen.queryAllByText('OPML 导入完成')).toHaveLength(1);
 
     await waitFor(() => {
       expect(countSnapshotCalls()).toBe(snapshotCallsBeforeImport + 1);
     });
   });
 
-  it('shows backend autosave error through global api notification', async () => {
+  it('shows one autosave success toast every 30s window through notifier', async () => {
+    resetSettingsStore();
+    const dateNowSpy = vi.spyOn(Date, 'now');
+    dateNowSpy.mockReturnValue(100_000);
+
+    try {
+      renderWithNotifications();
+
+      fireEvent.click(screen.getByLabelText('打开设置'));
+      await waitFor(() => {
+        expect(screen.getByTestId('settings-center-modal')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: '深色' }));
+      await waitFor(() => {
+        expect(lastSettingsPutBodyText).toContain('"theme":"dark"');
+      });
+
+      expect(await screen.findByText('设置已自动保存')).toBeInTheDocument();
+
+      dateNowSpy.mockReturnValue(110_000);
+      fireEvent.click(screen.getByRole('button', { name: '浅色' }));
+      await waitFor(() => {
+        expect(lastSettingsPutBodyText).toContain('"theme":"light"');
+      });
+
+      expect(screen.queryAllByText('设置已自动保存')).toHaveLength(1);
+    } finally {
+      dateNowSpy.mockRestore();
+    }
+  });
+
+  it('exports opml from the RSS tab and shows one success toast', async () => {
+    resetSettingsStore();
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    const createObjectURLMock = vi.fn(() => 'blob:feedfuse-opml');
+    const revokeObjectURLMock = vi.fn();
+    const originalCreateObjectURL = URL.createObjectURL;
+    const originalRevokeObjectURL = URL.revokeObjectURL;
+
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      writable: true,
+      value: createObjectURLMock,
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      writable: true,
+      value: revokeObjectURLMock,
+    });
+
+    try {
+      renderWithNotifications();
+
+      fireEvent.click(screen.getByLabelText('打开设置'));
+      fireEvent.click(await screen.findByTestId('settings-section-tab-rss'));
+      fireEvent.click(await screen.findByRole('button', { name: '导出 OPML' }));
+
+      expect(await screen.findByText('OPML 已开始下载')).toBeInTheDocument();
+      expect(screen.queryAllByText('OPML 已开始下载')).toHaveLength(1);
+      expect(createObjectURLMock).toHaveBeenCalledTimes(1);
+      expect(clickSpy).toHaveBeenCalledTimes(1);
+      expect(revokeObjectURLMock).toHaveBeenCalledWith('blob:feedfuse-opml');
+    } finally {
+      if (originalCreateObjectURL) {
+        Object.defineProperty(URL, 'createObjectURL', {
+          configurable: true,
+          writable: true,
+          value: originalCreateObjectURL,
+        });
+      }
+      if (originalRevokeObjectURL) {
+        Object.defineProperty(URL, 'revokeObjectURL', {
+          configurable: true,
+          writable: true,
+          value: originalRevokeObjectURL,
+        });
+      }
+      clickSpy.mockRestore();
+    }
+  });
+
+  it('shows backend autosave error through the unified notifier', async () => {
     resetSettingsStore();
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -577,8 +661,8 @@ describe('SettingsCenterModal', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '深色' }));
 
-    expect(await screen.findByText('设置保存失败，请稍后重试')).toBeInTheDocument();
-    expect(screen.queryByText('设置自动保存失败，请检查后重试')).not.toBeInTheDocument();
+    expect(await screen.findByText('保存设置失败：设置保存失败，请稍后重试')).toBeInTheDocument();
+    expect(screen.queryByText('设置保存失败，请稍后重试')).not.toBeInTheDocument();
 
     consoleErrorSpy.mockRestore();
   });

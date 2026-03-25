@@ -1,9 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AI_DIGEST_VIEW_ID } from '../lib/view';
 
+const { runImmediateFailureMock, runImmediateSuccessMock } = vi.hoisted(() => ({
+  runImmediateFailureMock: vi.fn(),
+  runImmediateSuccessMock: vi.fn(),
+}));
+
 type AppStoreModule = typeof import('./appStore');
 let useAppStore: AppStoreModule['useAppStore'];
 let fetchMock: ReturnType<typeof vi.fn>;
+
+vi.mock('../features/notifications/userOperationNotifier', () => ({
+  runImmediateSuccess: (...args: unknown[]) => runImmediateSuccessMock(...args),
+  runImmediateFailure: (...args: unknown[]) => runImmediateFailureMock(...args),
+}));
 
 function jsonResponse(payload: unknown, init?: ResponseInit) {
   return new Response(JSON.stringify(payload), {
@@ -133,6 +143,8 @@ beforeEach(async () => {
   vi.resetModules();
   fetchMock = vi.fn();
   vi.stubGlobal('fetch', fetchMock);
+  runImmediateSuccessMock.mockReset();
+  runImmediateFailureMock.mockReset();
   window.localStorage.clear();
   window.history.replaceState({}, '', '/');
 
@@ -169,7 +181,7 @@ describe('appStore api integration', () => {
     clearApiErrorNotifier();
   });
 
-  it('notifies for optimistic write failures started from store actions', async () => {
+  it('routes optimistic write failures through userOperationNotifier instead of apiClient globals', async () => {
     const { setApiErrorNotifier, clearApiErrorNotifier } = await import('../lib/apiErrorNotifier');
     const notifyError = vi.fn();
     setApiErrorNotifier(notifyError);
@@ -241,7 +253,10 @@ describe('appStore api integration', () => {
     useAppStore.getState().markAsRead('article-1');
     await flushPromises();
 
-    expect(notifyError).toHaveBeenCalledWith('更新失败，请稍后重试');
+    expect(runImmediateFailureMock).toHaveBeenCalledWith(
+      expect.objectContaining({ actionKey: 'article.markRead' }),
+    );
+    expect(notifyError).not.toHaveBeenCalled();
     clearApiErrorNotifier();
   });
 
@@ -710,6 +725,9 @@ describe('appStore api integration', () => {
           getFetchCallMethod(input, init).toUpperCase() === 'PATCH',
       ),
     ).toBe(true);
+    expect(runImmediateSuccessMock).toHaveBeenCalledWith(
+      expect.objectContaining({ actionKey: 'article.markRead' }),
+    );
   });
 
 	  it('creates feed via API, stores it, and selects it', async () => {

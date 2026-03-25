@@ -6,6 +6,10 @@ import {
   resolveAiCleanupScopesForInputs,
 } from '../../../server/ai/configFingerprints';
 import { writeSystemLog } from '../../../server/logging/systemLogger';
+import {
+  writeUserOperationFailedLog,
+  writeUserOperationSucceededLog,
+} from '../../../server/logging/userOperationLogger';
 import { pruneAllFeedsArticlesToLimit } from '../../../server/repositories/articlesRepo';
 import {
   getAiApiKey,
@@ -30,11 +34,12 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
+  const pool = getPool();
+
   try {
     const json = await request.json().catch(() => null);
     const next = normalizePersistedSettings(json);
 
-    const pool = getPool();
     const [prevRaw, aiApiKey, translationApiKey] = await Promise.all([
       getUiSettings(pool),
       getAiApiKey(pool),
@@ -95,6 +100,11 @@ export async function PUT(request: Request) {
         }, undefined);
       }
 
+      await writeUserOperationSucceededLog(client, {
+        actionKey: 'settings.save',
+        source: 'app/api/settings',
+      });
+
       await client.query('commit');
       const cleanupScopes = resolveAiCleanupScopesForInputs({
         previous: {
@@ -122,6 +132,11 @@ export async function PUT(request: Request) {
       client.release();
     }
   } catch (err) {
+    await writeUserOperationFailedLog(pool, {
+      actionKey: 'settings.save',
+      source: 'app/api/settings',
+      err,
+    });
     return fail(err);
   }
 }

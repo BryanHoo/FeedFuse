@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const importOpmlMock = vi.fn();
 const getPoolMock = vi.fn();
 const pool = {};
+const writeUserOperationSucceededLogMock = vi.fn();
+const writeUserOperationFailedLogMock = vi.fn();
 
 vi.mock('../../../../server/db/pool', () => ({
   getPool: () => getPoolMock(),
@@ -11,6 +13,12 @@ vi.mock('../../../../server/db/pool', () => ({
 vi.mock('../../../../server/services/opmlService', () => ({
   importOpml: (...args: unknown[]) => importOpmlMock(...args),
 }));
+vi.mock('../../../../server/logging/userOperationLogger', () => ({
+  writeUserOperationSucceededLog: (...args: unknown[]) =>
+    writeUserOperationSucceededLogMock(...args),
+  writeUserOperationFailedLog: (...args: unknown[]) =>
+    writeUserOperationFailedLogMock(...args),
+}));
 
 const VALID_OPML = '<?xml version="1.0"?><opml version="2.0"><body /></opml>';
 
@@ -18,6 +26,8 @@ describe('/api/opml/import', () => {
   beforeEach(() => {
     getPoolMock.mockReset();
     importOpmlMock.mockReset();
+    writeUserOperationSucceededLogMock.mockReset();
+    writeUserOperationFailedLogMock.mockReset();
     getPoolMock.mockReturnValue(pool);
   });
 
@@ -62,6 +72,10 @@ describe('/api/opml/import', () => {
       content: VALID_OPML,
       fileName: 'feeds.opml',
     });
+    expect(writeUserOperationSucceededLogMock).toHaveBeenCalledWith(
+      pool,
+      expect.objectContaining({ actionKey: 'opml.import' }),
+    );
     expect(await res.json()).toMatchObject({
       ok: true,
       data: { importedCount: 2 },

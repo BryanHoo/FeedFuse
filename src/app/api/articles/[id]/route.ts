@@ -19,6 +19,10 @@ import {
 } from '../../../../server/media/imageProxyUrl';
 import { rewriteHtmlImages } from '../../../../server/media/rewriteHtmlImages';
 import { getUsableFulltextHtml } from '../../../../server/fulltext/fulltextVerification';
+import {
+  writeUserOperationFailedLog,
+  writeUserOperationSucceededLog,
+} from '../../../../server/logging/userOperationLogger';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -105,6 +109,36 @@ function buildAiSummarySessionSnapshot(
   };
 }
 
+function resolvePatchOperation(input: {
+  articleId: string;
+  isRead?: boolean;
+  isStarred?: boolean;
+}):
+  | {
+      actionKey: 'article.markRead' | 'article.toggleStar';
+      context: Record<string, unknown>;
+    }
+  | null {
+  if (typeof input.isRead !== 'undefined' && typeof input.isStarred === 'undefined') {
+    return {
+      actionKey: 'article.markRead',
+      context: { articleId: input.articleId },
+    };
+  }
+
+  if (typeof input.isStarred !== 'undefined' && typeof input.isRead === 'undefined') {
+    return {
+      actionKey: 'article.toggleStar',
+      context: {
+        articleId: input.articleId,
+        starred: input.isStarred,
+      },
+    };
+  }
+
+  return null;
+}
+
 export async function GET(
   _request: Request,
   context: { params: Promise<{ id: string }> },
@@ -153,6 +187,13 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
+  let operation:
+    | {
+        actionKey: 'article.markRead' | 'article.toggleStar';
+        context: Record<string, unknown>;
+      }
+    | null = null;
+
   try {
     const params = await context.params;
     const paramsParsed = paramsSchema.safeParse(params);
@@ -170,6 +211,11 @@ export async function PATCH(
 
     const pool = getPool();
     const { isRead, isStarred } = bodyParsed.data;
+    operation = resolvePatchOperation({
+      articleId: paramsParsed.data.id,
+      isRead,
+      isStarred,
+    });
 
     if (typeof isRead !== 'undefined') {
       await setArticleRead(pool, paramsParsed.data.id, isRead);
@@ -178,8 +224,24 @@ export async function PATCH(
       await setArticleStarred(pool, paramsParsed.data.id, isStarred);
     }
 
+    if (operation) {
+      await writeUserOperationSucceededLog(pool, {
+        actionKey: operation.actionKey,
+        source: 'app/api/articles/[id]',
+        context: operation.context,
+      });
+    }
+
     return ok({ updated: true });
   } catch (err) {
+    if (operation) {
+      await writeUserOperationFailedLog(getPool(), {
+        actionKey: operation.actionKey,
+        source: 'app/api/articles/[id]',
+        err,
+        context: operation.context,
+      });
+    }
     return fail(err);
   }
 }

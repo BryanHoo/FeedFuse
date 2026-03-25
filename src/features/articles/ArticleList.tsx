@@ -24,6 +24,7 @@ import {
 } from "@/lib/view";
 import type { ViewType } from "../../types";
 import ReaderToolbarIconButton from "../reader/ReaderToolbarIconButton";
+import { runImmediateOperation } from "../notifications/userOperationNotifier";
 import { useHydratedSelectedView } from "../reader/useHydratedSelectedView";
 import { toast } from "../toast/toast";
 import { buildArticleListDerivedState } from "./articleListModel";
@@ -749,7 +750,11 @@ export default function ArticleList({
       ),
     }));
 
-    void patchFeed(feedId, { articleListDisplayMode: nextMode })
+    void runImmediateOperation({
+      actionKey: 'feed.articleListDisplayMode.update',
+      execute: () =>
+        patchFeed(feedId, { articleListDisplayMode: nextMode }, { notifyOnError: false }),
+    })
       .then((updated) => {
         if (displayModeRequestIdRef.current !== requestId) return;
         useAppStore.setState((state) => ({

@@ -37,6 +37,12 @@ export interface SettingsDraft {
   session: SessionSettings;
 }
 
+export interface SaveDraftResult {
+  ok: boolean;
+  err?: unknown;
+  shouldNotify?: boolean;
+}
+
 interface SettingsState {
   persistedSettings: PersistedSettings;
   sessionSettings: SessionSettings;
@@ -45,7 +51,7 @@ interface SettingsState {
   hydratePersistedSettings: () => Promise<void>;
   loadDraft: () => void;
   updateDraft: (updater: (draft: SettingsDraft) => void) => void;
-  saveDraft: () => Promise<{ ok: boolean }>;
+  saveDraft: () => Promise<SaveDraftResult>;
   discardDraft: () => void;
 
   // Compatibility layer for legacy consumers during migration.
@@ -229,9 +235,13 @@ export const useSettingsStore = create<SettingsState>()(
         }
 
         const nextPersistedSettings = ensureAiTranslationSettings(state.draft.persisted);
+        let settingsSaved = false;
 
         try {
-          const savedSettings = await putSettings(nextPersistedSettings, { notifyOnError: true });
+          const savedSettings = await putSettings(nextPersistedSettings, {
+            notifyOnError: false,
+          });
+          settingsSaved = true;
           const shouldClearApiKey = state.draft.session.ai.clearApiKey;
           const apiKey = state.draft.session.ai.apiKey.trim();
           const shouldClearTranslationApiKey = state.draft.session.ai.clearTranslationApiKey ?? false;
@@ -289,7 +299,11 @@ export const useSettingsStore = create<SettingsState>()(
           return { ok: true };
         } catch (err) {
           console.error(err);
-          return { ok: false };
+          return {
+            ok: false,
+            err,
+            shouldNotify: !settingsSaved,
+          };
         }
       },
       discardDraft: () =>
