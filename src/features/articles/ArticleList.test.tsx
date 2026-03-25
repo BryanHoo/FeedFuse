@@ -971,7 +971,40 @@ describe('ArticleList', () => {
     async (view) => {
       vi.useFakeTimers();
       try {
+        let runStatusCalls = 0;
         const loadSnapshotMock = vi.fn().mockResolvedValue(undefined);
+        fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+          const url = getFetchCallUrl(input);
+          const method = getFetchCallMethod(input, init);
+
+          if (url.includes('/api/feeds/refresh') && method === 'POST') {
+            return jsonResponse({
+              ok: true,
+              data: { enqueued: true, jobId: 'job-1', runId: 'run-refresh-all' },
+            });
+          }
+
+          if (url.includes('/api/feed-refresh-runs/run-refresh-all') && method === 'GET') {
+            runStatusCalls += 1;
+            return jsonResponse({
+              ok: true,
+              data: {
+                id: 'run-refresh-all',
+                scope: 'all',
+                status: runStatusCalls > 1 ? 'succeeded' : 'running',
+                feedId: null,
+                totalCount: 2,
+                succeededCount: runStatusCalls > 1 ? 2 : 0,
+                failedCount: 0,
+                errorMessage: null,
+                updatedAt: '2026-03-25T00:00:00.000Z',
+                finishedAt: runStatusCalls > 1 ? '2026-03-25T00:00:01.000Z' : null,
+              },
+            });
+          }
+
+          return jsonResponse({ ok: true, data: { updated: true } });
+        });
         useAppStore.setState({
           selectedView: view,
           selectedArticleId: null,
@@ -991,6 +1024,7 @@ describe('ArticleList', () => {
         expect(refreshCall).toBeTruthy();
         expect(getFetchCallMethod(refreshCall?.[0] as RequestInfo | URL, refreshCall?.[1])).toBe('POST');
         expect(loadSnapshotMock).toHaveBeenCalledWith({ view });
+        expect(runStatusCalls).toBeGreaterThan(1);
       } finally {
         vi.useRealTimers();
       }
@@ -1000,7 +1034,40 @@ describe('ArticleList', () => {
   it('refreshes selected feed in feed view', async () => {
     vi.useFakeTimers();
     try {
+      let runStatusCalls = 0;
       const loadSnapshotMock = vi.fn().mockResolvedValue(undefined);
+      fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = getFetchCallUrl(input);
+        const method = getFetchCallMethod(input, init);
+
+        if (url.includes('/api/feeds/feed-1/refresh') && method === 'POST') {
+          return jsonResponse({
+            ok: true,
+            data: { enqueued: true, jobId: 'job-1', runId: 'run-refresh-feed-1' },
+          });
+        }
+
+        if (url.includes('/api/feed-refresh-runs/run-refresh-feed-1') && method === 'GET') {
+          runStatusCalls += 1;
+          return jsonResponse({
+            ok: true,
+            data: {
+              id: 'run-refresh-feed-1',
+              scope: 'single',
+              status: runStatusCalls > 1 ? 'succeeded' : 'running',
+              feedId: 'feed-1',
+              totalCount: 1,
+              succeededCount: runStatusCalls > 1 ? 1 : 0,
+              failedCount: 0,
+              errorMessage: null,
+              updatedAt: '2026-03-25T00:00:00.000Z',
+              finishedAt: runStatusCalls > 1 ? '2026-03-25T00:00:01.000Z' : null,
+            },
+          });
+        }
+
+        return jsonResponse({ ok: true, data: { updated: true } });
+      });
       useAppStore.setState({
         selectedView: 'feed-1',
         selectedArticleId: null,
@@ -1020,6 +1087,7 @@ describe('ArticleList', () => {
       expect(refreshCall).toBeTruthy();
       expect(getFetchCallMethod(refreshCall?.[0] as RequestInfo | URL, refreshCall?.[1])).toBe('POST');
       expect(loadSnapshotMock).toHaveBeenCalledWith({ view: 'feed-1' });
+      expect(runStatusCalls).toBeGreaterThan(1);
     } finally {
       vi.useRealTimers();
     }
@@ -1120,10 +1188,107 @@ describe('ArticleList', () => {
     }
   });
 
+  it('shows started info then aggregated terminal error for refresh all', async () => {
+    vi.useFakeTimers();
+    let runStatusCalls = 0;
+    const loadSnapshotMock = vi.fn().mockResolvedValue(undefined);
+
+    try {
+      fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = getFetchCallUrl(input);
+        const method = getFetchCallMethod(input, init);
+
+        if (url.includes('/api/feeds/refresh') && method === 'POST') {
+          return jsonResponse({
+            ok: true,
+            data: { enqueued: true, jobId: 'job-1', runId: 'run-refresh-1' },
+          });
+        }
+
+        if (url.includes('/api/feed-refresh-runs/run-refresh-1') && method === 'GET') {
+          runStatusCalls += 1;
+          return jsonResponse({
+            ok: true,
+            data: {
+              id: 'run-refresh-1',
+              scope: 'all',
+              status: runStatusCalls > 1 ? 'failed' : 'running',
+              feedId: null,
+              totalCount: 3,
+              succeededCount: 1,
+              failedCount: 2,
+              errorMessage: '2 个订阅源刷新失败',
+              updatedAt: '2026-03-25T00:00:00.000Z',
+              finishedAt: runStatusCalls > 1 ? '2026-03-25T00:00:02.000Z' : null,
+            },
+          });
+        }
+
+        return jsonResponse({ ok: true, data: { updated: true } });
+      });
+
+      useAppStore.setState({
+        selectedView: 'all',
+        selectedArticleId: null,
+        loadSnapshot: loadSnapshotMock as unknown as LoadSnapshot,
+      });
+
+      renderWithNotifications();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: '刷新全部订阅源' }));
+        await Promise.resolve();
+      });
+
+      expect(screen.getByText('已开始刷新全部订阅源')).toBeInTheDocument();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_000);
+        await Promise.resolve();
+      });
+
+      expect(screen.getByText('刷新全部订阅源失败：2 个订阅源刷新失败')).toBeInTheDocument();
+      expect(runStatusCalls).toBeGreaterThan(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('shows success notification when refreshing all feeds starts', async () => {
     vi.useFakeTimers();
     try {
       const loadSnapshotMock = vi.fn().mockResolvedValue(undefined);
+      fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = getFetchCallUrl(input);
+        const method = getFetchCallMethod(input, init);
+
+        if (url.includes('/api/feeds/refresh') && method === 'POST') {
+          return jsonResponse({
+            ok: true,
+            data: { enqueued: true, jobId: 'job-1', runId: 'run-refresh-all' },
+          });
+        }
+
+        if (url.includes('/api/feed-refresh-runs/run-refresh-all') && method === 'GET') {
+          return jsonResponse({
+            ok: true,
+            data: {
+              id: 'run-refresh-all',
+              scope: 'all',
+              status: 'running',
+              feedId: null,
+              totalCount: 2,
+              succeededCount: 0,
+              failedCount: 0,
+              errorMessage: null,
+              updatedAt: '2026-03-25T00:00:00.000Z',
+              finishedAt: null,
+            },
+          });
+        }
+
+        return jsonResponse({ ok: true, data: { updated: true } });
+      });
       useAppStore.setState({
         selectedView: 'all',
         selectedArticleId: null,
@@ -1147,7 +1312,7 @@ describe('ArticleList', () => {
     }
   });
 
-  it('relies on global api notification for refresh failures', async () => {
+  it('shows unified notifier error when refresh enqueue fails', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
         ok: false,
@@ -1168,15 +1333,47 @@ describe('ArticleList', () => {
     fireEvent.click(screen.getByRole('button', { name: ALL_FEEDS_REFRESH_LABEL }));
 
     await waitFor(() => {
-      expect(screen.getByText('刷新失败：请求超时')).toBeInTheDocument();
-      expect(screen.queryByText('操作失败：刷新失败：请求超时')).not.toBeInTheDocument();
+      expect(screen.getByText('刷新全部订阅源失败：刷新失败：请求超时')).toBeInTheDocument();
     });
   });
 
   it('shows success notification when refreshing all feeds completes', async () => {
     vi.useFakeTimers();
     try {
+      let runStatusCalls = 0;
       const loadSnapshotMock = vi.fn().mockResolvedValue(undefined);
+      fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = getFetchCallUrl(input);
+        const method = getFetchCallMethod(input, init);
+
+        if (url.includes('/api/feeds/refresh') && method === 'POST') {
+          return jsonResponse({
+            ok: true,
+            data: { enqueued: true, jobId: 'job-1', runId: 'run-refresh-all' },
+          });
+        }
+
+        if (url.includes('/api/feed-refresh-runs/run-refresh-all') && method === 'GET') {
+          runStatusCalls += 1;
+          return jsonResponse({
+            ok: true,
+            data: {
+              id: 'run-refresh-all',
+              scope: 'all',
+              status: runStatusCalls > 1 ? 'succeeded' : 'running',
+              feedId: null,
+              totalCount: 2,
+              succeededCount: runStatusCalls > 1 ? 2 : 0,
+              failedCount: 0,
+              errorMessage: null,
+              updatedAt: '2026-03-25T00:00:00.000Z',
+              finishedAt: runStatusCalls > 1 ? '2026-03-25T00:00:01.000Z' : null,
+            },
+          });
+        }
+
+        return jsonResponse({ ok: true, data: { updated: true } });
+      });
       useAppStore.setState({
         selectedView: 'all',
         selectedArticleId: null,
@@ -1191,11 +1388,12 @@ describe('ArticleList', () => {
       });
 
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(11_000);
+        await vi.advanceTimersByTimeAsync(2_000);
       });
 
-      expect(screen.getByText('已完成刷新全部订阅源')).toBeInTheDocument();
-      expect(loadSnapshotMock).toHaveBeenCalledTimes(12);
+      expect(screen.getByText('全部订阅源已刷新')).toBeInTheDocument();
+      expect(loadSnapshotMock).toHaveBeenCalledWith({ view: 'all' });
+      expect(runStatusCalls).toBeGreaterThan(1);
     } finally {
       vi.useRealTimers();
     }

@@ -526,6 +526,21 @@ export async function getAiDigestRunStatus(runId: string): Promise<{
   return requestApi(`/api/ai-digests/runs/${encodeURIComponent(runId)}`);
 }
 
+export async function getFeedRefreshRunStatus(runId: string): Promise<{
+  id: string;
+  scope: 'single' | 'all';
+  status: 'queued' | 'running' | 'succeeded' | 'failed';
+  feedId: string | null;
+  totalCount: number;
+  succeededCount: number;
+  failedCount: number;
+  errorMessage: string | null;
+  updatedAt: string;
+  finishedAt: string | null;
+}> {
+  return requestApi(`/api/feed-refresh-runs/${encodeURIComponent(runId)}`);
+}
+
 export async function refreshFeed(
   feedId: string,
   options?: RequestApiOptions,

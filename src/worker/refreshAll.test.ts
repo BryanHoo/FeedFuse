@@ -34,5 +34,12 @@ describe('buildFeedFetchJobData', () => {
       force: true,
     });
   });
-});
 
+  it('includes runId when refresh tracking is enabled', () => {
+    expect(buildFeedFetchJobData('feed-1', { force: true, runId: 'run-1' })).toEqual({
+      feedId: 'feed-1',
+      force: true,
+      runId: 'run-1',
+    });
+  });
+});

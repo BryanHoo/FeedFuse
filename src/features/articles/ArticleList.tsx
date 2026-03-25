@@ -14,6 +14,7 @@ import { formatRelativeTime } from "../../utils/date";
 import {
   generateAiDigest,
   getAiDigestRunStatus,
+  getFeedRefreshRunStatus,
   patchFeed,
   refreshAllFeeds,
   refreshFeed,
@@ -38,7 +39,6 @@ import {
   runImmediateOperation,
 } from "../notifications/userOperationNotifier";
 import { useHydratedSelectedView } from "../reader/useHydratedSelectedView";
-import { toast } from "../toast/toast";
 import { buildArticleListDerivedState } from "./articleListModel";
 import { getFilteredReasonLabel } from "./articleFilterReason";
 import {
@@ -79,6 +79,51 @@ async function pollAiDigestRunStatus(input: {
 
     if (attempt < AI_DIGEST_POLL_MAX_ATTEMPTS - 1) {
       await sleep(AI_DIGEST_POLL_INTERVAL_MS);
+    }
+  }
+
+  return null;
+}
+
+async function pollFeedRefreshRunStatus(input: {
+  runId: string;
+  view: ViewType;
+  loadSnapshot: (input?: { view?: ViewType }) => Promise<void>;
+  isCurrentRequest: () => boolean;
+}) {
+  for (let attempt = 0; attempt < REFRESH_POLL_MAX_ATTEMPTS; attempt += 1) {
+    if (!input.isCurrentRequest()) {
+      return null;
+    }
+
+    const run = await getFeedRefreshRunStatus(input.runId);
+    if (!input.isCurrentRequest()) {
+      return null;
+    }
+
+    if (run.status === 'succeeded') {
+      await input.loadSnapshot({ view: input.view }).catch((err) => {
+        console.error(err);
+      });
+      return { ok: true as const };
+    }
+
+    if (run.status === 'failed') {
+      return {
+        ok: false as const,
+        err: run.errorMessage ?? '请稍后重试',
+      };
+    }
+
+    await input.loadSnapshot({ view: input.view }).catch((err) => {
+      console.error(err);
+    });
+    if (!input.isCurrentRequest()) {
+      return null;
+    }
+
+    if (attempt < REFRESH_POLL_MAX_ATTEMPTS - 1) {
+      await sleep(REFRESH_POLL_INTERVAL_MS);
     }
   }
 
@@ -707,8 +752,43 @@ export default function ArticleList({
     void (async () => {
       try {
         if (isGlobalView) {
-          await refreshAllFeeds();
-          toast.success("已开始刷新全部订阅源");
+          const result = await refreshAllFeeds({ notifyOnError: false });
+          if (!result.runId) {
+            runImmediateFailure({
+              actionKey: 'feed.refreshAll',
+              err: '暂时无法获取运行状态，请稍后重试',
+            });
+            return;
+          }
+
+          beginDeferredOperation({
+            actionKey: 'feed.refreshAll',
+            trackingKey: result.runId,
+          });
+
+          const runResult = await pollFeedRefreshRunStatus({
+            runId: result.runId,
+            view,
+            loadSnapshot,
+            isCurrentRequest: () => refreshRequestIdRef.current === requestId,
+          });
+          if (refreshRequestIdRef.current !== requestId || !runResult) {
+            return;
+          }
+
+          if (runResult.ok) {
+            resolveDeferredOperation({
+              actionKey: 'feed.refreshAll',
+              trackingKey: result.runId,
+            });
+            return;
+          }
+
+          failDeferredOperation({
+            actionKey: 'feed.refreshAll',
+            trackingKey: result.runId,
+            err: runResult.err,
+          });
         } else if (isDigestView) {
           const result = await generateAiDigest(view, { notifyOnError: false });
 
@@ -758,27 +838,49 @@ export default function ArticleList({
             err: runResult.err,
           });
         } else {
-          await refreshFeed(view);
-          toast.success("已开始刷新订阅源");
-        }
-
-        if (!isDigestView) {
-          for (let attempt = 0; attempt < REFRESH_POLL_MAX_ATTEMPTS; attempt += 1) {
-            if (refreshRequestIdRef.current !== requestId) return;
-
-            await loadSnapshot({ view });
-
-            if (refreshRequestIdRef.current !== requestId) return;
-            if (attempt < REFRESH_POLL_MAX_ATTEMPTS - 1) {
-              await sleep(REFRESH_POLL_INTERVAL_MS);
-            }
+          const result = await refreshFeed(view, { notifyOnError: false });
+          if (!result.runId) {
+            runImmediateFailure({
+              actionKey: 'feed.refresh',
+              err: '暂时无法获取运行状态，请稍后重试',
+            });
+            return;
           }
 
-          if (refreshRequestIdRef.current !== requestId) return;
-          toast.success(isGlobalView ? "已完成刷新全部订阅源" : "已完成刷新订阅源");
+          beginDeferredOperation({
+            actionKey: 'feed.refresh',
+            trackingKey: result.runId,
+          });
+
+          const runResult = await pollFeedRefreshRunStatus({
+            runId: result.runId,
+            view,
+            loadSnapshot,
+            isCurrentRequest: () => refreshRequestIdRef.current === requestId,
+          });
+          if (refreshRequestIdRef.current !== requestId || !runResult) {
+            return;
+          }
+
+          if (runResult.ok) {
+            resolveDeferredOperation({
+              actionKey: 'feed.refresh',
+              trackingKey: result.runId,
+            });
+            return;
+          }
+
+          failDeferredOperation({
+            actionKey: 'feed.refresh',
+            trackingKey: result.runId,
+            err: runResult.err,
+          });
         }
-      } catch {
-        // apiClient handles failure notifications globally
+      } catch (err) {
+        runImmediateFailure({
+          actionKey: isDigestView ? 'aiDigest.generate' : isGlobalView ? 'feed.refreshAll' : 'feed.refresh',
+          err,
+        });
       } finally {
         if (refreshRequestIdRef.current === requestId) {
           setRefreshing(false);

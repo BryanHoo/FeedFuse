@@ -662,6 +662,36 @@ it('GETs /api/ai-digests/runs/:runId', async () => {
   expect(getFetchCallMethod(fetchMock.mock.calls[0])).toBe('GET');
 });
 
+it('GETs /api/feed-refresh-runs/:runId', async () => {
+  const fetchMock = vi.fn(async () => {
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        data: {
+          id: 'run-1',
+          scope: 'all',
+          status: 'failed',
+          feedId: null,
+          totalCount: 3,
+          succeededCount: 1,
+          failedCount: 2,
+          errorMessage: '2 个订阅源刷新失败',
+          updatedAt: '2026-03-25T00:00:00.000Z',
+          finishedAt: '2026-03-25T00:00:00.000Z',
+        },
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+  });
+  vi.stubGlobal('fetch', fetchMock);
+
+  const { getFeedRefreshRunStatus } = await import('./apiClient');
+  await getFeedRefreshRunStatus('run-1');
+
+  expect(getFetchCallUrl(fetchMock.mock.calls[0]?.[0])).toContain('/api/feed-refresh-runs/run-1');
+  expect(getFetchCallMethod(fetchMock.mock.calls[0])).toBe('GET');
+});
+
 it('throws ApiError invalid_response when response is not an envelope', async () => {
   const fetchMock = vi.fn(async () => {
     return new Response('not json', { status: 200, headers: { 'content-type': 'text/plain' } });

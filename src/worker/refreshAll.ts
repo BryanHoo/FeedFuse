@@ -23,9 +23,11 @@ export function selectFeedsForRefreshAll(
 
 export function buildFeedFetchJobData(
   feedId: string,
-  input: { force: boolean },
-): { feedId: string; force?: true } {
-  if (!input.force) return { feedId };
-  return { feedId, force: true };
+  input: { force: boolean; runId?: string },
+): { feedId: string; force?: true; runId?: string } {
+  return {
+    feedId,
+    ...(input.force ? { force: true } : {}),
+    ...(input.runId ? { runId: input.runId } : {}),
+  };
 }
-

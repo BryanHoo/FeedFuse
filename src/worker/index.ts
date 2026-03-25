@@ -65,6 +65,11 @@ import { runAiDigestTick } from './aiDigestTick';
 import { runAiDigestGenerate } from './aiDigestGenerate';
 import { runArticleFilterWorker, type ArticleFilterJobData } from './articleFilterWorker';
 import { runSystemLogCleanup } from './systemLogCleanup';
+import {
+  attachFeedRefreshRunItems,
+  completeFeedRefreshRunItem,
+  markFeedRefreshRunItemRunning,
+} from '../server/services/feedRefreshRunService';
 
 const DEFAULT_TRANSLATION_MODEL = 'gpt-4o-mini';
 const DEFAULT_TRANSLATION_API_BASE_URL = 'https://api.openai.com/v1';
@@ -88,29 +93,52 @@ function buildDedupeKey(input: {
   return `hash:${sha256(`${input.title}|${input.publishedAt.toISOString()}|${input.link ?? ''}`)}`;
 }
 
-async function enqueueRefreshAll(boss: PgBoss, input?: { force?: boolean }) {
+type FeedFetchResult = {
+  inserted: number;
+  errorMessage: string | null;
+};
+
+async function enqueueRefreshAll(boss: PgBoss, input?: { force?: boolean; runId?: string }) {
   const pool = getPool();
   const feeds = await listEnabledFeedsForFetch(pool);
   const now = new Date();
   const force = Boolean(input?.force);
   const targetFeeds = selectFeedsForRefreshAll(feeds, now, { force });
 
+  if (input?.runId) {
+    await attachFeedRefreshRunItems(pool, {
+      runId: input.runId,
+      targetFeedIds: targetFeeds.map((feed) => feed.id),
+    });
+  }
+
   await Promise.all(
-    targetFeeds.map((feed) => boss.send(JOB_FEED_FETCH, buildFeedFetchJobData(feed.id, { force }))),
+    targetFeeds.map((feed) => {
+      const payload = buildFeedFetchJobData(feed.id, { force, runId: input?.runId });
+      return boss.send(JOB_FEED_FETCH, payload, getQueueSendOptions(JOB_FEED_FETCH, payload));
+    }),
   );
   return { enqueued: targetFeeds.length };
 }
 
-async function fetchAndIngestFeed(boss: PgBoss, feedId: string, input?: { force?: boolean }) {
+async function fetchAndIngestFeed(
+  boss: PgBoss,
+  feedId: string,
+  input?: { force?: boolean },
+): Promise<FeedFetchResult> {
   const pool = getPool();
   const feed = await getFeedForFetch(pool, feedId);
-  if (!feed) return { inserted: 0 };
+  if (!feed) {
+    return { inserted: 0, errorMessage: '订阅源不存在' };
+  }
 
-  if (!feed.enabled) return { inserted: 0 };
+  if (!feed.enabled) {
+    return { inserted: 0, errorMessage: '订阅源已停用' };
+  }
 
   const force = Boolean(input?.force);
   if (!force && !isFeedDue({ lastFetchedAt: feed.lastFetchedAt, fetchIntervalMinutes: feed.fetchIntervalMinutes }, new Date())) {
-    return { inserted: 0 };
+    return { inserted: 0, errorMessage: null };
   }
 
   if (!(await isSafeExternalUrl(feed.url))) {
@@ -120,7 +148,7 @@ async function fetchAndIngestFeed(boss: PgBoss, feedId: string, input?: { force?
       error: mapped.errorMessage,
       rawError: mapped.rawErrorMessage,
     });
-    return { inserted: 0 };
+    return { inserted: 0, errorMessage: mapped.errorMessage };
   }
 
   const settings = await getAppSettings(pool);
@@ -145,13 +173,13 @@ async function fetchAndIngestFeed(boss: PgBoss, feedId: string, input?: { force?
     etag = res.etag;
     lastModified = res.lastModified;
 
-    if (status === 304 || !res.xml) return { inserted: 0 };
+    if (status === 304 || !res.xml) return { inserted: 0, errorMessage: null };
 
     if (status < 200 || status >= 300) {
       const mapped = mapFeedFetchError(`HTTP ${status}`);
       error = mapped.errorMessage;
       rawError = mapped.rawErrorMessage;
-      return { inserted: 0 };
+      return { inserted: 0, errorMessage: mapped.errorMessage };
     }
 
     const parsed = await parseFeed(res.xml, fetchedAt);
@@ -199,12 +227,12 @@ async function fetchAndIngestFeed(boss: PgBoss, feedId: string, input?: { force?
       await pruneFeedArticlesToLimit(pool, feedId, uiSettings.rss.maxStoredArticlesPerFeed);
     }
 
-    return { inserted };
+    return { inserted, errorMessage: null };
   } catch (err) {
     const mapped = mapFeedFetchError(err);
     error = mapped.errorMessage;
     rawError = mapped.rawErrorMessage;
-    return { inserted: 0 };
+    return { inserted: 0, errorMessage: mapped.errorMessage };
   } finally {
     await recordFeedFetchResult(pool, feedId, {
       status,
@@ -231,8 +259,29 @@ async function main() {
       if (!('force' in data)) return false;
       return (data as { force?: unknown }).force === true;
     });
+    const runId = jobs.find((job) => {
+      const data =
+        typeof job === 'object' && job !== null && 'data' in job
+          ? (job as { data?: unknown }).data
+          : null;
+      return (
+        typeof data === 'object' &&
+        data !== null &&
+        'runId' in data &&
+        typeof (data as { runId?: unknown }).runId === 'string'
+      );
+    });
 
-    await enqueueRefreshAll(boss, { force });
+    await enqueueRefreshAll(boss, {
+      force,
+      runId:
+        typeof runId === 'object' &&
+        runId !== null &&
+        'data' in runId &&
+        typeof (runId as { data: { runId?: unknown } }).data.runId === 'string'
+          ? (runId as { data: { runId: string } }).data.runId
+          : undefined,
+    });
   };
 
   const feedFetchHandler = async (jobs: unknown[]) => {
@@ -259,8 +308,28 @@ async function main() {
         typeof (data as { force?: unknown }).force === 'boolean'
           ? (data as { force: boolean }).force
           : false;
+      const runId =
+        typeof data === 'object' &&
+        data !== null &&
+        'runId' in data &&
+        typeof (data as { runId?: unknown }).runId === 'string'
+          ? (data as { runId: string }).runId
+          : null;
 
-      await fetchAndIngestFeed(boss, feedId, { force });
+      if (runId) {
+        await markFeedRefreshRunItemRunning(getPool(), { runId, feedId });
+      }
+
+      const result = await fetchAndIngestFeed(boss, feedId, { force });
+
+      if (runId) {
+        await completeFeedRefreshRunItem(getPool(), {
+          runId,
+          feedId,
+          status: result.errorMessage ? 'failed' : 'succeeded',
+          errorMessage: result.errorMessage,
+        });
+      }
     }
   };
 

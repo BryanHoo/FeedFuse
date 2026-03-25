@@ -39,7 +39,10 @@ export const QUEUE_CONTRACTS: Record<string, QueueContract> = {
       warningQueueSize: 200,
     },
     worker: { localConcurrency: 3, batchSize: 1 },
-    send: () => ({}),
+    send: (ctx) =>
+      ctx.runId && ctx.feedId
+        ? { singletonKey: `${ctx.runId}:${ctx.feedId}`, singletonSeconds: 3600 }
+        : {},
   },
   'article.fetch_fulltext': {
     queue: {
@@ -108,7 +111,7 @@ export const QUEUE_CONTRACTS: Record<string, QueueContract> = {
   'feed.refresh_all': {
     queue: { warningQueueSize: 50 },
     worker: { localConcurrency: 1, batchSize: 1 },
-    send: () => ({}),
+    send: (ctx) => (ctx.runId ? { singletonKey: ctx.runId, singletonSeconds: 3600 } : {}),
   },
   'system_logs.cleanup': {
     queue: { warningQueueSize: 5 },
