@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const getAiApiKeyMock = vi.fn();
+const getUiSettingsMock = vi.fn();
 const listDueAiDigestConfigFeedIdsMock = vi.fn();
 const getAiDigestConfigByFeedIdMock = vi.fn();
 const getAiDigestRunByFeedIdAndWindowStartAtMock = vi.fn();
@@ -9,6 +10,7 @@ const updateAiDigestRunMock = vi.fn();
 
 vi.mock('../server/repositories/settingsRepo', () => ({
   getAiApiKey: (...args: unknown[]) => getAiApiKeyMock(...args),
+  getUiSettings: (...args: unknown[]) => getUiSettingsMock(...args),
 }));
 
 vi.mock('../server/repositories/aiDigestRepo', () => ({
@@ -23,6 +25,7 @@ vi.mock('../server/repositories/aiDigestRepo', () => ({
 describe('runAiDigestTick', () => {
   beforeEach(() => {
     getAiApiKeyMock.mockReset();
+    getUiSettingsMock.mockReset().mockResolvedValue({});
     listDueAiDigestConfigFeedIdsMock.mockReset();
     getAiDigestConfigByFeedIdMock.mockReset();
     getAiDigestRunByFeedIdAndWindowStartAtMock.mockReset();
