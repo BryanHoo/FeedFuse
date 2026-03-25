@@ -637,6 +637,31 @@ it('passes RequestApiOptions through refreshFeed and generateAiDigest', async ()
   notifier.clearApiErrorNotifier();
 });
 
+it('GETs /api/ai-digests/runs/:runId', async () => {
+  const fetchMock = vi.fn(async () => {
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        data: {
+          id: 'run-1',
+          status: 'succeeded',
+          errorCode: null,
+          errorMessage: null,
+          updatedAt: '2026-03-25T00:00:00.000Z',
+        },
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+  });
+  vi.stubGlobal('fetch', fetchMock);
+
+  const { getAiDigestRunStatus } = await import('./apiClient');
+  await getAiDigestRunStatus('run-1');
+
+  expect(getFetchCallUrl(fetchMock.mock.calls[0]?.[0])).toContain('/api/ai-digests/runs/run-1');
+  expect(getFetchCallMethod(fetchMock.mock.calls[0])).toBe('GET');
+});
+
 it('throws ApiError invalid_response when response is not an envelope', async () => {
   const fetchMock = vi.fn(async () => {
     return new Response('not json', { status: 200, headers: { 'content-type': 'text/plain' } });

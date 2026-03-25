@@ -13,6 +13,7 @@ const createAiDigestRunMock = vi.fn();
 const getAiDigestRunByFeedIdAndWindowStartAtMock = vi.fn();
 const updateAiDigestRunMock = vi.fn();
 const enqueueWithResultMock = vi.fn();
+const writeUserOperationStartedLogMock = vi.fn();
 const writeUserOperationSucceededLogMock = vi.fn();
 const writeUserOperationFailedLogMock = vi.fn();
 
@@ -78,16 +79,22 @@ vi.mock('../../../../../server/queue/queue', () => ({
   enqueueWithResult: (...args: unknown[]) => enqueueWithResultMock(...args),
 }));
 vi.mock('../../../server/logging/userOperationLogger', () => ({
+  writeUserOperationStartedLog: (...args: unknown[]) =>
+    writeUserOperationStartedLogMock(...args),
   writeUserOperationSucceededLog: (...args: unknown[]) =>
     writeUserOperationSucceededLogMock(...args),
   writeUserOperationFailedLog: (...args: unknown[]) => writeUserOperationFailedLogMock(...args),
 }));
 vi.mock('../../../../server/logging/userOperationLogger', () => ({
+  writeUserOperationStartedLog: (...args: unknown[]) =>
+    writeUserOperationStartedLogMock(...args),
   writeUserOperationSucceededLog: (...args: unknown[]) =>
     writeUserOperationSucceededLogMock(...args),
   writeUserOperationFailedLog: (...args: unknown[]) => writeUserOperationFailedLogMock(...args),
 }));
 vi.mock('../../../../../server/logging/userOperationLogger', () => ({
+  writeUserOperationStartedLog: (...args: unknown[]) =>
+    writeUserOperationStartedLogMock(...args),
   writeUserOperationSucceededLog: (...args: unknown[]) =>
     writeUserOperationSucceededLogMock(...args),
   writeUserOperationFailedLog: (...args: unknown[]) => writeUserOperationFailedLogMock(...args),
@@ -99,6 +106,7 @@ describe('/api/ai-digests', () => {
     pool.query.mockReset();
     createAiDigestWithCategoryResolutionMock.mockReset();
     updateAiDigestWithCategoryResolutionMock.mockReset();
+    writeUserOperationStartedLogMock.mockReset();
     writeUserOperationSucceededLogMock.mockReset();
     writeUserOperationFailedLogMock.mockReset();
   });
@@ -227,6 +235,7 @@ describe('/api/ai-digests/:feedId/generate', () => {
     getAiDigestRunByFeedIdAndWindowStartAtMock.mockReset();
     updateAiDigestRunMock.mockReset();
     enqueueWithResultMock.mockReset();
+    writeUserOperationStartedLogMock.mockReset();
   });
 
   it('returns missing_api_key and does not create runs', async () => {
@@ -267,10 +276,15 @@ describe('/api/ai-digests/:feedId/generate', () => {
 
     expect(json.ok).toBe(true);
     expect(json.data.enqueued).toBe(true);
+    expect(json.data.runId).toBe('5001');
     expect(enqueueWithResultMock).toHaveBeenCalledWith(
       JOB_AI_DIGEST_GENERATE,
       expect.objectContaining({ runId: '5001', sharedConfigFingerprint: expect.any(String) }),
       getQueueSendOptions(JOB_AI_DIGEST_GENERATE, { runId: '5001' }),
+    );
+    expect(writeUserOperationStartedLogMock).toHaveBeenCalledWith(
+      pool,
+      expect.objectContaining({ actionKey: 'aiDigest.generate' }),
     );
   });
 

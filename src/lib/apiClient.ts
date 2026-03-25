@@ -516,6 +516,16 @@ export async function generateAiDigest(
   );
 }
 
+export async function getAiDigestRunStatus(runId: string): Promise<{
+  id: string;
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'skipped_no_updates';
+  errorCode: string | null;
+  errorMessage: string | null;
+  updatedAt: string;
+}> {
+  return requestApi(`/api/ai-digests/runs/${encodeURIComponent(runId)}`);
+}
+
 export async function refreshFeed(
   feedId: string,
   options?: RequestApiOptions,

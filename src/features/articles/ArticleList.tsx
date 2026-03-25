@@ -11,7 +11,13 @@ import {
 } from "react";
 import { useAppStore } from "../../store/appStore";
 import { formatRelativeTime } from "../../utils/date";
-import { generateAiDigest, patchFeed, refreshAllFeeds, refreshFeed } from "../../lib/apiClient";
+import {
+  generateAiDigest,
+  getAiDigestRunStatus,
+  patchFeed,
+  refreshAllFeeds,
+  refreshFeed,
+} from "../../lib/apiClient";
 import { resolveArticleBriefContent } from "../../lib/articleSummary";
 import { useRenderTimeSnapshot } from "../../hooks/useRenderTimeSnapshot";
 import { READER_PANE_HOVER_BACKGROUND_CLASS_NAME } from "@/lib/designSystem";
@@ -24,7 +30,13 @@ import {
 } from "@/lib/view";
 import type { ViewType } from "../../types";
 import ReaderToolbarIconButton from "../reader/ReaderToolbarIconButton";
-import { runImmediateOperation } from "../notifications/userOperationNotifier";
+import {
+  beginDeferredOperation,
+  failDeferredOperation,
+  resolveDeferredOperation,
+  runImmediateFailure,
+  runImmediateOperation,
+} from "../notifications/userOperationNotifier";
 import { useHydratedSelectedView } from "../reader/useHydratedSelectedView";
 import { toast } from "../toast/toast";
 import { buildArticleListDerivedState } from "./articleListModel";
@@ -39,6 +51,39 @@ const REFRESH_POLL_INTERVAL_MS = 1000;
 const REFRESH_POLL_MAX_ATTEMPTS = 12;
 const AI_DIGEST_POLL_INTERVAL_MS = 1000;
 const AI_DIGEST_POLL_MAX_ATTEMPTS = 30;
+
+async function pollAiDigestRunStatus(input: {
+  runId: string;
+  isCurrentRequest: () => boolean;
+}) {
+  for (let attempt = 0; attempt < AI_DIGEST_POLL_MAX_ATTEMPTS; attempt += 1) {
+    if (!input.isCurrentRequest()) {
+      return null;
+    }
+
+    const run = await getAiDigestRunStatus(input.runId);
+    if (!input.isCurrentRequest()) {
+      return null;
+    }
+
+    if (run.status === 'succeeded' || run.status === 'skipped_no_updates') {
+      return { ok: true as const };
+    }
+
+    if (run.status === 'failed') {
+      return {
+        ok: false as const,
+        err: run.errorMessage ?? run.errorCode ?? '请稍后重试',
+      };
+    }
+
+    if (attempt < AI_DIGEST_POLL_MAX_ATTEMPTS - 1) {
+      await sleep(AI_DIGEST_POLL_INTERVAL_MS);
+    }
+  }
+
+  return null;
+}
 const PREVIEW_PRELOAD_MAX_CONCURRENT = 2;
 const VIRTUAL_OVERSCAN = 8;
 const LOAD_MORE_THRESHOLD_PX = 320;
@@ -91,6 +136,7 @@ export default function ArticleList({
   const articleListLoadMoreError = useAppStore((state) => state.articleListLoadMoreError);
   const refreshRequestIdRef = useRef(0);
   const displayModeRequestIdRef = useRef(0);
+  const hasInitializedSelectedViewRef = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
   const [displayModeSaving, setDisplayModeSaving] = useState(false);
   const renderedSelectedView = useHydratedSelectedView(selectedView, initialSelectedView);
@@ -129,6 +175,13 @@ export default function ArticleList({
   const referenceTime = useRenderTimeSnapshot(renderedAt);
 
   useEffect(() => {
+    if (!hasInitializedSelectedViewRef.current) {
+      // Skip the initial selectedView effect so a click right after mount does not
+      // invalidate the request id of the operation it just started.
+      hasInitializedSelectedViewRef.current = true;
+      return;
+    }
+
     refreshRequestIdRef.current += 1;
     displayModeRequestIdRef.current += 1;
     setRefreshing(false);
@@ -657,53 +710,53 @@ export default function ArticleList({
           await refreshAllFeeds();
           toast.success("已开始刷新全部订阅源");
         } else if (isDigestView) {
-          // AI digest feeds use "generate" semantics instead of RSS refresh.
-          const existingArticleIds = new Set(
-            useAppStore.getState().articles
-              .filter((article) => article.feedId === view)
-              .map((article) => article.id),
-          );
+          const result = await generateAiDigest(view, { notifyOnError: false });
 
-          const result = await generateAiDigest(view);
-
-          if (!result.enqueued) {
-            if (result.reason === "missing_api_key") {
-              toast.error("请先在设置中配置 AI API Key");
-              return;
-            }
-
-            if (result.reason === "already_running") {
-              toast.info("已在生成中");
-              return;
-            }
-
-            toast.info("已提交生成请求");
+          if (result.reason === "missing_api_key") {
+            runImmediateFailure({
+              actionKey: 'aiDigest.generate',
+              err: '请先在设置中配置 AI API Key',
+            });
             return;
           }
 
-          toast.success("已开始生成 AI 解读");
-
-          for (let attempt = 0; attempt < AI_DIGEST_POLL_MAX_ATTEMPTS; attempt += 1) {
-            if (refreshRequestIdRef.current !== requestId) return;
-
-            await loadSnapshot({ view });
-
-            if (refreshRequestIdRef.current !== requestId) return;
-
-            const nextIds = useAppStore.getState().articles
-              .filter((article) => article.feedId === view)
-              .map((article) => article.id);
-
-            const hasNewArticle = nextIds.some((id) => !existingArticleIds.has(id));
-            if (hasNewArticle) return;
-
-            if (attempt < AI_DIGEST_POLL_MAX_ATTEMPTS - 1) {
-              await sleep(AI_DIGEST_POLL_INTERVAL_MS);
-            }
+          if (!result.runId) {
+            runImmediateFailure({
+              actionKey: 'aiDigest.generate',
+              err: '暂时无法获取运行状态，请稍后重试',
+            });
+            return;
           }
 
-          if (refreshRequestIdRef.current !== requestId) return;
-          toast.info("本次窗口无更新，未生成解读（可稍后重试）");
+          beginDeferredOperation({
+            actionKey: 'aiDigest.generate',
+            trackingKey: result.runId,
+          });
+
+          const runResult = await pollAiDigestRunStatus({
+            runId: result.runId,
+            isCurrentRequest: () => refreshRequestIdRef.current === requestId,
+          });
+          if (refreshRequestIdRef.current !== requestId || !runResult) {
+            return;
+          }
+
+          if (runResult.ok) {
+            resolveDeferredOperation({
+              actionKey: 'aiDigest.generate',
+              trackingKey: result.runId,
+            });
+            await loadSnapshot({ view }).catch((err) => {
+              console.error(err);
+            });
+            return;
+          }
+
+          failDeferredOperation({
+            actionKey: 'aiDigest.generate',
+            trackingKey: result.runId,
+            err: runResult.err,
+          });
         } else {
           await refreshFeed(view);
           toast.success("已开始刷新订阅源");

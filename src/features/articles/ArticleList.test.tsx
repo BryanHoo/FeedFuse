@@ -1047,6 +1047,79 @@ describe('ArticleList', () => {
     expect(screen.queryByRole('button', { name: FEED_REFRESH_LABEL })).not.toBeInTheDocument();
   });
 
+  it('shows started info then terminal success for digest generation', async () => {
+    vi.useFakeTimers();
+    let runStatusCalls = 0;
+    const loadSnapshotMock = vi.fn().mockResolvedValue(undefined);
+
+    try {
+      fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = getFetchCallUrl(input);
+        const method = getFetchCallMethod(input, init);
+
+        if (url.includes('/api/ai-digests/digest-1/generate') && method === 'POST') {
+          return jsonResponse({
+            ok: true,
+            data: { enqueued: true, jobId: 'job-1', runId: 'run-1' },
+          });
+        }
+
+        if (url.includes('/api/ai-digests/runs/run-1') && method === 'GET') {
+          runStatusCalls += 1;
+          return jsonResponse({
+            ok: true,
+            data: {
+              id: 'run-1',
+              status: runStatusCalls > 1 ? 'succeeded' : 'running',
+              errorCode: null,
+              errorMessage: null,
+              updatedAt: '2026-03-25T00:00:00.000Z',
+            },
+          });
+        }
+
+        return jsonResponse({ ok: true, data: { updated: true } });
+      });
+
+      useAppStore.setState((state) => ({
+        ...state,
+        loadSnapshot: loadSnapshotMock as unknown as LoadSnapshot,
+        feeds: [
+          {
+            ...state.feeds[0],
+            id: 'digest-1',
+            kind: 'ai_digest',
+            title: 'My Digest',
+            url: 'http://localhost/__feedfuse_ai_digest__/digest-1',
+          },
+        ],
+        selectedView: 'digest-1',
+        selectedArticleId: null,
+      }));
+
+      renderWithNotifications();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: '立即生成' }));
+        await Promise.resolve();
+      });
+
+      expect(screen.getByText('已开始生成 AI 解读')).toBeInTheDocument();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_000);
+        await Promise.resolve();
+      });
+
+      expect(screen.getByText('AI 解读已生成')).toBeInTheDocument();
+      expect(screen.queryByText('已在生成中')).not.toBeInTheDocument();
+      expect(runStatusCalls).toBeGreaterThan(1);
+      expect(loadSnapshotMock).toHaveBeenCalledWith({ view: 'digest-1' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('shows success notification when refreshing all feeds starts', async () => {
     vi.useFakeTimers();
     try {

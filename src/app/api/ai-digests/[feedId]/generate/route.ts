@@ -14,6 +14,7 @@ import {
 import { getQueueSendOptions } from '../../../../../server/queue/contracts';
 import { enqueueWithResult } from '../../../../../server/queue/queue';
 import { JOB_AI_DIGEST_GENERATE } from '../../../../../server/queue/jobs';
+import { writeUserOperationStartedLog } from '../../../../../server/logging/userOperationLogger';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -65,6 +66,11 @@ export async function POST(
 
     const existing = await getAiDigestRunByFeedIdAndWindowStartAt(pool, { feedId, windowStartAt });
     if (existing && (existing.status === 'queued' || existing.status === 'running')) {
+      await writeUserOperationStartedLog(pool, {
+        actionKey: 'aiDigest.generate',
+        source: 'app/api/ai-digests/[feedId]/generate',
+        context: { feedId, runId: existing.id },
+      });
       return ok({ enqueued: false, reason: 'already_running', runId: existing.id });
     }
 
@@ -79,11 +85,21 @@ export async function POST(
     if (!created) {
       const again = await getAiDigestRunByFeedIdAndWindowStartAt(pool, { feedId, windowStartAt });
       if (again && (again.status === 'queued' || again.status === 'running')) {
+        await writeUserOperationStartedLog(pool, {
+          actionKey: 'aiDigest.generate',
+          source: 'app/api/ai-digests/[feedId]/generate',
+          context: { feedId, runId: again.id },
+        });
         return ok({ enqueued: false, reason: 'already_running', runId: again.id });
       }
       if (!again) throw new Error('Failed to create or load ai digest run');
       // allow manual retry for failed
       if (again.status !== 'failed') {
+        await writeUserOperationStartedLog(pool, {
+          actionKey: 'aiDigest.generate',
+          source: 'app/api/ai-digests/[feedId]/generate',
+          context: { feedId, runId: again.id },
+        });
         return ok({ enqueued: false, reason: 'already_running', runId: again.id });
       }
     }
@@ -107,6 +123,11 @@ export async function POST(
       status: 'queued',
       errorCode: null,
       errorMessage: null,
+    });
+    await writeUserOperationStartedLog(pool, {
+      actionKey: 'aiDigest.generate',
+      source: 'app/api/ai-digests/[feedId]/generate',
+      context: { feedId, runId },
     });
     return ok({ enqueued: true, jobId: enqueueResult.jobId, runId });
   } catch (err) {
