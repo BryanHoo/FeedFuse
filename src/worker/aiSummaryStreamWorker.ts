@@ -212,12 +212,9 @@ export async function runAiSummaryStreamWorker(
     articleId: input.articleId,
     type: 'ai_summary',
     jobId: input.jobId,
-    logLifecycle: {
-      category: 'ai_summary',
+    userOperation: {
+      actionKey: 'article.aiSummary.generate',
       source: 'worker/aiSummaryStreamWorker',
-      startedMessage: 'AI summary started',
-      succeededMessage: 'AI summary succeeded',
-      failedMessage: 'AI summary failed',
       context: {
         articleId: input.articleId,
         ...(input.sessionId ? { sessionId: input.sessionId } : {}),

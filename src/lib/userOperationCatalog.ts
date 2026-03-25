@@ -1,14 +1,6 @@
-export type UserOperationMode = 'immediate' | 'deferred';
+import type { SystemLogCategory } from '../types';
 
-export type UserOperationCategory =
-  | 'feed'
-  | 'category'
-  | 'article'
-  | 'opml'
-  | 'settings'
-  | 'ai_summary'
-  | 'ai_translate'
-  | 'ai_digest';
+export type UserOperationMode = 'immediate' | 'deferred';
 
 export type UserOperationActionKey =
   | 'feed.create'
@@ -39,7 +31,7 @@ export type UserOperationActionKey =
 
 export interface UserOperationCatalogEntry {
   mode: UserOperationMode;
-  category: UserOperationCategory;
+  category: SystemLogCategory;
   successMessage: (context?: Record<string, unknown>) => string;
   errorPrefix: (context?: Record<string, unknown>) => string;
   startMessage?: (context?: Record<string, unknown>) => string;

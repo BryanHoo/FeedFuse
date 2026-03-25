@@ -26,7 +26,11 @@ import {
   type AiDigestRunRow,
 } from '../server/repositories/aiDigestRepo';
 import { listFeeds } from '../server/repositories/feedsRepo';
-import { writeSystemLog } from '../server/logging/systemLogger';
+import {
+  writeUserOperationFailedLog,
+  writeUserOperationStartedLog,
+  writeUserOperationSucceededLog,
+} from '../server/logging/userOperationLogger';
 import { getAiApiKey, getUiSettings } from '../server/repositories/settingsRepo';
 import { sanitizeContent } from '../server/rss/sanitizeContent';
 
@@ -237,10 +241,8 @@ export async function runAiDigestGenerate(input: {
     errorCode: null,
     errorMessage: null,
   });
-  await writeSystemLog(input.pool, {
-    level: 'info',
-    category: 'ai_digest',
-    message: 'AI digest started',
+  await writeUserOperationStartedLog(input.pool, {
+    actionKey: 'aiDigest.generate',
     source: 'worker/aiDigestGenerate',
     context: {
       runId: run.id,
@@ -273,10 +275,8 @@ export async function runAiDigestGenerate(input: {
       ensureSharedConfigCurrent,
     });
     if (status === 'succeeded') {
-      await writeSystemLog(input.pool, {
-        level: 'info',
-        category: 'ai_digest',
-        message: 'AI digest succeeded',
+      await writeUserOperationSucceededLog(input.pool, {
+        actionKey: 'aiDigest.generate',
         source: 'worker/aiDigestGenerate',
         context: {
           runId: run.id,
@@ -292,12 +292,11 @@ export async function runAiDigestGenerate(input: {
       errorCode: mapped.errorCode,
       errorMessage: mapped.errorMessage,
     });
-    await writeSystemLog(input.pool, {
-      level: 'error',
-      category: 'ai_digest',
-      message: 'AI digest failed',
-      details: safeErrorText(err),
+    await writeUserOperationFailedLog(input.pool, {
+      actionKey: 'aiDigest.generate',
       source: 'worker/aiDigestGenerate',
+      err,
+      details: safeErrorText(err),
       context: {
         runId: run.id,
         feedId: run.feedId,

@@ -4,7 +4,9 @@ const upsertTaskRunningMock = vi.fn();
 const upsertTaskSucceededMock = vi.fn();
 const upsertTaskFailedMock = vi.fn();
 const mapTaskErrorMock = vi.fn();
-const writeSystemLogMock = vi.fn();
+const writeUserOperationStartedLogMock = vi.fn();
+const writeUserOperationSucceededLogMock = vi.fn();
+const writeUserOperationFailedLogMock = vi.fn();
 
 vi.mock('../server/repositories/articleTasksRepo', () => ({
   upsertTaskRunning: (...args: unknown[]) => upsertTaskRunningMock(...args),
@@ -16,8 +18,10 @@ vi.mock('../server/tasks/errorMapping', () => ({
   mapTaskError: (...args: unknown[]) => mapTaskErrorMock(...args),
 }));
 
-vi.mock('../server/logging/systemLogger', () => ({
-  writeSystemLog: (...args: unknown[]) => writeSystemLogMock(...args),
+vi.mock('../server/logging/userOperationLogger', () => ({
+  writeUserOperationStartedLog: (...args: unknown[]) => writeUserOperationStartedLogMock(...args),
+  writeUserOperationSucceededLog: (...args: unknown[]) => writeUserOperationSucceededLogMock(...args),
+  writeUserOperationFailedLog: (...args: unknown[]) => writeUserOperationFailedLogMock(...args),
 }));
 
 describe('articleTaskStatus', () => {
@@ -26,7 +30,9 @@ describe('articleTaskStatus', () => {
     upsertTaskSucceededMock.mockReset();
     upsertTaskFailedMock.mockReset();
     mapTaskErrorMock.mockReset();
-    writeSystemLogMock.mockReset();
+    writeUserOperationStartedLogMock.mockReset();
+    writeUserOperationSucceededLogMock.mockReset();
+    writeUserOperationFailedLogMock.mockReset();
   });
 
   it('writes started and succeeded lifecycle logs when configured', async () => {
@@ -36,31 +42,28 @@ describe('articleTaskStatus', () => {
       articleId: 'article-1',
       type: 'ai_translate',
       jobId: 'job-1',
-      logLifecycle: {
-        category: 'ai_translate',
+      userOperation: {
+        actionKey: 'article.aiTranslate.retrySegment',
         source: 'worker/index',
-        startedMessage: 'AI translation started',
-        succeededMessage: 'AI translation succeeded',
-        failedMessage: 'AI translation failed',
         context: { articleId: 'article-1', jobId: 'job-1' },
       },
       fn: async () => 'ok',
     });
 
     expect(result).toBe('ok');
-    expect(writeSystemLogMock).toHaveBeenNthCalledWith(
-      1,
+    expect(writeUserOperationStartedLogMock).toHaveBeenCalledOnce();
+    expect(writeUserOperationStartedLogMock).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ message: 'AI translation started' }),
+      expect.objectContaining({ actionKey: 'article.aiTranslate.retrySegment' }),
     );
-    expect(writeSystemLogMock).toHaveBeenNthCalledWith(
-      2,
+    expect(writeUserOperationSucceededLogMock).toHaveBeenCalledOnce();
+    expect(writeUserOperationSucceededLogMock).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ message: 'AI translation succeeded' }),
+      expect.objectContaining({ actionKey: 'article.aiTranslate.retrySegment' }),
     );
   });
 
-  it('writes failed lifecycle logs when the task throws', async () => {
+  it('uses error level for failed terminal worker logs and never emits warning', async () => {
     mapTaskErrorMock.mockReturnValue({
       errorCode: 'ai_rate_limited',
       errorMessage: '请求太频繁了，请稍后重试',
@@ -74,12 +77,9 @@ describe('articleTaskStatus', () => {
         articleId: 'article-1',
         type: 'ai_translate',
         jobId: 'job-1',
-        logLifecycle: {
-          category: 'ai_translate',
-          source: 'worker/index',
-          startedMessage: 'AI translation started',
-          succeededMessage: 'AI translation succeeded',
-          failedMessage: 'AI translation failed',
+        userOperation: {
+          actionKey: 'article.aiTranslate.retrySegment',
+          source: 'worker/articleTaskStatus',
           context: { articleId: 'article-1', jobId: 'job-1' },
         },
         fn: async () => {
@@ -89,11 +89,10 @@ describe('articleTaskStatus', () => {
     ).rejects.toThrow('429 rate limit');
 
     expect(upsertTaskFailedMock).toHaveBeenCalled();
-    expect(writeSystemLogMock).toHaveBeenLastCalledWith(
+    expect(writeUserOperationFailedLogMock).toHaveBeenLastCalledWith(
       expect.anything(),
       expect.objectContaining({
-        level: 'error',
-        message: 'AI translation failed',
+        actionKey: 'article.aiTranslate.retrySegment',
         details: '429 rate limit',
       }),
     );

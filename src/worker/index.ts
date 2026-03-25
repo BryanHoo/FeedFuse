@@ -476,12 +476,12 @@ async function main() {
         articleId,
         type: 'ai_translate',
         jobId,
-        logLifecycle: {
-          category: 'ai_translate',
+        userOperation: {
+          actionKey:
+            segmentIndex !== null
+              ? 'article.aiTranslate.retrySegment'
+              : 'article.aiTranslate.generate',
           source: 'worker/index',
-          startedMessage: 'AI translation started',
-          succeededMessage: 'AI translation succeeded',
-          failedMessage: 'AI translation failed',
           context: {
             articleId,
             ...(sessionId ? { sessionId } : {}),

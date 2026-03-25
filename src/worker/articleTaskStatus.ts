@@ -1,20 +1,21 @@
 import type { Pool } from 'pg';
-import type { SystemLogCategory } from '../types';
 import type { ArticleTaskType } from '../server/repositories/articleTasksRepo';
+import type { UserOperationActionKey } from '../lib/userOperationCatalog';
 import {
   upsertTaskFailed,
   upsertTaskRunning,
   upsertTaskSucceeded,
 } from '../server/repositories/articleTasksRepo';
-import { writeSystemLog } from '../server/logging/systemLogger';
+import {
+  writeUserOperationFailedLog,
+  writeUserOperationStartedLog,
+  writeUserOperationSucceededLog,
+} from '../server/logging/userOperationLogger';
 import { mapTaskError } from '../server/tasks/errorMapping';
 
-interface ArticleTaskLifecycleLog {
-  category: SystemLogCategory;
+interface ArticleTaskUserOperation {
+  actionKey: UserOperationActionKey;
   source: string;
-  startedMessage: string;
-  succeededMessage: string;
-  failedMessage: string;
   context?: Record<string, unknown>;
 }
 
@@ -23,7 +24,7 @@ export async function runArticleTaskWithStatus<T>(input: {
   articleId: string;
   type: ArticleTaskType;
   jobId: string | null;
-  logLifecycle?: ArticleTaskLifecycleLog;
+  userOperation?: ArticleTaskUserOperation;
   fn: () => Promise<T>;
 }): Promise<T> {
   await upsertTaskRunning(input.pool, {
@@ -31,14 +32,8 @@ export async function runArticleTaskWithStatus<T>(input: {
     type: input.type,
     jobId: input.jobId,
   });
-  if (input.logLifecycle) {
-    await writeSystemLog(input.pool, {
-      level: 'info',
-      category: input.logLifecycle.category,
-      message: input.logLifecycle.startedMessage,
-      source: input.logLifecycle.source,
-      context: input.logLifecycle.context,
-    });
+  if (input.userOperation) {
+    await writeUserOperationStartedLog(input.pool, input.userOperation);
   }
 
   try {
@@ -48,14 +43,8 @@ export async function runArticleTaskWithStatus<T>(input: {
       type: input.type,
       jobId: input.jobId,
     });
-    if (input.logLifecycle) {
-      await writeSystemLog(input.pool, {
-        level: 'info',
-        category: input.logLifecycle.category,
-        message: input.logLifecycle.succeededMessage,
-        source: input.logLifecycle.source,
-        context: input.logLifecycle.context,
-      });
+    if (input.userOperation) {
+      await writeUserOperationSucceededLog(input.pool, input.userOperation);
     }
     return result;
   } catch (err) {
@@ -68,14 +57,11 @@ export async function runArticleTaskWithStatus<T>(input: {
       errorMessage: mapped.errorMessage,
       rawErrorMessage: mapped.rawErrorMessage,
     });
-    if (input.logLifecycle) {
-      await writeSystemLog(input.pool, {
-        level: 'error',
-        category: input.logLifecycle.category,
-        message: input.logLifecycle.failedMessage,
+    if (input.userOperation) {
+      await writeUserOperationFailedLog(input.pool, {
+        ...input.userOperation,
+        err,
         details: mapped.rawErrorMessage ?? mapped.errorMessage,
-        source: input.logLifecycle.source,
-        context: input.logLifecycle.context,
       });
     }
     throw err;

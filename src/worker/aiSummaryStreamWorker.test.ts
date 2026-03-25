@@ -96,11 +96,9 @@ describe('aiSummaryStreamWorker', () => {
     expect(updateSessionDraftMock).toHaveBeenCalled();
     expect(runArticleTaskWithStatusMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        logLifecycle: expect.objectContaining({
-          category: 'ai_summary',
-          startedMessage: 'AI summary started',
-          succeededMessage: 'AI summary succeeded',
-          failedMessage: 'AI summary failed',
+        userOperation: expect.objectContaining({
+          actionKey: 'article.aiSummary.generate',
+          source: 'worker/aiSummaryStreamWorker',
         }),
       }),
     );

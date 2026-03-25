@@ -1,15 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Pool } from 'pg';
 
-const writeSystemLogMock = vi.fn();
+const writeUserOperationStartedLogMock = vi.fn();
+const writeUserOperationSucceededLogMock = vi.fn();
+const writeUserOperationFailedLogMock = vi.fn();
 
-vi.mock('../server/logging/systemLogger', () => ({
-  writeSystemLog: (...args: unknown[]) => writeSystemLogMock(...args),
+vi.mock('../server/logging/userOperationLogger', () => ({
+  writeUserOperationStartedLog: (...args: unknown[]) => writeUserOperationStartedLogMock(...args),
+  writeUserOperationSucceededLog: (...args: unknown[]) => writeUserOperationSucceededLogMock(...args),
+  writeUserOperationFailedLog: (...args: unknown[]) => writeUserOperationFailedLogMock(...args),
 }));
 
 describe('runAiDigestGenerate', () => {
   it('marks skipped_no_updates and advances last_window_end_at when no candidates', async () => {
-    writeSystemLogMock.mockReset();
+    writeUserOperationStartedLogMock.mockReset();
+    writeUserOperationSucceededLogMock.mockReset();
+    writeUserOperationFailedLogMock.mockReset();
     const pool = { query: vi.fn() } as unknown as Pool;
 
     const getAiDigestRunByIdMock = vi.fn().mockResolvedValue({
@@ -79,7 +85,9 @@ describe('runAiDigestGenerate', () => {
   });
 
   it('uses selectedFeedIds only when resolving target feeds', async () => {
-    writeSystemLogMock.mockReset();
+    writeUserOperationStartedLogMock.mockReset();
+    writeUserOperationSucceededLogMock.mockReset();
+    writeUserOperationFailedLogMock.mockReset();
     const pool = { query: vi.fn() } as unknown as Pool;
 
     const getAiDigestRunByIdMock = vi.fn().mockResolvedValue({
@@ -142,7 +150,9 @@ describe('runAiDigestGenerate', () => {
   });
 
   it('persists selected source article ids with deterministic positions on success', async () => {
-    writeSystemLogMock.mockReset();
+    writeUserOperationStartedLogMock.mockReset();
+    writeUserOperationSucceededLogMock.mockReset();
+    writeUserOperationFailedLogMock.mockReset();
     const replaceAiDigestRunSourcesMock = vi.fn().mockResolvedValue(undefined);
     const insertArticleIgnoreDuplicateMock = vi.fn().mockResolvedValue({ id: 'digest-article-1' });
     const pruneFeedArticlesToLimitMock = vi.fn().mockResolvedValue({ deletedCount: 0 });
@@ -228,20 +238,22 @@ describe('runAiDigestGenerate', () => {
       }),
     );
     expect(pruneFeedArticlesToLimitMock).toHaveBeenCalledWith(pool, 'feed-ai', 1000);
-    expect(writeSystemLogMock).toHaveBeenNthCalledWith(
-      1,
+    expect(writeUserOperationStartedLogMock).toHaveBeenCalledOnce();
+    expect(writeUserOperationStartedLogMock).toHaveBeenCalledWith(
       pool,
-      expect.objectContaining({ message: 'AI digest started' }),
+      expect.objectContaining({ actionKey: 'aiDigest.generate' }),
     );
-    expect(writeSystemLogMock).toHaveBeenNthCalledWith(
-      2,
+    expect(writeUserOperationSucceededLogMock).toHaveBeenCalledOnce();
+    expect(writeUserOperationSucceededLogMock).toHaveBeenCalledWith(
       pool,
-      expect.objectContaining({ message: 'AI digest succeeded' }),
+      expect.objectContaining({ actionKey: 'aiDigest.generate' }),
     );
   });
 
   it('stores a text summary for generated AI digest articles', async () => {
-    writeSystemLogMock.mockReset();
+    writeUserOperationStartedLogMock.mockReset();
+    writeUserOperationSucceededLogMock.mockReset();
+    writeUserOperationFailedLogMock.mockReset();
     const insertArticleIgnoreDuplicateMock = vi.fn().mockResolvedValue({ id: 'digest-article-2' });
     const pruneFeedArticlesToLimitMock = vi.fn().mockResolvedValue({ deletedCount: 0 });
     const pool = { query: vi.fn() } as unknown as Pool;
@@ -311,7 +323,9 @@ describe('runAiDigestGenerate', () => {
   });
 
   it('writes failed lifecycle logs when digest generation throws', async () => {
-    writeSystemLogMock.mockReset();
+    writeUserOperationStartedLogMock.mockReset();
+    writeUserOperationSucceededLogMock.mockReset();
+    writeUserOperationFailedLogMock.mockReset();
     const updateAiDigestRunMock = vi.fn().mockResolvedValue(undefined);
     const pool = { query: vi.fn() } as unknown as Pool;
 
@@ -360,17 +374,16 @@ describe('runAiDigestGenerate', () => {
       }),
     ).rejects.toThrow('Missing AI API key');
 
-    expect(writeSystemLogMock).toHaveBeenNthCalledWith(
-      1,
+    expect(writeUserOperationStartedLogMock).toHaveBeenCalledOnce();
+    expect(writeUserOperationStartedLogMock).toHaveBeenCalledWith(
       pool,
-      expect.objectContaining({ message: 'AI digest started' }),
+      expect.objectContaining({ actionKey: 'aiDigest.generate' }),
     );
-    expect(writeSystemLogMock).toHaveBeenNthCalledWith(
-      2,
+    expect(writeUserOperationFailedLogMock).toHaveBeenCalledOnce();
+    expect(writeUserOperationFailedLogMock).toHaveBeenCalledWith(
       pool,
       expect.objectContaining({
-        level: 'error',
-        message: 'AI digest failed',
+        actionKey: 'aiDigest.generate',
       }),
     );
     expect(updateAiDigestRunMock).toHaveBeenCalledWith(
@@ -381,7 +394,9 @@ describe('runAiDigestGenerate', () => {
   });
 
   it('fails the run without persisting a digest article when shared AI config changes mid-run', async () => {
-    writeSystemLogMock.mockReset();
+    writeUserOperationStartedLogMock.mockReset();
+    writeUserOperationSucceededLogMock.mockReset();
+    writeUserOperationFailedLogMock.mockReset();
     const updateAiDigestRunMock = vi.fn().mockResolvedValue(undefined);
     const insertArticleIgnoreDuplicateMock = vi.fn().mockResolvedValue({ id: 'digest-article-9' });
     const pool = { query: vi.fn() } as unknown as Pool;

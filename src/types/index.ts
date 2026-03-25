@@ -157,6 +157,10 @@ export interface RssSettings {
 export type LoggingRetentionDays = 1 | 3 | 7 | 14 | 30 | 90;
 export type SystemLogLevel = 'error' | 'warning' | 'info';
 export type SystemLogCategory =
+  | 'feed'
+  | 'category'
+  | 'article'
+  | 'opml'
   | 'settings'
   | 'external_api'
   | 'ai_summary'
