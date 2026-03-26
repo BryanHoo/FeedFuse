@@ -23,6 +23,8 @@ const INLINE_TAG_NAMES = new Set([
   'span',
   'strong',
 ]);
+const IMAGE_PROXY_ROUTE_PATH = '/api/media/image';
+const EXPORT_URL_BASE = 'https://feedfuse.local';
 
 export function buildArticleMarkdownDocument(input: ArticleMarkdownExportInput): string {
   const title = input.title.trim() || 'Untitled Article';
@@ -139,7 +141,7 @@ function renderBlock(node: Node): string {
   }
 
   if (tagName === 'img') {
-    const src = node.getAttribute('src')?.trim() ?? '';
+    const src = resolveExportUrl(node.getAttribute('src'));
     if (!src) {
       return '';
     }
@@ -192,7 +194,7 @@ function renderInlineNode(node: Node): string {
   }
 
   if (tagName === 'a') {
-    const href = node.getAttribute('href')?.trim() ?? '';
+    const href = resolveExportUrl(node.getAttribute('href'));
     const label = content || href;
     return href ? `[${label}](${href})` : label;
   }
@@ -202,7 +204,7 @@ function renderInlineNode(node: Node): string {
   }
 
   if (tagName === 'img') {
-    const src = node.getAttribute('src')?.trim() ?? '';
+    const src = resolveExportUrl(node.getAttribute('src'));
     if (!src) {
       return '';
     }
@@ -254,6 +256,25 @@ function isInlineContainer(element: HTMLElement): boolean {
 
 function collapseWhitespace(value: string): string {
   return value.replace(/\s+/g, ' ');
+}
+
+function resolveExportUrl(rawUrl: string | null): string {
+  const url = rawUrl?.trim() ?? '';
+  if (!url) {
+    return '';
+  }
+
+  try {
+    const parsed = new URL(url, EXPORT_URL_BASE);
+    if (parsed.pathname !== IMAGE_PROXY_ROUTE_PATH) {
+      return url;
+    }
+
+    // Exported Markdown should point to the original media asset, not the app proxy.
+    return new URL(parsed.searchParams.get('url') ?? '').toString();
+  } catch {
+    return url;
+  }
 }
 
 function formatArticlePublishedAt(publishedAt: string): string {

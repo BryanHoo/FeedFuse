@@ -33,6 +33,19 @@ describe('buildArticleMarkdownDocument', () => {
     expect(markdown).toContain('# Empty Body');
     expect(markdown).toContain('原文链接：https://example.com/empty');
   });
+
+  it('exports original image urls instead of internal proxy urls', () => {
+    const markdown = buildArticleMarkdownDocument({
+      title: 'Proxy Image',
+      publishedAt: '2026-03-21T10:00:00.000Z',
+      link: 'https://example.com/proxy-image',
+      contentHtml:
+        '<p>Cover</p><img src="/api/media/image?url=https%3A%2F%2Fimg.example.com%2Fa.jpg&sig=test" alt="cover" />',
+    });
+
+    expect(markdown).toContain('![cover](https://img.example.com/a.jpg)');
+    expect(markdown).not.toContain('/api/media/image?');
+  });
 });
 
 describe('sanitizeArticleMarkdownFilename', () => {
