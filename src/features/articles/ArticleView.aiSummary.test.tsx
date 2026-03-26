@@ -6,6 +6,7 @@ type ApiClientModule = typeof import('../../lib/apiClient');
 type ArticleViewModule = typeof import('./ArticleView');
 type AppStoreModule = typeof import('../../store/appStore');
 type SettingsStoreModule = typeof import('../../store/settingsStore');
+type ToastStoreModule = typeof import('../toast/toastStore');
 
 const idleTasks = {
   fulltext: {
@@ -157,6 +158,7 @@ describe('ArticleView ai summary', () => {
   let getArticleAiSummarySnapshotMock: ReturnType<typeof vi.fn>;
   let createArticleAiSummaryEventSourceMock: ReturnType<typeof vi.fn>;
   let getArticleTasksMock: ReturnType<typeof vi.fn>;
+  let toastStore: ToastStoreModule['toastStore'];
   let fakeEventSource: FakeEventSource;
 
   beforeEach(async () => {
@@ -206,6 +208,9 @@ describe('ArticleView ai summary', () => {
     ({ default: ArticleView } = await import('./ArticleView'));
     ({ useAppStore } = await import('../../store/appStore'));
     ({ useSettingsStore } = await import('../../store/settingsStore'));
+    ({ toastStore } = await import('../toast/toastStore'));
+
+    toastStore.getState().reset();
 
     const persisted = useSettingsStore.getState().persistedSettings;
     useSettingsStore.setState({
@@ -470,6 +475,41 @@ describe('ArticleView ai summary', () => {
     fireEvent.click(screen.getByRole('button', { name: '生成摘要' }));
     await waitFor(() => {
       expect(enqueueArticleAiSummaryMock).toHaveBeenCalledWith('article-1', { force: true });
+    });
+  });
+
+  it('全文抓取失败时会弹出错误 toast 并展示失败原因', async () => {
+    getArticleTasksMock
+      .mockResolvedValueOnce(idleTasks)
+      .mockResolvedValueOnce({
+        ...idleTasks,
+        fulltext: {
+          ...idleTasks.fulltext,
+          status: 'failed',
+          jobId: 'job-fulltext-verify-1',
+          attempts: 1,
+          errorCode: 'fetch_verification_required',
+          errorMessage: '源站要求完成验证，暂时无法抓取全文',
+          rawErrorMessage: 'Verification required',
+        },
+      });
+
+    await seedArticleViewState({
+      feed: { fullTextOnOpenEnabled: false },
+    });
+
+    render(<ArticleView />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '抓取全文' }));
+
+    await waitFor(() => {
+      expect(
+        toastStore.getState().toasts.some(
+          (item) =>
+            item.tone === 'error' &&
+            item.message === '抓取全文失败：源站要求完成验证，暂时无法抓取全文',
+        ),
+      ).toBe(true);
     });
   });
 

@@ -45,6 +45,20 @@ const challengeHtml = `
     </div>
   </div>
 `;
+const cloudflareChallengeHtml = `
+  <html>
+    <head>
+      <title>Just a moment...</title>
+    </head>
+    <body>
+      <main>
+        <h1>Verify you are human</h1>
+        <p>Complete the security check to access example.com</p>
+        <div>Cloudflare Ray ID: 1234567890abcdef</div>
+      </main>
+    </body>
+  </html>
+`;
 
 describe('fetchFulltextAndStore', () => {
   beforeEach(() => {
@@ -131,6 +145,35 @@ describe('fetchFulltextAndStore', () => {
     expect(setArticleFulltextErrorMock).toHaveBeenCalledWith(pool, 'article-1', {
       error: 'Verification required',
       sourceUrl: challengeUrl,
+    });
+  });
+
+  it('stores verification error for generic anti-bot challenge pages', async () => {
+    const pool = {};
+
+    getArticleByIdMock.mockResolvedValue({
+      id: 'article-1',
+      link: 'https://example.com/protected',
+      contentFullHtml: null,
+      contentFullSourceUrl: null,
+    });
+    getAppSettingsMock.mockResolvedValue({ rssTimeoutMs: 1000, rssUserAgent: 'test-agent' });
+    isSafeExternalUrlMock.mockResolvedValue(true);
+    fetchHtmlMock.mockResolvedValue({
+      status: 200,
+      finalUrl: 'https://example.com/protected',
+      contentType: 'text/html; charset=utf-8',
+      html: cloudflareChallengeHtml,
+    });
+
+    const mod = (await import('./fetchFulltextAndStore')) as typeof import('./fetchFulltextAndStore');
+    await mod.fetchFulltextAndStore(pool as never, 'article-1');
+
+    expect(extractFulltextMock).not.toHaveBeenCalled();
+    expect(setArticleFulltextMock).not.toHaveBeenCalled();
+    expect(setArticleFulltextErrorMock).toHaveBeenCalledWith(pool, 'article-1', {
+      error: 'Verification required',
+      sourceUrl: 'https://example.com/protected',
     });
   });
 

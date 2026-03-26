@@ -45,6 +45,7 @@ import ArticleScrollAssist from "./ArticleScrollAssist";
 import ArticleImagePreview from "./ArticleImagePreview";
 import ReaderToolbarIconButton from "../reader/ReaderToolbarIconButton";
 import { READER_RESIZE_DESKTOP_MIN_WIDTH } from "../reader/readerLayoutSizing";
+import { toast } from "../toast/toast";
 
 const FLOATING_TITLE_SCROLL_THRESHOLD_PX = 96;
 const AI_DIGEST_SOURCES_VISIBLE_LIMIT = 3;
@@ -351,6 +352,17 @@ export default function ArticleView({
 
       if (result.value?.fulltext.status === "succeeded") {
         await refreshArticle(articleId);
+        return;
+      }
+
+      if (result.value?.fulltext.status === "failed") {
+        const failureReason =
+          result.value.fulltext.errorMessage?.trim() ||
+          result.value.fulltext.rawErrorMessage?.trim() ||
+          "请稍后重试";
+        toast.error(`抓取全文失败：${failureReason}`, {
+          dedupeKey: `article-fulltext-failed:${articleId}:${result.value.fulltext.jobId ?? "none"}:${result.value.fulltext.errorCode ?? failureReason}`,
+        });
       }
     },
     [refreshArticle],
