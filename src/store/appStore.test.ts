@@ -1437,6 +1437,91 @@ describe('appStore api integration', () => {
     expect(pushSpy).not.toHaveBeenCalled();
   });
 
+  it('openArticleInReader switches to the target feed and reveals the fetched article in the visible list', async () => {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = getFetchCallUrl(input);
+      const method = getFetchCallMethod(input, init);
+
+      if (url.includes('/api/reader/snapshot') && method === 'GET') {
+        return jsonResponse({
+          ok: true,
+          data: {
+            categories: [],
+            feeds: [createSnapshotFeed('feed-2', 'Feed 2', 1)],
+            articles: {
+              items: [createSnapshotArticle('art-1', 'feed-2', 'Visible article')],
+              nextCursor: null,
+            },
+          },
+        });
+      }
+
+      if (url.includes('/api/articles/art-search') && method === 'GET') {
+        return jsonResponse({
+          ok: true,
+          data: {
+            id: 'art-search',
+            feedId: 'feed-2',
+            dedupeKey: 'dedupe-art-search',
+            title: 'Search target',
+            titleOriginal: 'Search target',
+            titleZh: null,
+            link: 'https://example.com/search-target',
+            author: null,
+            publishedAt: '2026-03-26T09:00:00.000Z',
+            contentHtml: '<p>matched body</p>',
+            contentFullHtml: null,
+            contentFullFetchedAt: null,
+            contentFullError: null,
+            contentFullSourceUrl: null,
+            aiSummary: null,
+            aiSummaryModel: null,
+            aiSummarizedAt: null,
+            aiTranslationBilingualHtml: null,
+            aiTranslationZhHtml: null,
+            aiTranslationModel: null,
+            aiTranslatedAt: null,
+            summary: 'summary',
+            filterStatus: 'passed',
+            isFiltered: false,
+            filteredBy: [],
+            isRead: false,
+            readAt: null,
+            isStarred: false,
+            starredAt: null,
+            bodyTranslationEligible: false,
+            bodyTranslationBlockedReason: null,
+          },
+        });
+      }
+
+      throw new Error(`Unexpected fetch: ${method} ${url}`);
+    });
+
+    useAppStore.setState({
+      selectedView: 'all',
+      selectedArticleId: null,
+      articles: [],
+      articleSnapshotCache: {},
+      articleDetailCache: {},
+    });
+
+    await useAppStore.getState().openArticleInReader({
+      view: 'feed-2',
+      articleId: 'art-search',
+      articleHistory: 'push',
+    });
+
+    await vi.waitFor(() => {
+      expect(useAppStore.getState().selectedView).toBe('feed-2');
+      expect(useAppStore.getState().selectedArticleId).toBe('art-search');
+      expect(useAppStore.getState().articles.map((article) => article.id)).toContain('art-search');
+      expect(useAppStore.getState().articleSnapshotCache['feed-2']?.map((article) => article.id)).toContain(
+        'art-search',
+      );
+    });
+  });
+
   it('applies defaultUnreadOnlyInAll when switching to AI digest smart view', async () => {
     const { useSettingsStore } = await import('./settingsStore');
 

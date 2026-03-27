@@ -1055,6 +1055,43 @@ it('getSystemLogs builds /api/logs query with keyword, page and pageSize', async
   expect(result.hasNextPage).toBe(true);
 });
 
+it('searchArticles builds /api/articles/search query with keyword and limit', async () => {
+  const fetchMock = vi.fn(async () => {
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        data: {
+          items: [
+            {
+              id: 'article-1',
+              feedId: 'feed-1',
+              feedTitle: 'Feed 1',
+              title: 'FeedFuse 搜索',
+              titleOriginal: 'FeedFuse Search',
+              titleZh: 'FeedFuse 搜索',
+              summary: 'summary',
+              excerpt: 'excerpt',
+              publishedAt: '2026-03-26T09:00:00.000Z',
+            },
+          ],
+        },
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+  });
+  vi.stubGlobal('fetch', fetchMock);
+
+  const { searchArticles } = await import('./apiClient');
+  await searchArticles({ keyword: ' FeedFuse  search ', limit: 12 });
+
+  const firstCall = fetchMock.mock.calls[0] ?? [];
+  const firstUrl = getFetchCallUrl(firstCall[0]);
+  expect(firstUrl).toContain('/api/articles/search?');
+  expect(firstUrl).toContain('keyword=FeedFuse+search');
+  expect(firstUrl).toContain('limit=12');
+  expect(getFetchCallMethod(firstCall) ?? 'GET').toBe('GET');
+});
+
 it('deleteSystemLogs sends DELETE /api/logs and returns deletedCount', async () => {
   const fetchMock = vi.fn(async () => {
     return new Response(

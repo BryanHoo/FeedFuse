@@ -16,7 +16,7 @@ export interface TranslationConfigInput {
   translationApiKey: string;
 }
 
-export interface TranslationRuntimeConfig extends AiRuntimeConfig {}
+export type TranslationRuntimeConfig = AiRuntimeConfig;
 
 function trim(value: string): string {
   return value.trim();

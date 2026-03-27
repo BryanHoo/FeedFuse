@@ -307,7 +307,6 @@ export default function ArticleList({
     previewImageCandidates,
     unreadCount,
     virtualRows,
-    viewScopedArticles,
   } = derivedState;
   const rowHeights = useMemo(() => virtualRows.map((row) => row.height), [virtualRows]);
   const effectiveViewportHeight = viewportHeight || scrollContainerRef.current?.clientHeight || 768;

@@ -19,8 +19,10 @@ function dedupeKeywords(input: string[]): string[] {
 
 export function getArticleKeywordsForFeed(
   filter: ArticleFilterKeywordSettings,
-  _feedId: string,
+  feedId: string,
 ): string[] {
+  void feedId;
+
   if (!filter.enabled) {
     return [];
   }

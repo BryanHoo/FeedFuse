@@ -138,7 +138,6 @@ export async function GET(
     const pool = getPool();
     const article = await getArticleById(pool, articleId);
     if (!article) return fail(new NotFoundError('Article not found'));
-    const usableFulltextHtml = getUsableFulltextHtml(article);
 
     const session = await getActiveAiSummarySessionByArticleId(pool, articleId);
     return ok({ session: buildSessionSnapshot(session) });

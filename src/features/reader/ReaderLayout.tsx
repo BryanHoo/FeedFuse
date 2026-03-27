@@ -1,5 +1,5 @@
 import dynamic from 'next/dynamic';
-import { ChevronLeft, PanelLeft, Settings as SettingsIcon } from 'lucide-react';
+import { ChevronLeft, PanelLeft, Search, Settings as SettingsIcon } from 'lucide-react';
 import {
   memo,
   useCallback,
@@ -11,6 +11,7 @@ import ArticleList from '../articles/ArticleList';
 import ArticleView from '../articles/ArticleView';
 import FeedList from '../feeds/FeedList';
 import ResizeHandle from './ResizeHandle';
+import GlobalSearchDialog from './GlobalSearchDialog';
 import { getSelectedArticleFromState, useAppStore } from '../../store/appStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import type { ViewType } from '../../types';
@@ -62,6 +63,8 @@ export default function ReaderLayout({ renderedAt, initialSelectedView }: Reader
     (state) => getSelectedArticleFromState(state)?.title ?? '',
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [activeSearchHighlightQuery, setActiveSearchHighlightQuery] = useState('');
   const selectionKey = `${selectedView}:${selectedArticleId ?? ''}`;
   const [feedSheetState, setFeedSheetState] = useState(() => ({
     open: false,
@@ -320,6 +323,8 @@ export default function ReaderLayout({ renderedAt, initialSelectedView }: Reader
           <div className="relative flex-1 overflow-hidden bg-background">
             <MemoizedArticleView
               renderedAt={renderedAt}
+              highlightQuery={activeSearchHighlightQuery}
+              onOpenSearch={() => setSearchOpen(true)}
               onOpenSettings={() => setSettingsOpen(true)}
             />
           </div>
@@ -363,15 +368,27 @@ export default function ReaderLayout({ renderedAt, initialSelectedView }: Reader
               <span className="block truncate">{selectedArticleId ? selectedArticleTitle || '阅读文章' : 'FeedFuse'}</span>
             </div>
 
-            <Button
-              onClick={() => setSettingsOpen(true)}
-              type="button"
-              variant="outline"
-              size="icon"
-              aria-label="打开设置"
-            >
-              <SettingsIcon />
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => setSearchOpen(true)}
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label="打开全局搜索"
+              >
+                <Search />
+              </Button>
+
+              <Button
+                onClick={() => setSettingsOpen(true)}
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label="打开设置"
+              >
+                <SettingsIcon />
+              </Button>
+            </div>
           </div>
 
           {isTablet ? (
@@ -390,6 +407,7 @@ export default function ReaderLayout({ renderedAt, initialSelectedView }: Reader
               <div className="relative min-w-0 flex-1 overflow-hidden bg-background">
                 <MemoizedArticleView
                   renderedAt={renderedAt}
+                  highlightQuery={activeSearchHighlightQuery}
                   reserveTopSpace={false}
                 />
               </div>
@@ -402,6 +420,7 @@ export default function ReaderLayout({ renderedAt, initialSelectedView }: Reader
               {selectedArticleId ? (
                 <MemoizedArticleView
                   renderedAt={renderedAt}
+                  highlightQuery={activeSearchHighlightQuery}
                   reserveTopSpace={false}
                 />
               ) : (
@@ -442,6 +461,19 @@ export default function ReaderLayout({ renderedAt, initialSelectedView }: Reader
           </SheetContent>
         </Sheet>
       ) : null}
+
+      <GlobalSearchDialog
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        onSelectResult={async (result, query) => {
+          setActiveSearchHighlightQuery(query);
+          await useAppStore.getState().openArticleInReader({
+            view: result.feedId,
+            articleId: result.id,
+            articleHistory: 'push',
+          });
+        }}
+      />
 
       {settingsOpen && <SettingsCenterModal onClose={() => setSettingsOpen(false)} />}
     </div>

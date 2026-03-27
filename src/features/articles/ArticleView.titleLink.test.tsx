@@ -351,4 +351,52 @@ describe('ArticleView title link', () => {
 
     expect(commitCount).toBe(baselineCommitCount);
   });
+
+  it('highlights matched query text inside rendered article html', async () => {
+    useAppStore.setState({
+      feeds: [
+        {
+          id: 'feed-1',
+          title: 'Feed 1',
+          url: 'https://example.com/rss.xml',
+          unreadCount: 1,
+          enabled: true,
+          fullTextOnOpenEnabled: false,
+          aiSummaryOnOpenEnabled: false,
+          categoryId: 'cat-uncategorized',
+          category: '未分类',
+        },
+      ],
+      articles: [
+        {
+          id: 'article-1',
+          feedId: 'feed-1',
+          title: 'Article 1',
+          content: '<p>Hello FeedFuse world</p>',
+          summary: 'summary',
+          publishedAt: new Date().toISOString(),
+          link: 'https://example.com/a1',
+          isRead: true,
+          isStarred: false,
+        },
+      ],
+      selectedView: 'all',
+      selectedArticleId: 'article-1',
+    });
+
+    await act(async () => {
+      render(<ArticleView highlightQuery="FeedFuse world" />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const content = screen.getByTestId('article-html-content');
+    const marks = content.querySelectorAll('mark[data-search-highlight="true"]');
+    expect(marks).toHaveLength(2);
+    expect(marks[0]).toHaveClass('bg-warning/30', 'font-semibold');
+    expect(Array.from(marks).map((element) => element.textContent)).toEqual([
+      'FeedFuse',
+      'world',
+    ]);
+  });
 });

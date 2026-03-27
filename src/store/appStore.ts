@@ -107,6 +107,11 @@ interface AppState {
 
   setSelectedView: (view: ViewType, options?: { history?: ReaderSelectionHistoryMode }) => void;
   setSelectedArticle: (id: string | null, options?: { history?: ReaderSelectionHistoryMode }) => void;
+  openArticleInReader: (input: {
+    view: ViewType;
+    articleId: string;
+    articleHistory?: ReaderSelectionHistoryMode;
+  }) => Promise<void>;
   toggleShowUnreadOnly: () => void;
   toggleShowFilteredForFeed: (feedId: string) => void;
   refreshArticle: (
@@ -324,19 +329,41 @@ export function getSelectedArticleFromState(
 }
 
 function mergeArticleIntoCollections(
-  state: Pick<AppState, 'articles' | 'articleDetailCache'>,
+  state: Pick<AppState, 'articles' | 'articleDetailCache' | 'selectedView' | 'articleSnapshotCache'>,
   article: Article,
 ) {
   const existingArticle = state.articles.find((item) => item.id === article.id);
+  const cachedArticlesForFeed = state.articleSnapshotCache[article.feedId] ?? [];
+  const existingCachedArticle = cachedArticlesForFeed.find((item) => item.id === article.id);
+  const shouldRevealArticleInVisibleFeed =
+    state.selectedView === article.feedId && !existingArticle;
+
+  const nextVisibleArticles = existingArticle
+    ? state.articles.map((item) => (item.id === article.id ? { ...item, ...article } : item))
+    : shouldRevealArticleInVisibleFeed
+      ? sortArticlesByPublishedAtDesc([...state.articles, article])
+      : state.articles;
+
+  const nextFeedSnapshotArticles = existingCachedArticle
+    ? cachedArticlesForFeed.map((item) => (item.id === article.id ? { ...item, ...article } : item))
+    : state.selectedView === article.feedId
+      ? sortArticlesByPublishedAtDesc([...cachedArticlesForFeed, article])
+      : cachedArticlesForFeed;
+  const shouldWriteFeedSnapshotCache =
+    existingCachedArticle !== undefined || state.selectedView === article.feedId;
 
   return {
-    articles: existingArticle
-      ? state.articles.map((item) => (item.id === article.id ? { ...item, ...article } : item))
-      : state.articles,
+    articles: nextVisibleArticles,
     articleDetailCache: {
       ...state.articleDetailCache,
       [article.id]: article,
     },
+    articleSnapshotCache: shouldWriteFeedSnapshotCache
+      ? {
+          ...state.articleSnapshotCache,
+          [article.feedId]: nextFeedSnapshotArticles,
+        }
+      : state.articleSnapshotCache,
   };
 }
 
@@ -521,6 +548,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         console.error(err);
       }
     })();
+  },
+  openArticleInReader: async ({ view, articleId, articleHistory = 'push' }) => {
+    get().setSelectedView(view, { history: 'none' });
+    await get().loadSnapshot({ view });
+    get().setSelectedArticle(articleId, { history: articleHistory });
   },
   toggleShowUnreadOnly: () => {
     set((state) => ({

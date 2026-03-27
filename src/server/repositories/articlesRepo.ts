@@ -104,6 +104,91 @@ export interface ArticleRow {
   starredAt: string | null;
 }
 
+export interface ArticleSearchRow {
+  id: string;
+  feedId: string;
+  feedTitle: string;
+  title: string;
+  titleOriginal: string | null;
+  titleZh: string | null;
+  summary: string | null;
+  bodyText: string;
+  publishedAt: string | null;
+}
+
+export interface ArticleSearchResult {
+  id: string;
+  feedId: string;
+  feedTitle: string;
+  title: string;
+  titleOriginal: string | null;
+  titleZh: string | null;
+  summary: string;
+  excerpt: string;
+  publishedAt: string | null;
+}
+
+function normalizeSearchKeyword(value: string): string {
+  return value.trim().replace(/\s+/g, ' ');
+}
+
+function tokenizeSearchKeyword(keyword: string): string[] {
+  return Array.from(new Set(normalizeSearchKeyword(keyword).split(' ').filter(Boolean))).slice(0, 8);
+}
+
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, '\\$&');
+}
+
+function stripHtml(value: string): string {
+  return value
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/&nbsp;|&#160;/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function indexOfTerm(text: string, terms: string[]): number {
+  const lower = text.toLowerCase();
+
+  return terms.reduce((minIndex, term) => {
+    const nextIndex = lower.indexOf(term.toLowerCase());
+    if (nextIndex < 0) {
+      return minIndex;
+    }
+
+    return minIndex < 0 ? nextIndex : Math.min(minIndex, nextIndex);
+  }, -1);
+}
+
+function buildExcerpt(input: {
+  summary?: string | null;
+  bodyText: string;
+  terms: string[];
+}): string {
+  const normalizedSummary = input.summary?.trim() ?? '';
+  const normalizedBody = stripHtml(input.bodyText);
+  const preferredText = normalizedSummary || normalizedBody;
+
+  if (!preferredText) {
+    return '';
+  }
+
+  const matchIndex = indexOfTerm(preferredText, input.terms);
+  if (matchIndex < 0) {
+    return preferredText.slice(0, 180);
+  }
+
+  const start = Math.max(0, matchIndex - 48);
+  const end = Math.min(preferredText.length, matchIndex + 132);
+  const prefix = start > 0 ? '...' : '';
+  const suffix = end < preferredText.length ? '...' : '';
+
+  return `${prefix}${preferredText.slice(start, end).trim()}${suffix}`;
+}
+
 export async function insertArticleIgnoreDuplicate(
   pool: DbClient,
   input: {
@@ -193,6 +278,111 @@ export async function getArticleById(
     [id],
   );
   return rows[0] ?? null;
+}
+
+export async function searchArticles(
+  pool: DbClient,
+  input: {
+    keyword: string;
+    limit?: number;
+  },
+): Promise<ArticleSearchResult[]> {
+  const normalizedKeyword = normalizeSearchKeyword(input.keyword);
+  const terms = tokenizeSearchKeyword(normalizedKeyword);
+
+  if (terms.length === 0) {
+    return [];
+  }
+
+  const limit = Math.min(Math.max(input.limit ?? 20, 1), 50);
+  const searchableSql = `
+    trim(
+      concat_ws(
+        ' ',
+        coalesce(articles.title_zh, ''),
+        coalesce(articles.title, ''),
+        coalesce(articles.title_original, ''),
+        coalesce(articles.summary, ''),
+        regexp_replace(
+          regexp_replace(
+            regexp_replace(coalesce(articles.content_full_html, articles.content_html, ''), '<script[\\s\\S]*?<\\/script>', ' ', 'gi'),
+            '<style[\\s\\S]*?<\\/style>',
+            ' ',
+            'gi'
+          ),
+          '<[^>]+>',
+          ' ',
+          'g'
+        )
+      )
+    )
+  `;
+  const params: Array<string | number> = [];
+  const searchConditions = terms.map((term) => {
+    params.push(`%${escapeLikePattern(term)}%`);
+    return `${searchableSql} ilike $${params.length} escape '\\'`;
+  });
+
+  params.push(`%${escapeLikePattern(normalizedKeyword)}%`);
+  const exactKeywordParamIndex = params.length;
+  params.push(limit);
+  const limitParamIndex = params.length;
+
+  const { rows } = await pool.query<ArticleSearchRow>(
+    `
+      select
+        articles.id,
+        articles.feed_id as "feedId",
+        feeds.title as "feedTitle",
+        articles.title,
+        articles.title_original as "titleOriginal",
+        articles.title_zh as "titleZh",
+        articles.summary,
+        regexp_replace(
+          regexp_replace(
+            regexp_replace(coalesce(articles.content_full_html, articles.content_html, ''), '<script[\\s\\S]*?<\\/script>', ' ', 'gi'),
+            '<style[\\s\\S]*?<\\/style>',
+            ' ',
+            'gi'
+          ),
+          '<[^>]+>',
+          ' ',
+          'g'
+        ) as "bodyText",
+        articles.published_at as "publishedAt"
+      from articles
+      inner join feeds on feeds.id = articles.feed_id
+      where articles.filter_status = any('{passed,error}'::text[])
+        and ${searchConditions.join('\n        and ')}
+      order by
+        case
+          when coalesce(articles.title_zh, articles.title, '') ilike $${exactKeywordParamIndex} escape '\\' then 0
+          when coalesce(articles.title_original, '') ilike $${exactKeywordParamIndex} escape '\\' then 1
+          when coalesce(articles.summary, '') ilike $${exactKeywordParamIndex} escape '\\' then 2
+          else 3
+        end,
+        coalesce(articles.published_at, 'epoch'::timestamptz) desc,
+        articles.id desc
+      limit $${limitParamIndex}
+    `,
+    params,
+  );
+
+  return rows.map((row) => ({
+    id: row.id,
+    feedId: row.feedId,
+    feedTitle: row.feedTitle,
+    title: row.titleZh?.trim() || row.title,
+    titleOriginal: row.titleOriginal,
+    titleZh: row.titleZh,
+    summary: row.summary?.trim() ?? '',
+    excerpt: buildExcerpt({
+      summary: row.summary,
+      bodyText: row.bodyText,
+      terms,
+    }),
+    publishedAt: row.publishedAt,
+  }));
 }
 
 export async function setArticleRead(

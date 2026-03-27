@@ -13,6 +13,7 @@ import {
   Download,
   FileText,
   Languages,
+  Search,
   Settings as SettingsIcon,
   Sparkles,
   Star,
@@ -45,6 +46,7 @@ import ArticleScrollAssist from "./ArticleScrollAssist";
 import ArticleImagePreview from "./ArticleImagePreview";
 import ReaderToolbarIconButton from "../reader/ReaderToolbarIconButton";
 import { READER_RESIZE_DESKTOP_MIN_WIDTH } from "../reader/readerLayoutSizing";
+import { highlightHtmlByQuery } from "../reader/globalSearch";
 import { toast } from "../toast/toast";
 
 const FLOATING_TITLE_SCROLL_THRESHOLD_PX = 96;
@@ -52,6 +54,8 @@ const AI_DIGEST_SOURCES_VISIBLE_LIMIT = 3;
 const AI_DIGEST_SOURCES_SCROLL_MAX_HEIGHT_CLASS = "max-h-[13.5rem]";
 
 interface ArticleViewProps {
+  highlightQuery?: string;
+  onOpenSearch?: () => void;
   onOpenSettings?: () => void;
   onTitleVisibilityChange?: (isVisible: boolean) => void;
   reserveTopSpace?: boolean;
@@ -66,6 +70,8 @@ type ImagePreviewState = {
 };
 
 export default function ArticleView({
+  highlightQuery = "",
+  onOpenSearch,
   onOpenSettings,
   onTitleVisibilityChange,
   reserveTopSpace = true,
@@ -81,9 +87,7 @@ export default function ArticleView({
   const markAsRead = useAppStore((state) => state.markAsRead);
   const toggleStar = useAppStore((state) => state.toggleStar);
   const refreshArticle = useAppStore((state) => state.refreshArticle);
-  const setSelectedView = useAppStore((state) => state.setSelectedView);
-  const setSelectedArticle = useAppStore((state) => state.setSelectedArticle);
-  const loadSnapshot = useAppStore((state) => state.loadSnapshot);
+  const openArticleInReader = useAppStore((state) => state.openArticleInReader);
   const general = useSettingsStore((state) => state.persistedSettings.general);
   const autoMarkReadEnabled = useSettingsStore(
     (state) => state.persistedSettings.general.autoMarkReadEnabled,
@@ -427,6 +431,7 @@ export default function ArticleView({
     });
   }, [
     article?.aiSummary,
+    article?.aiSummarySession,
     article?.aiSummarySession?.id,
     article?.aiSummarySession?.status,
     article?.id,
@@ -511,9 +516,11 @@ export default function ArticleView({
 
   async function onAiDigestSourceClick(source: ArticleAiDigestSource) {
     // Preserve the current digest article URL entry so browser back can return to it.
-    setSelectedView(source.feedId, { history: "none" });
-    await loadSnapshot({ view: source.feedId });
-    setSelectedArticle(source.articleId, { history: "push" });
+    await openArticleInReader({
+      view: source.feedId,
+      articleId: source.articleId,
+      articleHistory: "push",
+    });
   }
 
   function renderDesktopToolbar() {
@@ -587,6 +594,11 @@ export default function ArticleView({
               onClick={onMarkdownExportButtonClick}
             />
           ) : null}
+          <ReaderToolbarIconButton
+            icon={Search}
+            label="全局搜索"
+            onClick={onOpenSearch}
+          />
           <ReaderToolbarIconButton
             icon={SettingsIcon}
             label="打开设置"
@@ -684,7 +696,14 @@ export default function ArticleView({
           article?.content ||
           ""
         : article?.content || "";
-  const articleBodyMarkup = useMemo(() => ({ __html: bodyHtml }), [bodyHtml]);
+  const highlightedBodyHtml = useMemo(
+    () => highlightHtmlByQuery(bodyHtml, highlightQuery),
+    [bodyHtml, highlightQuery],
+  );
+  const articleBodyMarkup = useMemo(
+    () => ({ __html: highlightedBodyHtml }),
+    [highlightedBodyHtml],
+  );
 
   useEffect(() => {
     const container = articleContentRef.current;
@@ -701,7 +720,7 @@ export default function ArticleView({
       node.setAttribute("aria-label", label);
       node.classList.add("cursor-zoom-in");
     }
-  }, [bodyHtml]);
+  }, [highlightedBodyHtml]);
 
   useEffect(() => {
     if (typeof window === "undefined") {

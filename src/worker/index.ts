@@ -59,7 +59,6 @@ import { buildFeedFetchJobData, selectFeedsForRefreshAll } from './refreshAll';
 import { isFeedDue } from './rssScheduler';
 import { runArticleTaskWithStatus } from './articleTaskStatus';
 import { runImmersiveTranslateSession } from './immersiveTranslateWorker';
-import { enqueueAutoAiTriggersOnFetch } from './autoAiTriggers';
 import { runAiSummaryStreamWorker } from './aiSummaryStreamWorker';
 import { runAiDigestTick } from './aiDigestTick';
 import { runAiDigestGenerate } from './aiDigestGenerate';

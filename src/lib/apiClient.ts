@@ -792,6 +792,40 @@ export interface ArticleAiDigestSourceDto {
   position: number;
 }
 
+export interface ArticleSearchItemDto {
+  id: string;
+  feedId: string;
+  feedTitle: string;
+  title: string;
+  titleOriginal: string | null;
+  titleZh: string | null;
+  summary: string;
+  excerpt: string;
+  publishedAt: string | null;
+}
+
+export async function searchArticles(
+  input: {
+    keyword: string;
+    limit?: number;
+  },
+  options?: RequestApiOptions,
+): Promise<{ items: ArticleSearchItemDto[] }> {
+  const params = new URLSearchParams();
+  const normalizedKeyword = input.keyword.trim().replace(/\s+/g, ' ');
+
+  if (normalizedKeyword) {
+    params.set('keyword', normalizedKeyword);
+  }
+
+  if (typeof input.limit === 'number') {
+    params.set('limit', String(input.limit));
+  }
+
+  const query = params.toString();
+  return requestApi(query ? `/api/articles/search?${query}` : '/api/articles/search', undefined, options);
+}
+
 export async function getArticle(
   articleId: string,
   options?: RequestApiOptions,

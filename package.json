@@ -15,7 +15,10 @@
     "worker:dev": "tsx src/worker/index.ts",
     "worker:start": "tsx src/worker/index.ts",
     "lint": "eslint .",
+    "type-check": "tsc --noEmit -p tsconfig.typecheck.json",
+    "pretest": "node scripts/check-node-version.mjs",
     "pretest:unit": "node scripts/check-node-version.mjs",
+    "test": "vitest run",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest"
   },
