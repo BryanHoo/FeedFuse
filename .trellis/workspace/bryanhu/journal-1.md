@@ -190,3 +190,49 @@ Completed the Trellis backend specification set so future backend work can load 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: 收敛阅读器主题视觉层级
+
+**Date**: 2026-03-27
+**Task**: 收敛阅读器主题视觉层级
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| Theme tokens | 统一移除亮暗主题阴影，补充阅读器 pane 的 hover 与 active 色板 token |
+| Reader UI | 调整左栏与中栏选中态、未读提示、AI 摘要卡片的亮暗主题视觉层级 |
+| Contracts & tests | 更新 globals/theme 契约测试与 FeedList、ArticleList、ArticleView 等相关回归测试 |
+
+**Verification**:
+- `pnpm lint`
+- `pnpm type-check`
+- `pnpm test`
+
+**Notes**:
+- 保留未跟踪设计文件 `docs/Design Style Linear  Modern.md`，未纳入代码提交
+- 记录的功能提交为 `a87c45f`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a87c45f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
