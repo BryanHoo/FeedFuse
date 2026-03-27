@@ -1,0 +1,7 @@
+{"file": ".claude/commands/trellis/finish-work.md", "reason": "Finish work checklist"}
+{"file": ".claude/commands/trellis/check-backend.md", "reason": "Backend check spec"}
+{"file": ".claude/commands/trellis/check-frontend.md", "reason": "Frontend check spec"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "检查搜索交互和可访问性"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "检查请求路径、语义 token 和测试覆盖"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "检查搜索 DTO 和辅助函数的类型边界"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "检查 API 与前端状态联动的数据契约"}
