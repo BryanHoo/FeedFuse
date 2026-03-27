@@ -12,15 +12,15 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          'bg-[linear-gradient(135deg,var(--color-primary),color-mix(in_oklab,var(--color-primary)_72%,white_28%))] text-primary-foreground shadow-button hover:-translate-y-0.5 hover:brightness-[1.03] hover:shadow-button-hover',
+          'bg-[linear-gradient(135deg,var(--color-primary),color-mix(in_oklab,var(--color-primary)_72%,white_28%))] text-primary-foreground hover:-translate-y-0.5 hover:brightness-[1.03] dark:border-[rgba(94,106,210,0.34)] dark:bg-[linear-gradient(135deg,color-mix(in_oklab,var(--color-primary)_94%,black_6%),color-mix(in_oklab,var(--color-primary)_76%,white_24%))] dark:text-primary-foreground',
         destructive:
           'bg-destructive text-destructive-foreground hover:-translate-y-0.5 hover:bg-destructive/92',
         outline:
-          'border-border/80 bg-background/90 text-foreground shadow-field hover:-translate-y-px hover:border-primary/20 hover:bg-accent/90 hover:text-accent-foreground',
+          'border-border/80 bg-background/90 text-foreground hover:-translate-y-px hover:border-primary/20 hover:bg-accent/90 hover:text-accent-foreground dark:border-white/[0.07] dark:bg-[linear-gradient(180deg,rgba(14,14,18,0.96),rgba(10,10,13,0.92))] dark:text-foreground dark:hover:border-[rgba(94,106,210,0.24)] dark:hover:bg-[color-mix(in_oklab,var(--color-primary)_10%,var(--color-card)_90%)]',
         secondary:
-          'border-border/70 bg-[color-mix(in_oklab,var(--color-secondary)_78%,white_22%)] text-secondary-foreground shadow-field hover:-translate-y-px hover:border-primary/18 hover:bg-[color-mix(in_oklab,var(--color-accent)_58%,white_42%)]',
+          'border-border/70 bg-[color-mix(in_oklab,var(--color-secondary)_78%,white_22%)] text-secondary-foreground hover:-translate-y-px hover:border-primary/18 hover:bg-[color-mix(in_oklab,var(--color-accent)_58%,white_42%)] dark:border-white/[0.05] dark:bg-[linear-gradient(180deg,rgba(13,13,17,0.96),rgba(9,9,12,0.92))] dark:text-foreground dark:hover:border-[rgba(94,106,210,0.18)] dark:hover:bg-[color-mix(in_oklab,var(--color-primary)_8%,var(--color-card)_92%)]',
         ghost:
-          'text-muted-foreground hover:bg-accent/90 hover:text-foreground',
+          'text-muted-foreground hover:bg-accent/90 hover:text-foreground dark:text-muted-foreground dark:hover:bg-[color-mix(in_oklab,var(--color-primary)_10%,var(--color-card)_90%)] dark:hover:text-foreground',
         link: 'text-primary underline-offset-4 hover:text-primary/88 hover:underline',
       },
       size: {

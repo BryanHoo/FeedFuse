@@ -31,7 +31,10 @@ import {
 } from '@/components/ui/context-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { deleteCategory, patchCategory, reorderCategories } from '@/lib/apiClient';
-import { READER_PANE_HOVER_BACKGROUND_CLASS_NAME } from '@/lib/designSystem';
+import {
+  READER_PANE_ACTIVE_ITEM_CLASS_NAME,
+  READER_PANE_HOVER_BACKGROUND_CLASS_NAME,
+} from '@/lib/designSystem';
 import { runImmediateOperation } from '../notifications/userOperationNotifier';
 import { cn } from '@/lib/utils';
 import { AI_DIGEST_VIEW_ID } from '@/lib/view';
@@ -39,6 +42,8 @@ import { useHydratedSelectedView } from '../reader/useHydratedSelectedView';
 
 const uncategorizedName = '未分类';
 const uncategorizedId = 'cat-uncategorized';
+const LEFT_RAIL_UNREAD_BADGE_CLASS_NAME =
+  'border-border/60 bg-[color-mix(in_oklab,var(--color-background)_86%,white_14%)] text-muted-foreground dark:border-white/[0.08] dark:bg-[color-mix(in_oklab,var(--color-primary)_10%,var(--color-card)_90%)] dark:text-foreground/86';
 const AddFeedDialog = dynamic(() => import('./AddFeedDialog'), { ssr: false, loading: () => null });
 const AddAiDigestDialog = dynamic(() => import('./AddAiDigestDialog'), { ssr: false, loading: () => null });
 const EditFeedDialog = dynamic(() => import('./EditFeedDialog'), { ssr: false, loading: () => null });
@@ -333,10 +338,13 @@ export default function FeedList({
 
   return (
     <>
-      <div className="flex h-full flex-col">
+      <div className="flex h-full flex-col dark:bg-[linear-gradient(180deg,rgba(14,14,18,0.34),rgba(8,8,10,0))]">
         <div
           data-testid="feed-list-header"
-          className={cn('flex h-12 items-center justify-between px-4', reserveCloseButtonSpace && 'pr-16')}
+          className={cn(
+            'flex h-12 items-center justify-between border-b border-transparent px-4 dark:border-white/[0.04]',
+            reserveCloseButtonSpace && 'pr-16',
+          )}
         >
           <h1 className="flex items-center gap-2">
             <img
@@ -346,7 +354,9 @@ export default function FeedList({
               height={28}
               className="h-7 w-7 shrink-0"
             />
-            <span className="text-[15px] font-semibold leading-none tracking-tight">FeedFuse</span>
+            <span className="text-[15px] font-semibold leading-none tracking-tight dark:bg-gradient-to-b dark:from-white dark:via-white/95 dark:to-white/72 dark:bg-clip-text dark:text-transparent">
+              FeedFuse
+            </span>
           </h1>
           <Popover open={addMenuOpen} onOpenChange={setAddMenuOpen}>
             <PopoverTrigger asChild>
@@ -354,7 +364,7 @@ export default function FeedList({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 text-muted-foreground"
+                className="h-7 w-7 text-muted-foreground dark:border dark:border-white/[0.04] dark:bg-[rgba(14,14,18,0.92)]"
                 aria-label="添加订阅"
               >
                 <Plus className="h-4 w-4" />
@@ -400,9 +410,9 @@ export default function FeedList({
               onClick={() => setSelectedView(view.id)}
               aria-current={renderedSelectedView === view.id ? 'true' : undefined}
               className={cn(
-                'flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+                'flex w-full items-center justify-between gap-2 rounded-xl border border-transparent px-3 py-2 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset dark:border-white/[0.03]',
                 renderedSelectedView === view.id
-                  ? 'bg-primary/10 text-primary'
+                  ? READER_PANE_ACTIVE_ITEM_CLASS_NAME
                   : cn(
                       'text-foreground hover:text-accent-foreground',
                       READER_PANE_HOVER_BACKGROUND_CLASS_NAME,
@@ -417,7 +427,10 @@ export default function FeedList({
                 <Badge
                   variant="secondary"
                   aria-hidden="true"
-                  className="h-5 min-w-6 shrink-0 justify-center px-1.5 text-[10px] font-semibold tabular-nums"
+                  className={cn(
+                    'h-5 min-w-6 shrink-0 justify-center px-1.5 text-[10px] font-semibold tabular-nums',
+                    LEFT_RAIL_UNREAD_BADGE_CLASS_NAME,
+                  )}
                 >
                   {view.unreadCount}
                 </Badge>
@@ -439,7 +452,7 @@ export default function FeedList({
                 aria-expanded={expanded}
                 aria-controls={`feed-category-panel-${category.id}`}
                 className={cn(
-                  'flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-semibold tracking-[0.04em] text-muted-foreground transition-colors hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+                  'flex w-full items-center gap-1 rounded-lg border border-transparent px-2 py-1.5 text-[11px] font-semibold tracking-[0.04em] text-muted-foreground transition-colors hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset dark:border-white/[0.02]',
                   READER_PANE_HOVER_BACKGROUND_CLASS_NAME,
                 )}
               >
@@ -526,9 +539,9 @@ export default function FeedList({
                             setHoveredFeedErrorId((current) => (current === feed.id ? null : current));
                           }}
                           className={cn(
-                            'flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+                            'flex w-full items-center justify-between gap-2 rounded-xl border border-transparent px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset dark:border-white/[0.03]',
                             renderedSelectedView === feed.id
-                              ? 'bg-primary/10 text-primary'
+                              ? READER_PANE_ACTIVE_ITEM_CLASS_NAME
                               : cn(
                                   'text-foreground hover:text-accent-foreground',
                                   READER_PANE_HOVER_BACKGROUND_CLASS_NAME,
@@ -573,7 +586,10 @@ export default function FeedList({
                             {feed.unreadCount > 0 ? (
                               <Badge
                                 variant="secondary"
-                                className="h-5 min-w-6 justify-center px-1.5 text-[10px] font-semibold tabular-nums"
+                                className={cn(
+                                  'h-5 min-w-6 justify-center px-1.5 text-[10px] font-semibold tabular-nums',
+                                  LEFT_RAIL_UNREAD_BADGE_CLASS_NAME,
+                                )}
                               >
                                 {feed.unreadCount}
                               </Badge>

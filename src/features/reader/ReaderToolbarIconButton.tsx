@@ -35,7 +35,8 @@ export default function ReaderToolbarIconButton({
       size="icon"
       className={cn(
         'h-6 w-6 cursor-pointer text-muted-foreground',
-        pressed && 'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary',
+        pressed &&
+          'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary dark:border-white/[0.06] dark:bg-[color-mix(in_oklab,var(--color-primary)_12%,var(--color-card)_88%)] dark:text-foreground dark:hover:bg-[color-mix(in_oklab,var(--color-primary)_16%,var(--color-card)_84%)]',
         className,
       )}
       aria-label={label}

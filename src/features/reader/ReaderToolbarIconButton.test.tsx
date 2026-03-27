@@ -48,7 +48,6 @@ describe('ReaderToolbarIconButton', () => {
     expect(document.body.querySelector('[data-side="bottom"]')).toHaveClass(
       'bg-popover',
       'text-popover-foreground',
-      'shadow-popover',
     );
     expect(document.body.querySelector('[data-side="bottom"]')).not.toHaveClass('bg-black/80');
 

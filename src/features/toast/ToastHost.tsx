@@ -25,9 +25,9 @@ const iconClassByTone: Record<ToastTone, string> = {
 };
 
 const iconSurfaceClassByTone: Record<ToastTone, string> = {
-  success: 'border border-success/18 bg-success/24 shadow-field',
-  info: 'border border-info/18 bg-info/24 shadow-field',
-  error: 'border border-error/18 bg-error/24 shadow-field',
+  success: 'border border-success/18 bg-success/24',
+  info: 'border border-info/18 bg-info/24',
+  error: 'border border-error/18 bg-error/24',
 };
 
 function ToneIcon({ tone }: { tone: ToastTone }) {
@@ -66,7 +66,7 @@ export function ToastHost() {
           role={item.tone === 'error' ? 'alert' : 'status'}
           aria-live={item.tone === 'error' ? 'assertive' : 'polite'}
           className={cn(
-            'pointer-events-auto flex w-full max-w-[min(var(--layout-notification-viewport-max-width),calc(100vw-1rem))] items-center gap-3 rounded-2xl border px-3.5 py-2.5 shadow-popover backdrop-blur-md outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:slide-in-from-top-2 data-[state=closed]:slide-out-to-top-2',
+            'pointer-events-auto flex w-full max-w-[min(var(--layout-notification-viewport-max-width),calc(100vw-1rem))] items-center gap-3 rounded-2xl border px-3.5 py-2.5 backdrop-blur-md outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:slide-in-from-top-2 data-[state=closed]:slide-out-to-top-2',
             toneClassByTone[item.tone],
           )}
         >

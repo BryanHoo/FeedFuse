@@ -44,8 +44,11 @@ describe('globals.css contract', () => {
     expect(css).toContain('--reader-pane-hover: color-mix(');
     expect(css).toContain('var(--color-primary) 9%');
     expect(css).toContain('var(--color-card)');
-    expect(css).toContain('--color-background: hsl(224 31% 12%)');
-    expect(css).toContain('--color-primary: hsl(213 92% 72%)');
+    expect(css).toContain('--color-background: hsl(240 15% 3%)');
+    expect(css).toContain('--color-primary: hsl(234 56% 60%)');
+    expect(css).toContain('--reader-pane-hover: color-mix(');
+    expect(css).toContain('.dark body {');
+    expect(css).toContain('background-attachment: fixed;');
     expect(css).not.toContain('--color-background: hsl(0 0% 100%)');
     expect(css).not.toContain('--color-primary: hsl(221.2 83.2% 53.3%)');
     expect(css).not.toContain('--color-background: hsl(222.2 84% 4.9%)');
@@ -69,6 +72,6 @@ describe('globals.css contract', () => {
     const css = readFileSync('src/app/globals.css', 'utf-8');
 
     expect(css).toContain('--color-muted-foreground: hsl(215 16% 47%)');
-    expect(css).toContain('--color-muted-foreground: hsl(216 18% 78%)');
+    expect(css).toContain('--color-muted-foreground: hsl(226 8% 58%)');
   });
 });

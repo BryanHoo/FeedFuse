@@ -28,7 +28,7 @@ const SheetOverlay = React.forwardRef<
 SheetOverlay.displayName = SheetPrimitive.Overlay.displayName;
 
 const sheetVariants = cva(
-  'fixed z-50 gap-4 bg-background p-6 shadow-popover transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out',
+  'fixed z-50 gap-4 bg-background p-6 transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out dark:border-white/[0.06] dark:bg-[linear-gradient(180deg,rgba(15,15,20,0.97),rgba(9,9,12,0.98))]',
   {
     variants: {
       side: {
@@ -69,7 +69,7 @@ const SheetContent = React.forwardRef<
         {children}
         <SheetClose
           aria-label={closeButtonLabel}
-          className="absolute right-4 top-4 rounded-lg border border-transparent text-muted-foreground/80 opacity-90 ring-offset-background transition-[background-color,color,border-color,opacity] hover:border-border/70 hover:bg-accent/90 hover:text-accent-foreground hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring/20 focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent/80 data-[state=open]:text-accent-foreground"
+          className="absolute right-4 top-4 rounded-lg border border-transparent text-muted-foreground/80 opacity-90 ring-offset-background transition-[background-color,color,border-color,opacity] hover:border-border/70 hover:bg-accent/90 hover:text-accent-foreground hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring/20 focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent/80 data-[state=open]:text-accent-foreground dark:hover:border-white/[0.08] dark:hover:bg-[linear-gradient(180deg,rgba(94,106,210,0.18),rgba(255,255,255,0.04))] dark:data-[state=open]:bg-[linear-gradient(180deg,rgba(94,106,210,0.16),rgba(255,255,255,0.04))]"
         >
           <X className="h-4 w-4" />
           <span className="sr-only">{closeButtonLabel}</span>

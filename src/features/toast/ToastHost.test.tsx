@@ -30,7 +30,7 @@ describe('ToastHost', () => {
     expect(toastRoot.className).toContain('rounded-2xl');
     expect(toastRoot.className).toContain('data-[state=open]:slide-in-from-top-2');
     expect(toastRoot.className).toContain('data-[state=closed]:slide-out-to-top-2');
-    expect(toastRoot.className).toContain('shadow-popover');
+    expect(toastRoot.className).not.toContain('shadow-');
     expect(toastRoot.className).not.toContain('items-start');
     expect(await screen.findByText('已保存')).toBeInTheDocument();
   });
@@ -85,17 +85,17 @@ describe('ToastHost', () => {
     expect(errorToast?.className).toContain('border-error/34');
 
     expect(successToast?.firstElementChild?.className).toContain('bg-success/24');
-    expect(successToast?.firstElementChild?.className).toContain('shadow-field');
+    expect(successToast?.firstElementChild?.className).not.toContain('shadow-');
     expect(successToast?.firstElementChild?.firstElementChild?.getAttribute('class')).toContain(
       'text-success-foreground',
     );
     expect(infoToast?.firstElementChild?.className).toContain('bg-info/24');
-    expect(infoToast?.firstElementChild?.className).toContain('shadow-field');
+    expect(infoToast?.firstElementChild?.className).not.toContain('shadow-');
     expect(infoToast?.firstElementChild?.firstElementChild?.getAttribute('class')).toContain(
       'text-info-foreground',
     );
     expect(errorToast?.firstElementChild?.className).toContain('bg-error/24');
-    expect(errorToast?.firstElementChild?.className).toContain('shadow-field');
+    expect(errorToast?.firstElementChild?.className).not.toContain('shadow-');
     expect(errorToast?.firstElementChild?.firstElementChild?.getAttribute('class')).toContain(
       'text-error-foreground',
     );

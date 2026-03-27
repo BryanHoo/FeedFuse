@@ -135,12 +135,12 @@ const LOAD_MORE_THRESHOLD_PX = 320;
 const LOAD_MORE_FOOTER_CLASS_NAME = "flex justify-center px-4 py-3 text-center";
 const LOAD_MORE_HINT_CLASS_NAME = "text-xs text-muted-foreground";
 const SELECTED_ARTICLE_ROW_CLASS_NAME =
-  "bg-[color-mix(in_oklab,var(--color-primary)_11%,white_89%)] shadow-field";
+  "border border-transparent bg-[color-mix(in_oklab,var(--color-primary)_11%,white_89%)] [&_[data-selected-row-feed]]:text-foreground/72 [&_[data-selected-row-time]]:text-foreground/72 [&_[data-selected-row-title]]:text-foreground dark:border-[rgba(94,106,210,0.26)] dark:!bg-[var(--reader-pane-active-strong)] dark:[&_[data-selected-row-feed]]:text-foreground/78 dark:[&_[data-selected-row-time]]:text-foreground/78 dark:[&_[data-selected-row-title]]:text-foreground";
 type PreviewImageStatus = "loading" | "ready" | "failed";
 const unreadSignalDotClassName =
-  "h-2 w-2 rounded-full bg-[color-mix(in_oklab,var(--color-primary)_78%,white)] ring-2 ring-background/95";
+  "h-2 w-2 rounded-full bg-[color-mix(in_oklab,var(--color-primary)_70%,white_30%)] ring-2 ring-background/95 dark:bg-[color-mix(in_oklab,var(--color-primary)_90%,white_10%)] dark:ring-[rgba(5,5,6,0.96)]";
 const unreadSignalTimeClassName =
-  "font-semibold text-[color-mix(in_oklab,var(--color-primary)_88%,white_12%)]";
+  "font-semibold text-[color-mix(in_oklab,var(--color-primary)_78%,white_22%)] dark:text-[color-mix(in_oklab,var(--color-primary)_72%,white_28%)]";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -719,7 +719,7 @@ export default function ArticleList({
             onClick={() => void loadMoreSnapshot()}
             className={cn(
               LOAD_MORE_HINT_CLASS_NAME,
-              "rounded-full border border-border/70 px-3 py-1 transition-colors hover:border-border hover:text-foreground",
+              "rounded-full border border-border/70 px-3 py-1 transition-colors hover:border-border hover:text-foreground dark:border-white/[0.08] dark:bg-[rgba(255,255,255,0.03)] dark:hover:border-[rgba(94,106,210,0.3)] dark:hover:bg-[rgba(94,106,210,0.1)]",
             )}
           >
             加载更多时出了点小问题，再试一次
@@ -981,7 +981,7 @@ export default function ArticleList({
           aria-current={selectedArticleId === article.id ? "true" : undefined}
           aria-label={getArticleButtonLabel(article, displayTitle)}
           className={cn(
-            "w-full px-4 py-2.5 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+            "w-full rounded-xl border border-transparent px-4 py-2.5 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset dark:border-white/[0.03]",
             selectedArticleId === article.id
               ? SELECTED_ARTICLE_ROW_CLASS_NAME
               : READER_PANE_HOVER_BACKGROUND_CLASS_NAME,
@@ -989,11 +989,12 @@ export default function ArticleList({
           style={{ height: row.height }}
         >
           <div className="min-w-0">
-            <span
-              data-testid={`article-list-row-${article.id}-title`}
-              title={displayTitle}
-              className={cn(
-                "block min-w-0 truncate text-[0.94rem] leading-[1.35]",
+                <span
+                  data-testid={`article-list-row-${article.id}-title`}
+                  data-selected-row-title
+                  title={displayTitle}
+                  className={cn(
+                    "block min-w-0 truncate text-[0.94rem] leading-[1.35]",
                 article.isRead
                   ? "font-medium text-muted-foreground"
                   : "font-semibold text-foreground",
@@ -1005,6 +1006,7 @@ export default function ArticleList({
               <div className="min-w-0 flex items-center gap-2">
                 <span
                   data-testid={`article-list-row-${article.id}-feed`}
+                  data-selected-row-feed
                   className="min-w-0 max-w-[10.5rem] truncate font-medium text-muted-foreground"
                 >
                   {getFeedTitle(article.feedId)}
@@ -1025,6 +1027,7 @@ export default function ArticleList({
                 )}
                 <span
                   data-testid={`article-list-row-${article.id}-time`}
+                  data-selected-row-time
                   className={article.isRead ? "text-muted-foreground" : unreadSignalTimeClassName}
                 >
                   {formatRelativeTime(article.publishedAt, referenceTime)}
@@ -1055,7 +1058,7 @@ export default function ArticleList({
         aria-current={selectedArticleId === article.id ? "true" : undefined}
         aria-label={getArticleButtonLabel(article, displayTitle)}
         className={cn(
-          "w-full px-4 py-2.5 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+          "w-full rounded-xl border border-transparent px-4 py-2.5 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset dark:border-white/[0.03]",
           selectedArticleId === article.id
             ? SELECTED_ARTICLE_ROW_CLASS_NAME
             : READER_PANE_HOVER_BACKGROUND_CLASS_NAME,
@@ -1066,6 +1069,7 @@ export default function ArticleList({
           <div className="flex h-full min-w-0 flex-1 flex-col">
             <h3
               data-testid={`article-card-${article.id}-title`}
+              data-selected-row-title
               ref={(titleElement) => {
                 if (titleElement) {
                   cardTitleRefs.current.set(article.id, titleElement);
@@ -1096,7 +1100,10 @@ export default function ArticleList({
 
             <div className="mt-auto flex items-center justify-between gap-3 pt-1.5 text-[11px]">
               <div className="min-w-0 flex items-center gap-2">
-                <span className="max-w-[10.5rem] truncate font-medium text-muted-foreground">
+                <span
+                  data-selected-row-feed
+                  className="max-w-[10.5rem] truncate font-medium text-muted-foreground"
+                >
                   {getFeedTitle(article.feedId)}
                 </span>
                 {articleFiltered ? (
@@ -1115,6 +1122,7 @@ export default function ArticleList({
                 )}
                 <span
                   data-testid={`article-card-${article.id}-time`}
+                  data-selected-row-time
                   className={article.isRead ? "text-muted-foreground" : unreadSignalTimeClassName}
                 >
                   {formatRelativeTime(article.publishedAt, referenceTime)}
@@ -1124,7 +1132,7 @@ export default function ArticleList({
           </div>
 
           {showPreviewImage && previewImage ? (
-            <div className="h-full w-24 shrink-0 overflow-hidden rounded-md bg-muted">
+            <div className="h-full w-24 shrink-0 overflow-hidden rounded-lg bg-muted dark:bg-[linear-gradient(180deg,rgba(14,14,18,0.96),rgba(9,9,12,0.92))]">
               <img
                 src={previewImage.src}
                 alt=""
@@ -1155,8 +1163,11 @@ export default function ArticleList({
   };
 
   return (
-    <div className="flex h-full flex-col" aria-busy={refreshing || displayModeSaving}>
-      <div className="flex h-12 min-w-0 items-center justify-between gap-3 px-4">
+    <div
+      className="flex h-full flex-col dark:bg-[linear-gradient(180deg,rgba(14,14,18,0.3),rgba(8,8,10,0))]"
+      aria-busy={refreshing || displayModeSaving}
+    >
+      <div className="flex h-12 min-w-0 items-center justify-between gap-3 border-b border-transparent px-4 dark:border-white/[0.04]">
         <h2
           className="min-w-0 truncate text-[0.96rem] font-semibold tracking-[0.01em]"
           title={headerTitle}

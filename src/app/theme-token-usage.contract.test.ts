@@ -33,12 +33,13 @@ describe('theme token usage contract', () => {
     expect(toastHostSource).toContain('text-success-foreground');
     expect(toastHostSource).toContain('text-info-foreground');
     expect(toastHostSource).toContain('text-error-foreground');
-    expect(toastHostSource).toContain('shadow-popover');
     expect(toastHostSource).toContain('data-[state=open]:slide-in-from-top-2');
     expect(toastHostSource).toContain('data-[state=closed]:slide-out-to-top-2');
     expect(toastHostSource).not.toContain('bg-background/92');
     expect(toastHostSource).not.toContain('right-3 top-3');
     expect(toastHostSource).not.toContain('shadow-md');
+    expect(toastHostSource).not.toContain('shadow-popover');
+    expect(toastHostSource).not.toContain('shadow-field');
     expect(toastHostSource).not.toMatch(/\b(?:slate|gray|amber|emerald|red)-/);
     expect(toastHostSource).not.toContain('bg-black/5');
     expect(toastHostSource).not.toContain('bg-white/10');
@@ -48,19 +49,20 @@ describe('theme token usage contract', () => {
 
     expect(contextMenuSource).toContain('text-error');
     expect(contextMenuSource).toContain('bg-error/10');
-    expect(contextMenuSource).toContain('shadow-popover');
     expect(contextMenuSource).not.toContain('text-red');
+    expect(contextMenuSource).not.toContain('shadow-popover');
     expect(contextMenuSource).not.toContain('shadow-[');
 
     expect(tooltipSource).toContain('bg-popover');
     expect(tooltipSource).toContain('text-popover-foreground');
-    expect(tooltipSource).toContain('shadow-popover');
+    expect(tooltipSource).not.toContain('shadow-popover');
     expect(tooltipSource).not.toContain('bg-black/80');
 
-    expect(popoverSource).toContain('shadow-popover');
+    expect(popoverSource).not.toContain('shadow-popover');
     expect(popoverSource).not.toContain('shadow-md');
 
-    expect(selectSource).toContain('shadow-popover');
+    expect(selectSource).not.toContain('shadow-popover');
+    expect(selectSource).not.toContain('shadow-field');
     expect(selectSource).not.toContain('shadow-sm');
 
     expect(dialogSource).toContain('bg-overlay');
@@ -69,6 +71,9 @@ describe('theme token usage contract', () => {
     expect(dialogSource).not.toContain('shadow-md');
     expect(sheetSource).not.toContain('shadow-md');
     expect(alertDialogSource).not.toContain('shadow-md');
+    expect(dialogSource).not.toContain('shadow-popover');
+    expect(sheetSource).not.toContain('shadow-popover');
+    expect(alertDialogSource).not.toContain('shadow-popover');
     expect(dialogSource).not.toContain('bg-black/50');
     expect(sheetSource).not.toContain('bg-black/50');
     expect(alertDialogSource).not.toContain('bg-black/50');

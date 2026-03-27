@@ -268,7 +268,7 @@ export default function ReaderLayout({ renderedAt, initialSelectedView }: Reader
       ref={layoutRef}
       data-testid="reader-layout-root"
       className={cn(
-        'relative flex h-screen overflow-hidden bg-background text-foreground',
+        'relative flex h-screen overflow-hidden bg-background text-foreground dark:bg-[radial-gradient(ellipse_at_top,rgba(15,15,22,0.98)_0%,rgba(7,7,10,0.98)_48%,rgba(2,2,3,1)_100%)]',
         !isDesktop && 'flex-col',
       )}
     >
@@ -277,7 +277,7 @@ export default function ReaderLayout({ renderedAt, initialSelectedView }: Reader
           <div
             data-testid="reader-feed-pane"
             className={cn(
-              'shrink-0 overflow-hidden border-r bg-muted/55 transition-colors duration-200',
+              'shrink-0 overflow-hidden border-r bg-muted/55 transition-colors duration-200 dark:border-white/[0.05] dark:bg-[linear-gradient(180deg,rgba(14,14,18,0.96),rgba(9,9,12,0.94))]',
               isResizeTargetActive('left') ? 'border-primary/60' : 'border-border',
             )}
             style={{ width: `${leftPaneWidth}px` }}
@@ -298,7 +298,7 @@ export default function ReaderLayout({ renderedAt, initialSelectedView }: Reader
           <div
             data-testid="reader-article-pane"
             className={cn(
-              'shrink-0 border-r bg-muted/15 transition-colors duration-200',
+              'shrink-0 border-r bg-muted/15 transition-colors duration-200 dark:border-white/[0.05] dark:bg-[linear-gradient(180deg,rgba(11,11,15,0.94),rgba(7,7,10,0.9))]',
               isResizeTargetActive('middle') ? 'border-primary/60' : 'border-border',
             )}
             style={{ width: `${middlePaneWidth}px` }}
@@ -320,7 +320,7 @@ export default function ReaderLayout({ renderedAt, initialSelectedView }: Reader
             onPointerLeave={() => handleResizeHandleLeave('middle')}
           />
 
-          <div className="relative flex-1 overflow-hidden bg-background">
+          <div className="relative flex-1 overflow-hidden bg-background dark:bg-[radial-gradient(circle_at_top,rgba(94,106,210,0.09),transparent_26%),linear-gradient(180deg,rgba(8,8,11,0.95),rgba(3,3,4,1))]">
             <MemoizedArticleView
               renderedAt={renderedAt}
               highlightQuery={activeSearchHighlightQuery}
@@ -365,7 +365,9 @@ export default function ReaderLayout({ renderedAt, initialSelectedView }: Reader
             </div>
 
             <div className="min-w-0 flex-1 px-3 text-center text-sm font-medium text-muted-foreground">
-              <span className="block truncate">{selectedArticleId ? selectedArticleTitle || '阅读文章' : 'FeedFuse'}</span>
+              <span className="block truncate dark:bg-gradient-to-b dark:from-white dark:via-white/95 dark:to-white/70 dark:bg-clip-text dark:text-transparent">
+                {selectedArticleId ? selectedArticleTitle || '阅读文章' : 'FeedFuse'}
+              </span>
             </div>
 
             <div className="flex items-center gap-2">
@@ -404,7 +406,7 @@ export default function ReaderLayout({ renderedAt, initialSelectedView }: Reader
                 />
               </div>
 
-              <div className="relative min-w-0 flex-1 overflow-hidden bg-background">
+              <div className="relative min-w-0 flex-1 overflow-hidden bg-background dark:bg-[radial-gradient(circle_at_top,rgba(94,106,210,0.09),transparent_26%),linear-gradient(180deg,rgba(8,8,11,0.95),rgba(3,3,4,1))]">
                 <MemoizedArticleView
                   renderedAt={renderedAt}
                   highlightQuery={activeSearchHighlightQuery}
@@ -415,7 +417,7 @@ export default function ReaderLayout({ renderedAt, initialSelectedView }: Reader
           ) : (
             <div
               data-testid="reader-mobile-layout"
-              className="relative min-h-0 flex-1 overflow-hidden bg-background"
+              className="relative min-h-0 flex-1 overflow-hidden bg-background dark:bg-[radial-gradient(circle_at_top,rgba(94,106,210,0.09),transparent_26%),linear-gradient(180deg,rgba(8,8,11,0.95),rgba(3,3,4,1))]"
             >
               {selectedArticleId ? (
                 <MemoizedArticleView

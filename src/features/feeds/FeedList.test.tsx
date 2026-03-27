@@ -43,7 +43,11 @@ import ReaderLayout from '../reader/ReaderLayout';
 import FeedList from './FeedList';
 import { ToastHost } from '../toast/ToastHost';
 import { useAppStore } from '../../store/appStore';
+import { READER_PANE_ACTIVE_ITEM_CLASS_NAME } from '../../lib/designSystem';
 import { AI_DIGEST_VIEW_ID } from '../../lib/view';
+
+const LEFT_RAIL_UNREAD_BADGE_CLASS_NAME =
+  'bg-[color-mix(in_oklab,var(--color-background)_86%,white_14%)]';
 
 function jsonResponse(payload: unknown) {
   return new Response(JSON.stringify(payload), {
@@ -575,6 +579,7 @@ describe('FeedList manage', () => {
     const feedButton = screen.getByRole('button', { name: /My Feed.*2/ });
 
     expect(allArticlesButton).toHaveClass('bg-primary/10', 'text-primary');
+    expect(allArticlesButton.className).toContain(READER_PANE_ACTIVE_ITEM_CLASS_NAME);
     expect(feedButton).not.toHaveClass('bg-primary/10', 'text-primary');
 
     fireEvent.click(feedButton);
@@ -583,6 +588,7 @@ describe('FeedList manage', () => {
       expect(useAppStore.getState().selectedView).toBe('feed-1');
       expect(allArticlesButton).not.toHaveClass('bg-primary/10', 'text-primary');
       expect(feedButton).toHaveClass('bg-primary/10', 'text-primary');
+      expect(feedButton.className).toContain(READER_PANE_ACTIVE_ITEM_CLASS_NAME);
     });
   });
 
@@ -658,9 +664,15 @@ describe('FeedList manage', () => {
 
     const allArticlesButton = screen.getByRole('button', { name: '全部文章' });
     const aiDigestArticlesButton = screen.getByRole('button', { name: '智能解读' });
+    const allArticlesBadge = within(allArticlesButton).getByText('5');
+    const aiDigestBadge = within(aiDigestArticlesButton).getByText('3');
 
-    expect(within(allArticlesButton).getByText('5')).toBeInTheDocument();
-    expect(within(aiDigestArticlesButton).getByText('3')).toBeInTheDocument();
+    expect(allArticlesBadge).toBeInTheDocument();
+    expect(aiDigestBadge).toBeInTheDocument();
+    expect(allArticlesBadge.className).toContain(LEFT_RAIL_UNREAD_BADGE_CLASS_NAME);
+    expect(aiDigestBadge.className).toContain(LEFT_RAIL_UNREAD_BADGE_CLASS_NAME);
+    expect(allArticlesBadge.className).not.toContain('shadow-');
+    expect(aiDigestBadge.className).not.toContain('shadow-');
   });
 
   it('updates smart view unread badges after marking an article as read', async () => {

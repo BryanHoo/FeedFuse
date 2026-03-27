@@ -413,7 +413,7 @@ describe('ArticleView ai translate', () => {
     const waitingPanel = screen
       .getByText('请先等待全文抓取完成，再开始翻译')
       .closest('div.rounded-2xl');
-    expect(waitingPanel?.className).toContain('shadow-surface');
+    expect(waitingPanel?.className).not.toContain('shadow-');
     expect(waitingPanel?.className).toContain(
       'color-mix(in_oklab,var(--color-muted)_78%,white_22%)',
     );

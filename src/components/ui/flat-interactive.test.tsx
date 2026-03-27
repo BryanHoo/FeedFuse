@@ -16,7 +16,7 @@ import { Tabs, TabsList, TabsTrigger } from './tabs';
 import { Textarea } from './textarea';
 
 describe('flat interactive primitives', () => {
-  it('renders button variants with semantic lift classes and exposes compact size', () => {
+  it('renders button variants without shadows and exposes compact size', () => {
     render(
       <>
         <Button>默认</Button>
@@ -29,14 +29,14 @@ describe('flat interactive primitives', () => {
 
     expect(
       screen.getByRole('button', { name: '默认' }).className,
-    ).toContain('shadow-button');
+    ).not.toContain('shadow-');
     expect(screen.getByRole('button', { name: '紧凑' })).toHaveClass('h-8');
     expect(
       screen.getByRole('button', { name: '描边' }).className,
-    ).toContain('shadow-field');
+    ).not.toContain('shadow-');
   });
 
-  it('renders text inputs with semantic field shadows', () => {
+  it('renders text inputs without field shadows', () => {
     render(
       <>
         <Input aria-label="输入框" />
@@ -52,14 +52,14 @@ describe('flat interactive primitives', () => {
       </>,
     );
 
-    expect(screen.getByLabelText('输入框').className).toContain('shadow-field');
-    expect(screen.getByLabelText('多行输入框').className).toContain('shadow-field');
+    expect(screen.getByLabelText('输入框').className).not.toContain('shadow-');
+    expect(screen.getByLabelText('多行输入框').className).not.toContain('shadow-');
     expect(
       screen.getByRole('combobox', { name: '抓取间隔' }).className,
-    ).toContain('shadow-field');
+    ).not.toContain('shadow-');
   });
 
-  it('keeps switches flat while tabs and badges use semantic surface classes', () => {
+  it('keeps switches, tabs and badges free of shadow classes', () => {
     render(
       <>
         <Switch aria-label="开关" checked={false} onCheckedChange={() => {}} />
@@ -79,9 +79,9 @@ describe('flat interactive primitives', () => {
       screen.getByRole('switch', { name: '开关' }).querySelector('span')
         ?.className,
     ).not.toContain('shadow');
-    expect(screen.getByRole('tab', { name: '通用' }).className).toContain(
-      'data-[state=active]:shadow-surface',
+    expect(screen.getByRole('tab', { name: '通用' }).className).not.toContain(
+      'shadow-',
     );
-    expect(screen.getByText('标签').className).toContain('shadow-button');
+    expect(screen.getByText('标签').className).not.toContain('shadow-');
   });
 });

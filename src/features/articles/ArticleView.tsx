@@ -53,13 +53,13 @@ const FLOATING_TITLE_SCROLL_THRESHOLD_PX = 96;
 const AI_DIGEST_SOURCES_VISIBLE_LIMIT = 3;
 const AI_DIGEST_SOURCES_SCROLL_MAX_HEIGHT_CLASS = "max-h-[13.5rem]";
 const ARTICLE_STATUS_CARD_CLASS_NAME =
-  "mb-4 rounded-2xl border border-border/65 bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-muted)_78%,white_22%),color-mix(in_oklab,var(--color-background)_86%,white_14%))] px-4 py-3 shadow-surface";
+  "mb-4 rounded-2xl border border-border/65 bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-muted)_78%,white_22%),color-mix(in_oklab,var(--color-background)_86%,white_14%))] px-4 py-3 dark:border-white/[0.06] dark:bg-[linear-gradient(180deg,rgba(15,15,19,0.96),rgba(10,10,13,0.92))]";
 const ARTICLE_SUMMARY_CARD_CLASS_NAME =
-  "relative mb-4 cursor-pointer rounded-2xl border border-border/60 border-l-[3px] border-l-primary/45 bg-[linear-gradient(135deg,color-mix(in_oklab,var(--color-primary)_10%,white_90%),color-mix(in_oklab,var(--color-background)_90%,white_10%))] px-4 py-3 shadow-surface transition-[border-color,box-shadow,transform,background-color] duration-200 hover:-translate-y-px hover:border-primary/55 hover:shadow-surface-hover";
+  "relative mb-4 cursor-pointer rounded-2xl border border-border/60 border-l-[3px] border-l-primary/45 bg-[color-mix(in_oklab,var(--color-primary)_6%,var(--color-background)_94%)] px-4 py-3 transition-[border-color,box-shadow,transform,background-color] duration-200 hover:-translate-y-px hover:border-primary/55 hover:bg-[color-mix(in_oklab,var(--color-primary)_8%,var(--color-background)_92%)] dark:border-white/[0.06] dark:border-l-[rgba(94,106,210,0.38)] dark:bg-[linear-gradient(135deg,color-mix(in_oklab,var(--color-primary)_12%,var(--color-card)_88%),rgba(10,10,13,0.96))]";
 const ARTICLE_SUMMARY_BADGE_CLASS_NAME =
-  "inline-flex items-center gap-1.5 rounded-full bg-background/78 px-2 py-0.5 text-[11px] font-medium tracking-wide text-[color-mix(in_oklab,var(--color-primary)_40%,var(--color-muted-foreground)_60%)] ring-1 ring-[color-mix(in_oklab,var(--color-primary)_14%,var(--color-border)_86%)] shadow-field";
+  "inline-flex items-center gap-1.5 rounded-full bg-background/78 px-2 py-0.5 text-[11px] font-medium tracking-wide text-[color-mix(in_oklab,var(--color-primary)_40%,var(--color-muted-foreground)_60%)] ring-1 ring-[color-mix(in_oklab,var(--color-primary)_14%,var(--color-border)_86%)] dark:bg-[rgba(10,10,14,0.82)] dark:text-[color-mix(in_oklab,var(--color-primary)_54%,white_46%)] dark:ring-[rgba(94,106,210,0.24)]";
 const ARTICLE_SOURCE_BUTTON_CLASS_NAME =
-  "flex w-full items-start justify-between gap-3 rounded-xl border border-border/60 bg-[color-mix(in_oklab,var(--color-background)_84%,white_16%)] px-3 py-2 text-left shadow-field transition-[background-color,border-color,box-shadow,transform] duration-200 hover:-translate-y-px hover:border-primary/16 hover:bg-accent/35 hover:shadow-surface focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
+  "flex w-full items-start justify-between gap-3 rounded-xl border border-border/60 bg-[color-mix(in_oklab,var(--color-background)_84%,white_16%)] px-3 py-2 text-left transition-[background-color,border-color,box-shadow,transform] duration-200 hover:-translate-y-px hover:border-primary/16 hover:bg-accent/35 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring dark:border-white/[0.06] dark:bg-[linear-gradient(180deg,rgba(14,14,18,0.96),rgba(9,9,12,0.92))] dark:hover:border-[rgba(94,106,210,0.2)] dark:hover:bg-[color-mix(in_oklab,var(--color-primary)_10%,var(--color-card)_90%)]";
 
 interface ArticleViewProps {
   highlightQuery?: string;
@@ -760,7 +760,7 @@ export default function ArticleView({
 
   if (!article) {
     return (
-      <div className="flex h-full flex-col bg-background text-foreground">
+      <div className="flex h-full flex-col bg-background text-foreground dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.015),rgba(255,255,255,0))]">
         {showDesktopToolbar ? (
           renderDesktopToolbar()
         ) : reserveTopSpace ? (
@@ -838,7 +838,7 @@ export default function ArticleView({
     article.isFiltered || article.filterStatus === "filtered";
 
   return (
-    <div className="flex h-full flex-col bg-background text-foreground">
+    <div className="flex h-full flex-col bg-background text-foreground dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.015),rgba(255,255,255,0))]">
       {showDesktopToolbar ? (
         renderDesktopToolbar()
       ) : reserveTopSpace ? (
@@ -855,7 +855,7 @@ export default function ArticleView({
           data-testid="article-scroll-container"
         >
           <div
-            className="w-full px-8 pb-12 pt-4 lg:pl-12 lg:pr-8"
+            className="w-full px-8 pb-12 pt-4 dark:bg-[radial-gradient(circle_at_top,rgba(94,106,210,0.07),transparent_22%)] lg:pl-12 lg:pr-8"
             data-testid="article-content-shell"
           >
             <div className="mb-8">
@@ -1050,7 +1050,7 @@ export default function ArticleView({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="-mr-2 h-7 shrink-0 px-2 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+                    className="-mr-2 h-7 shrink-0 px-2 text-[11px] font-medium text-muted-foreground hover:text-foreground dark:border dark:border-transparent dark:hover:border-white/[0.06] dark:hover:bg-[rgba(255,255,255,0.04)]"
                     aria-expanded={aiSummaryExpanded}
                     aria-controls={aiSummaryContentId}
                     onClick={(event) => {
@@ -1216,7 +1216,7 @@ export default function ArticleView({
             {isAiDigestArticle ? (
               <section
                 data-testid="ai-digest-sources-section"
-                className="mt-6 rounded-2xl border border-border/65 bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-muted)_74%,white_26%),color-mix(in_oklab,var(--color-background)_88%,white_12%))] px-4 py-3 shadow-surface"
+                className="mt-6 rounded-2xl border border-border/65 bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-muted)_74%,white_26%),color-mix(in_oklab,var(--color-background)_88%,white_12%))] px-4 py-3 dark:border-white/[0.06] dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.025))]"
                 aria-label="来源"
               >
                 <h2 className="text-sm font-semibold">来源</h2>

@@ -592,9 +592,12 @@ describe('ArticleView ai summary', () => {
     const aiSummaryCard = screen.getByLabelText('AI 摘要');
     expect(aiSummaryCard.className).toContain('rounded-2xl');
     expect(aiSummaryCard.className).toContain('border-l-primary/45');
-    expect(aiSummaryCard.className).toContain('shadow-surface');
+    expect(aiSummaryCard.className).not.toContain('shadow-');
     expect(aiSummaryCard.className).toContain(
-      'color-mix(in_oklab,var(--color-primary)_10%,white_90%)',
+      'bg-[color-mix(in_oklab,var(--color-primary)_6%,var(--color-background)_94%)]',
+    );
+    expect(aiSummaryCard.className).not.toContain(
+      'bg-[linear-gradient(135deg,color-mix(in_oklab,var(--color-primary)_10%,white_90%),color-mix(in_oklab,var(--color-background)_90%,white_10%))]',
     );
 
     fireEvent.click(await screen.findByRole('button', { name: '生成摘要' }));

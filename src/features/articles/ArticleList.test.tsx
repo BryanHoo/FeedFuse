@@ -15,9 +15,10 @@ const TOGGLE_TO_LIST_LABEL = '切换为列表';
 const TOGGLE_UNREAD_ONLY_LABEL = '仅显示未读文章';
 const SHOW_ALL_ARTICLES_LABEL = '显示全部文章';
 const MARK_ALL_AS_READ_LABEL = '标记全部为已读';
-const UNREAD_SIGNAL_DOT_CLASS = 'bg-[color-mix(in_oklab,var(--color-primary)_78%,white)]';
+const UNREAD_SIGNAL_DOT_CLASS = 'bg-[color-mix(in_oklab,var(--color-primary)_70%,white_30%)]';
 const UNREAD_SIGNAL_TIME_CLASS =
-  'text-[color-mix(in_oklab,var(--color-primary)_88%,white_12%)]';
+  'text-[color-mix(in_oklab,var(--color-primary)_78%,white_22%)]';
+const SELECTED_ARTICLE_ROW_DARK_BACKGROUND_CLASS = 'dark:!bg-[var(--reader-pane-active-strong)]';
 
 function jsonResponse(payload: unknown, init?: ResponseInit) {
   return new Response(JSON.stringify(payload), {
@@ -1769,7 +1770,8 @@ describe('ArticleList', () => {
     const cardButton = screen.getByTestId('article-card-art-2-title').closest('button');
 
     expect(selectedCardButton).not.toBeNull();
-    expect(selectedCardButton?.className).toContain('shadow-field');
+    expect(selectedCardButton?.className).not.toContain('shadow-');
+    expect(selectedCardButton?.className).toContain(SELECTED_ARTICLE_ROW_DARK_BACKGROUND_CLASS);
     expect(cardButton).not.toBeNull();
     expect(cardButton?.className).toContain('hover:bg-[var(--reader-pane-hover)]');
 
