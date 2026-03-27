@@ -35,9 +35,14 @@ import {
 } from './readerLayoutSizing';
 
 type ResizeTarget = 'left' | 'middle';
-
 const LEFT_RESIZE_PREVIEW_OFFSET_VARIABLE = '--reader-left-resize-preview-offset';
 const MIDDLE_RESIZE_PREVIEW_OFFSET_VARIABLE = '--reader-middle-resize-preview-offset';
+const MOBILE_SMART_VIEW_LABELS: Record<string, string> = {
+  all: '全部文章',
+  unread: '未读文章',
+  starred: '收藏文章',
+  'ai-digest': '智能解读',
+};
 
 const MemoizedFeedList = memo(FeedList);
 const MemoizedArticleList = memo(ArticleList);
@@ -62,6 +67,13 @@ export default function ReaderLayout({ renderedAt, initialSelectedView }: Reader
   const selectedArticleTitle = useAppStore(
     (state) => getSelectedArticleFromState(state)?.title ?? '',
   );
+  const selectedViewLabel = useAppStore((state) => {
+    if (MOBILE_SMART_VIEW_LABELS[state.selectedView]) {
+      return MOBILE_SMART_VIEW_LABELS[state.selectedView];
+    }
+
+    return state.feeds.find((feed) => feed.id === state.selectedView)?.title ?? '订阅视图';
+  });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [activeSearchHighlightQuery, setActiveSearchHighlightQuery] = useState('');
@@ -93,6 +105,11 @@ export default function ReaderLayout({ renderedAt, initialSelectedView }: Reader
   const feedSheetOpen = !isDesktop && feedSheetState.open && feedSheetState.selectionKey === selectionKey;
   const leftPaneWidth = sidebarCollapsed ? 0 : general.leftPaneWidth;
   const middlePaneWidth = general.middlePaneWidth;
+  const mobileHeading = selectedArticleId ? selectedArticleTitle || '阅读文章' : selectedViewLabel;
+  const mobileSurfaceClassName = cn(
+    'overflow-hidden border border-border/60 bg-[color-mix(in_oklab,var(--color-background)_86%,white_14%)] shadow-none supports-[backdrop-filter]:bg-[color-mix(in_oklab,var(--color-background)_78%,white_22%)]',
+    'dark:border-white/[0.06] dark:bg-[linear-gradient(180deg,rgba(15,15,19,0.94),rgba(9,9,12,0.9))] dark:supports-[backdrop-filter]:bg-[linear-gradient(180deg,rgba(15,15,19,0.84),rgba(9,9,12,0.78))]',
+  );
 
   const setResizePreviewOffset = useCallback((target: ResizeTarget, offset: number) => {
     const layout = layoutRef.current;
@@ -331,109 +348,132 @@ export default function ReaderLayout({ renderedAt, initialSelectedView }: Reader
         </>
       ) : (
         <>
-          <div
-            data-testid="reader-non-desktop-topbar"
-            className={cn('flex h-14 shrink-0 items-center justify-between px-3', FROSTED_HEADER_CLASS_NAME)}
-          >
-            <div className="flex min-w-0 items-center gap-2">
-              {isMobile && selectedArticleId ? (
-                <Button
-                  onClick={() => setSelectedArticle(null)}
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  aria-label="返回文章列表"
-                >
-                  <ChevronLeft />
-                </Button>
-              ) : null}
+          <div className="relative min-h-0 flex-1 overflow-hidden">
+            <div className="absolute inset-x-0 top-0 h-40 bg-[radial-gradient(circle_at_top,rgba(74,107,255,0.14),transparent_72%)] dark:bg-[radial-gradient(circle_at_top,rgba(94,106,210,0.2),transparent_72%)]" />
 
-              <Button
-                onClick={() =>
-                  setFeedSheetState({
-                    open: true,
-                    selectionKey,
-                  })
-                }
-                type="button"
-                variant="outline"
-                size="icon"
-                aria-label="打开订阅源列表"
-              >
-                <PanelLeft />
-              </Button>
-            </div>
-
-            <div className="min-w-0 flex-1 px-3 text-center text-sm font-medium text-muted-foreground">
-              <span className="block truncate dark:bg-gradient-to-b dark:from-white dark:via-white/95 dark:to-white/70 dark:bg-clip-text dark:text-transparent">
-                {selectedArticleId ? selectedArticleTitle || '阅读文章' : 'FeedFuse'}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                onClick={() => setSearchOpen(true)}
-                type="button"
-                variant="outline"
-                size="icon"
-                aria-label="打开全局搜索"
-              >
-                <Search />
-              </Button>
-
-              <Button
-                onClick={() => setSettingsOpen(true)}
-                type="button"
-                variant="outline"
-                size="icon"
-                aria-label="打开设置"
-              >
-                <SettingsIcon />
-              </Button>
-            </div>
-          </div>
-
-          {isTablet ? (
-            <div className="flex min-h-0 flex-1">
+            <div className="relative flex h-full min-h-0 flex-col">
               <div
-                data-testid="reader-tablet-article-pane"
-                className={READER_TABLET_ARTICLE_PANE_CLASS_NAME}
+                data-testid="reader-non-desktop-topbar"
+                className={cn(
+                  'flex h-14 shrink-0 items-center gap-2 border-b px-2.5 sm:px-3',
+                  FROSTED_HEADER_CLASS_NAME,
+                )}
               >
-                <MemoizedArticleList
-                  key={selectedView}
-                  renderedAt={renderedAt}
-                  initialSelectedView={initialSelectedView}
-                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={isMobile && selectedArticleId ? '返回文章列表' : '打开订阅源列表'}
+                  className="h-9 w-9 shrink-0 rounded-full"
+                  onClick={() => {
+                    if (isMobile && selectedArticleId) {
+                      setSelectedArticle(null);
+                      return;
+                    }
+
+                    setFeedSheetState({
+                      open: true,
+                      selectionKey,
+                    });
+                  }}
+                >
+                  {isMobile && selectedArticleId ? (
+                    <ChevronLeft className="h-4 w-4" />
+                  ) : (
+                    <PanelLeft className="h-4 w-4" />
+                  )}
+                </Button>
+
+                <div className="min-w-0 flex-1 px-1 text-center">
+                  <h1 className="truncate text-sm font-semibold text-foreground sm:text-[15px]">
+                    {mobileHeading}
+                  </h1>
+                </div>
+
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="打开全局搜索"
+                    className="h-9 w-9 rounded-full"
+                    onClick={() => setSearchOpen(true)}
+                  >
+                    <Search className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="打开设置"
+                    className="h-9 w-9 rounded-full"
+                    onClick={() => setSettingsOpen(true)}
+                  >
+                    <SettingsIcon className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
 
-              <div className="relative min-w-0 flex-1 overflow-hidden bg-background dark:bg-[radial-gradient(circle_at_top,rgba(94,106,210,0.09),transparent_26%),linear-gradient(180deg,rgba(8,8,11,0.95),rgba(3,3,4,1))]">
-                <MemoizedArticleView
-                  renderedAt={renderedAt}
-                  highlightQuery={activeSearchHighlightQuery}
-                  reserveTopSpace={false}
-                />
-              </div>
-            </div>
-          ) : (
-            <div
-              data-testid="reader-mobile-layout"
-              className="relative min-h-0 flex-1 overflow-hidden bg-background dark:bg-[radial-gradient(circle_at_top,rgba(94,106,210,0.09),transparent_26%),linear-gradient(180deg,rgba(8,8,11,0.95),rgba(3,3,4,1))]"
-            >
-              {selectedArticleId ? (
-                <MemoizedArticleView
-                  renderedAt={renderedAt}
-                  highlightQuery={activeSearchHighlightQuery}
-                  reserveTopSpace={false}
-                />
+              {isTablet ? (
+                <div className="flex min-h-0 flex-1 gap-3 px-3 pb-3 pt-3 sm:px-4 sm:pb-4">
+                  <div
+                    data-testid="reader-tablet-article-pane"
+                    className={cn(
+                      READER_TABLET_ARTICLE_PANE_CLASS_NAME,
+                      'overflow-hidden rounded-[1.5rem] border border-border/70 shadow-none',
+                    )}
+                  >
+                    <MemoizedArticleList
+                      key={selectedView}
+                      renderedAt={renderedAt}
+                      initialSelectedView={initialSelectedView}
+                    />
+                  </div>
+
+                  <div
+                    className={cn(
+                      'relative min-w-0 flex-1 rounded-[1.5rem]',
+                      mobileSurfaceClassName,
+                    )}
+                  >
+                    <MemoizedArticleView
+                      renderedAt={renderedAt}
+                      highlightQuery={activeSearchHighlightQuery}
+                      reserveTopSpace={false}
+                    />
+                  </div>
+                </div>
               ) : (
-                <MemoizedArticleList
-                  key={selectedView}
-                  renderedAt={renderedAt}
-                  initialSelectedView={initialSelectedView}
-                />
+                <div
+                  data-testid="reader-mobile-layout"
+                  className="relative min-h-0 flex-1 overflow-hidden"
+                >
+                  <div
+                    className={cn(
+                      'h-full min-h-0 bg-background/96 dark:bg-[linear-gradient(180deg,rgba(10,10,14,0.96),rgba(6,6,9,0.98))]',
+                      selectedArticleId
+                        ? 'rounded-none'
+                        : 'rounded-t-[1.35rem] border-t border-border/60 dark:border-white/[0.05]',
+                    )}
+                  >
+                    {selectedArticleId ? (
+                      <MemoizedArticleView
+                        renderedAt={renderedAt}
+                        highlightQuery={activeSearchHighlightQuery}
+                        reserveTopSpace={false}
+                      />
+                    ) : (
+                      <MemoizedArticleList
+                        key={selectedView}
+                        renderedAt={renderedAt}
+                        initialSelectedView={initialSelectedView}
+                      />
+                    )}
+                  </div>
+                </div>
               )}
             </div>
-          )}
+          </div>
         </>
       )}
 

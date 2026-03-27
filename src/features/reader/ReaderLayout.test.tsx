@@ -364,8 +364,11 @@ describe('ReaderLayout', () => {
     renderWithNotifications();
 
     expect(screen.getByTestId('reader-non-desktop-topbar')).toBeInTheDocument();
+    expect(screen.queryByTestId('reader-mobile-action-bar')).not.toBeInTheDocument();
+    expect(screen.getByText('全部文章')).toBeInTheDocument();
     expect(screen.queryByTestId('reader-feed-pane')).not.toBeInTheDocument();
     expect(screen.getByLabelText('打开订阅源列表')).toBeInTheDocument();
+    expect(screen.getByLabelText('打开设置')).toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText('打开订阅源列表'));
 
@@ -378,6 +381,50 @@ describe('ReaderLayout', () => {
 
     expect(screen.getByRole('button', { name: '添加 RSS 源' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '添加 AI解读' })).toBeInTheDocument();
+  });
+
+  it('renders mobile reading context and quick actions for selected articles', () => {
+    resetSettingsStore();
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+
+    useAppStore.setState({
+      feeds: [
+        {
+          id: 'feed-1',
+          title: 'Example Feed',
+          url: 'https://example.com/rss.xml',
+          unreadCount: 1,
+          enabled: true,
+          fullTextOnOpenEnabled: false,
+          aiSummaryOnOpenEnabled: false,
+          categoryId: 'cat-uncategorized',
+          category: '未分类',
+        },
+      ],
+      articles: [
+        {
+          id: 'article-1',
+          feedId: 'feed-1',
+          title: 'Selected Article',
+          content: '<p>content</p>',
+          summary: 'summary',
+          publishedAt: new Date().toISOString(),
+          link: 'https://example.com/article-1',
+          isRead: false,
+          isStarred: false,
+        },
+      ],
+      selectedView: 'all',
+      selectedArticleId: 'article-1',
+    });
+
+    renderWithNotifications();
+
+    expect(screen.queryByText('正在阅读')).not.toBeInTheDocument();
+    expect(screen.getByText('Selected Article')).toBeInTheDocument();
+    expect(screen.getByLabelText('打开全局搜索')).toBeInTheDocument();
+    expect(screen.getByLabelText('打开设置')).toBeInTheDocument();
+    expect(screen.getByLabelText('返回文章列表')).toBeInTheDocument();
   });
 
   it('hydrates responsive layout without rebuilding from a mismatched mobile first render', async () => {
