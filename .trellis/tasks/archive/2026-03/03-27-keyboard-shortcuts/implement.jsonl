@@ -1,5 +1,0 @@
-{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
-{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend development guide"}
-{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "阅读器快捷键属于 feature 级 UI 组合逻辑，应保留在 src/features/reader"}
-{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "ReaderLayout 持有搜索弹窗状态与组合逻辑，快捷键入口应放在组件组合层"}
-{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "键盘事件监听需要正确注册与清理，避免全局副作用泄漏"}

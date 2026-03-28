@@ -1,7 +1,0 @@
-{"file": ".agents/skills/finish-work/SKILL.md", "reason": "Finish work checklist"}
-{"file": ".agents/skills/check-frontend/SKILL.md", "reason": "Frontend check spec"}
-{"file": "src/features/reader/ReaderLayout.tsx", "reason": "Check layout ownership examples"}
-{"file": "src/store/settingsStore.ts", "reason": "Check persisted/session state boundaries"}
-{"file": "src/lib/apiClient.ts", "reason": "Check request and envelope conventions"}
-{"file": "src/store/appStore.ts", "reason": "Check state ownership examples"}
-{"file": "src/app/theme-token-usage.contract.test.ts", "reason": "Check semantic token contract expectations"}

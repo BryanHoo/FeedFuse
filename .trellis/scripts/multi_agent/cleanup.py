@@ -22,16 +22,17 @@ This script:
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
+import _bootstrap  # noqa: F401 — adds parent scripts/ dir to sys.path
 
-from common.git_context import _run_git_command
-from common.paths import get_repo_root
+from common.git import run_git
+from common.log import Colors, log_info, log_success, log_warn, log_error
+from common.paths import FILE_TASK_JSON, get_repo_root
 from common.registry import (
     registry_get_file,
     registry_get_task_dir,
@@ -44,38 +45,8 @@ from common.task_utils import (
     is_safe_task_path,
 )
 
-# =============================================================================
-# Colors
-# =============================================================================
-
-
-class Colors:
-    RED = "\033[0;31m"
-    GREEN = "\033[0;32m"
-    YELLOW = "\033[1;33m"
-    BLUE = "\033[0;34m"
-    NC = "\033[0m"
-
-
-def log_info(msg: str) -> None:
-    print(f"{Colors.BLUE}[INFO]{Colors.NC} {msg}")
-
-
-def log_success(msg: str) -> None:
-    print(f"{Colors.GREEN}[SUCCESS]{Colors.NC} {msg}")
-
-
-def log_warn(msg: str) -> None:
-    print(f"{Colors.YELLOW}[WARN]{Colors.NC} {msg}")
-
-
-def log_error(msg: str) -> None:
-    print(f"{Colors.RED}[ERROR]{Colors.NC} {msg}")
-
-
-# =============================================================================
-# Helper Functions
-# =============================================================================
+# Colors, log_info, log_success, log_warn, log_error
+# are now imported from common.log above.
 
 
 def confirm(prompt: str, skip_confirm: bool) -> bool:
@@ -89,6 +60,26 @@ def confirm(prompt: str, skip_confirm: bool) -> bool:
 
     response = input(f"{prompt} [y/N] ")
     return response.lower() in ("y", "yes")
+
+
+def _warn_submodule_prs(task_dir_abs: Path) -> None:
+    """Print reminders for any open submodule PRs found in task.json."""
+    task_json = task_dir_abs / FILE_TASK_JSON
+    if not task_json.is_file():
+        return
+
+    try:
+        task_data = json.loads(task_json.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return
+
+    submodule_prs = task_data.get("submodule_prs")
+    if not isinstance(submodule_prs, dict) or not submodule_prs:
+        return
+
+    for name, url in submodule_prs.items():
+        log_warn(f"Submodule PR still open: {name} -> {url}")
+    log_info("Remember to close/merge submodule PRs before cleanup")
 
 
 # =============================================================================
@@ -109,8 +100,6 @@ def cmd_list(repo_root: Path) -> int:
     if registry_file and registry_file.is_file():
         print(f"{Colors.BLUE}=== Registered Agents ==={Colors.NC}")
         print()
-
-        import json
 
         data = json.loads(registry_file.read_text(encoding="utf-8"))
         agents = data.get("agents", [])
@@ -165,10 +154,11 @@ def cleanup_registry_only(search: str, repo_root: Path, skip_confirm: bool) -> i
         log_info("Aborted")
         return 0
 
-    # Archive task directory if exists
+    # Check for submodule PRs and archive task directory
     if task_dir and is_safe_task_path(task_dir, repo_root):
         task_dir_abs = repo_root / task_dir
         if task_dir_abs.is_dir():
+            _warn_submodule_prs(task_dir_abs)
             result = archive_task_complete(task_dir_abs, repo_root)
             if "archived_to" in result:
                 dest = Path(result["archived_to"])
@@ -191,7 +181,7 @@ def cleanup_worktree(
 ) -> int:
     """Cleanup single worktree."""
     # Find worktree path for branch
-    _, worktree_list, _ = _run_git_command(
+    _, worktree_list, _ = run_git(
         ["worktree", "list", "--porcelain"], cwd=repo_root
     )
 
@@ -223,7 +213,12 @@ def cleanup_worktree(
         log_info("Aborted")
         return 0
 
-    # 1. Archive task
+    # 1. Archive task (and check for submodule PRs)
+    task_dir = registry_get_task_dir(worktree_path, repo_root)
+    if task_dir and is_safe_task_path(task_dir, repo_root):
+        task_dir_abs_for_warn = repo_root / task_dir
+        if task_dir_abs_for_warn.is_dir():
+            _warn_submodule_prs(task_dir_abs_for_warn)
     archive_task(worktree_path, repo_root)
 
     # 2. Remove from registry
@@ -232,7 +227,7 @@ def cleanup_worktree(
 
     # 3. Remove worktree
     log_info("Removing worktree...")
-    ret, _, _ = _run_git_command(
+    ret, _, _ = run_git(
         ["worktree", "remove", worktree_path, "--force"], cwd=repo_root
     )
     if ret != 0:
@@ -247,7 +242,7 @@ def cleanup_worktree(
     # 4. Delete branch (optional)
     if not keep_branch:
         log_info("Deleting branch...")
-        ret, _, _ = _run_git_command(["branch", "-D", branch], cwd=repo_root)
+        ret, _, _ = run_git(["branch", "-D", branch], cwd=repo_root)
         if ret != 0:
             log_warn("Could not delete branch (may be checked out elsewhere)")
 
@@ -258,7 +253,7 @@ def cleanup_worktree(
 def cmd_merged(repo_root: Path, skip_confirm: bool, keep_branch: bool) -> int:
     """Cleanup merged worktrees."""
     # Get main branch
-    _, head_out, _ = _run_git_command(
+    _, head_out, _ = run_git(
         ["symbolic-ref", "refs/remotes/origin/HEAD"], cwd=repo_root
     )
     main_branch = head_out.strip().replace("refs/remotes/origin/", "") or "main"
@@ -267,7 +262,7 @@ def cmd_merged(repo_root: Path, skip_confirm: bool, keep_branch: bool) -> int:
     print()
 
     # Get merged branches
-    _, merged_out, _ = _run_git_command(
+    _, merged_out, _ = run_git(
         ["branch", "--merged", main_branch], cwd=repo_root
     )
     merged_branches = []
@@ -281,7 +276,7 @@ def cmd_merged(repo_root: Path, skip_confirm: bool, keep_branch: bool) -> int:
         return 0
 
     # Get worktree list
-    _, worktree_list, _ = _run_git_command(["worktree", "list"], cwd=repo_root)
+    _, worktree_list, _ = run_git(["worktree", "list"], cwd=repo_root)
 
     worktree_branches = []
     for branch in merged_branches:
@@ -310,7 +305,7 @@ def cmd_all(repo_root: Path, skip_confirm: bool, keep_branch: bool) -> int:
     print()
 
     # Get worktree list
-    _, worktree_list, _ = _run_git_command(
+    _, worktree_list, _ = run_git(
         ["worktree", "list", "--porcelain"], cwd=repo_root
     )
 
@@ -340,7 +335,7 @@ def cmd_all(repo_root: Path, skip_confirm: bool, keep_branch: bool) -> int:
     # Get branch for each worktree
     for wt in worktrees:
         # Find branch name from worktree list
-        _, wt_list, _ = _run_git_command(["worktree", "list"], cwd=repo_root)
+        _, wt_list, _ = run_git(["worktree", "list"], cwd=repo_root)
         for line in wt_list.splitlines():
             if wt in line:
                 # Extract branch from [branch] format

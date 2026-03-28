@@ -23,7 +23,6 @@ These guides help you **ask the right questions before coding**.
 |-------|---------|-------------|
 | [Code Reuse Thinking Guide](./code-reuse-thinking-guide.md) | Identify patterns and reduce duplication | When you notice repeated patterns |
 | [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md) | Think through data flow across layers | Features spanning multiple layers |
-| [Global Search Cross-Layer Contract](./global-search-cross-layer-contract.md) | Concrete contract for reader global search flow | Modifying article search API, result navigation, or highlight behavior |
 
 ---
 
@@ -35,10 +34,8 @@ These guides help you **ask the right questions before coding**.
 - [ ] Data format changes between layers
 - [ ] Multiple consumers need the same data
 - [ ] You're not sure where to put some logic
-- [ ] You're changing reader global search request, result payload, or article-open navigation
 
 → Read [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md)
-→ For the reader search implementation, also read [Global Search Cross-Layer Contract](./global-search-cross-layer-contract.md)
 
 ### When to Think About Code Reuse
 

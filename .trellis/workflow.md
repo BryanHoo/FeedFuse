@@ -58,35 +58,30 @@ git status && git log --oneline -10              # Git state
 **CRITICAL**: Read guidelines before writing any code:
 
 ```bash
-# Read frontend guidelines index (if applicable)
-cat .trellis/spec/frontend/index.md
+# Discover available packages and spec layers
+python3 ./.trellis/scripts/get_context.py --mode packages
 
-# Read backend guidelines index (if applicable)
-cat .trellis/spec/backend/index.md
+# Read the spec index for each relevant module
+cat .trellis/spec/<package>/<layer>/index.md
+
+# Always read shared guides
+cat .trellis/spec/guides/index.md
 ```
 
-**Why read both?**
-- Understand the full project architecture
-- Know coding standards for the entire codebase
-- See how frontend and backend interact
+**Why this matters?**
+- Understand which spec layers apply to your task
+- Know coding standards for the packages you'll modify
 - Learn the overall code quality requirements
 
 ### Step 3: Before Coding - Read Specific Guidelines (Required)
 
-Based on your task, read the **detailed** guidelines:
+Based on your task, read the **detailed** guideline files listed in each spec index's **Pre-Development Checklist**:
 
-**Frontend Task**:
 ```bash
-cat .trellis/spec/frontend/hook-guidelines.md      # For hooks
-cat .trellis/spec/frontend/component-guidelines.md # For components
-cat .trellis/spec/frontend/type-safety.md          # For types
-```
-
-**Backend Task**:
-```bash
-cat .trellis/spec/backend/database-guidelines.md   # For DB operations
-cat .trellis/spec/backend/type-safety.md           # For types
-cat .trellis/spec/backend/logging-guidelines.md    # For logging
+# The index points to specific files — read those, not just the index
+cat .trellis/spec/<package>/<layer>/error-handling.md
+cat .trellis/spec/<package>/<layer>/conventions.md
+# etc. — based on what the Pre-Development Checklist lists
 ```
 
 ---
@@ -168,21 +163,14 @@ python3 ./.trellis/scripts/get_context.py --json
 
 Based on what you'll develop, read the corresponding guidelines:
 
-**Frontend Development** (if applicable):
 ```bash
-# Read index first, then specific docs based on task
-cat .trellis/spec/frontend/index.md
-```
+# Discover available packages and spec layers
+python3 ./.trellis/scripts/get_context.py --mode packages
 
-**Backend Development** (if applicable):
-```bash
-# Read index first, then specific docs based on task
-cat .trellis/spec/backend/index.md
-```
+# Read spec indexes for relevant modules
+cat .trellis/spec/<package>/<layer>/index.md
 
-**Cross-Layer Features**:
-```bash
-# For features spanning multiple layers
+# For cross-layer features
 cat .trellis/spec/guides/cross-layer-thinking-guide.md
 ```
 
@@ -201,6 +189,21 @@ python3 ./.trellis/scripts/task.py create "<title>" --slug <task-name>
 ---
 
 ## Development Process
+
+### Task Routing
+
+- trivial / question: work directly
+- simple / moderate: create `task` + `prd.md`
+- complex: run `brainstorm`, then keep `prd.md`, and add `plan.md` only for multi-step execution
+
+### Behavior Changes Default to TDD
+
+When the task changes behavior, follow `RED -> GREEN -> REFACTOR`.
+
+### Completion Requires Fresh Evidence
+
+Do not claim "done", "fixed", or "passing" without the latest verification commands and results.
+Report the latest verification evidence before declaring completion.
 
 ### Task Development Flow
 
@@ -233,8 +236,7 @@ python3 ./.trellis/scripts/task.py create "<title>" --slug <task-name>
 - [OK] Manual feature testing passes
 
 **Project-specific checks**:
-- See `.trellis/spec/frontend/quality-guidelines.md` for frontend
-- See `.trellis/spec/backend/quality-guidelines.md` for backend
+- See `.trellis/spec/<package>/<layer>/quality-guidelines.md` for package-specific checks
 
 ---
 

@@ -1,5 +1,0 @@
-{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
-{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend development guide"}
-{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "theme token、shared UI 与 reader feature 的文件归属"}
-{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "共享视觉规则抽到 semantic token 与 designSystem 常量"}
-{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "共享 token / primitive 变更需要配合 contract test 校验"}

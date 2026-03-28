@@ -1,6 +1,0 @@
-{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
-{"file": ".trellis/spec/backend/index.md", "reason": "Backend development guide"}
-{"file": "src/app/api/feeds/route.ts", "reason": "API route 的请求校验、响应包装与日志模式"}
-{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "后端规范需要覆盖跨层边界与事务责任"}
-{"file": "src/server/services/feedCategoryLifecycleService.ts", "reason": "service 层事务与跨 repository 协调模式"}
-{"file": "src/server/repositories/feedsRepo.ts", "reason": "repository 参数化 SQL 与字段映射模式"}

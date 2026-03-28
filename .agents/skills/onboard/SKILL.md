@@ -1,6 +1,6 @@
 ---
 name: onboard
-description: "PART 3: Customize Your Development Guidelines"
+description: "Interactive three-part onboarding for new team members to the Trellis AI-assisted workflow system. Covers core philosophy (AI memory, project-specific knowledge, context drift), system structure and command deep-dives, real-world workflow examples, and guideline customization. Use when a new developer joins the project, someone needs to understand the Trellis workflow, or project guidelines need initial setup."
 ---
 
 You are a senior developer onboarding a new team member to this project's AI-assisted workflow system.
@@ -131,13 +131,13 @@ AI needs the same onboarding - but compressed into seconds at session start.
 
 ---
 
-### $before-frontend-dev and $before-backend-dev - Inject Specialized Knowledge
+### $before-dev - Inject Specialized Knowledge
 
 **WHY IT EXISTS**:
 AI models have "pre-trained knowledge" - general patterns from millions of codebases. But YOUR project has specific conventions that differ from generic patterns.
 
 **WHAT IT ACTUALLY DOES**:
-1. Reads `.trellis/spec/frontend/` or `.trellis/spec/backend/`
+1. Discovers spec layers via `get_context.py --mode packages` and reads relevant guidelines
 2. Loads project-specific patterns into AI's working context:
    - Component naming conventions
    - State management patterns
@@ -145,12 +145,12 @@ AI models have "pre-trained knowledge" - general patterns from millions of codeb
    - Error handling standards
 
 **WHY THIS MATTERS**:
-- Without before-*-dev: AI writes generic code that doesn't match project style.
-- With before-*-dev: AI writes code that looks like the rest of the codebase.
+- Without before-dev: AI writes generic code that doesn't match project style.
+- With before-dev: AI writes code that looks like the rest of the codebase.
 
 ---
 
-### $check-frontend and $check-backend - Combat Context Drift
+### $check - Combat Context Drift
 
 **WHY IT EXISTS**:
 AI context window has limited capacity. As conversation progresses, guidelines injected at session start become less influential. This causes "context drift."
@@ -216,9 +216,9 @@ All the context AI built during this session will be lost when session ends. The
 
 **[1/8] $start** - AI needs project context before touching code
 **[2/8] python3 ./.trellis/scripts/task.py create "Fix bug" --slug fix-bug** - Track work for future reference
-**[3/8] $before-frontend-dev** - Inject project-specific frontend knowledge
+**[3/8] $before-dev** - Inject project-specific development guidelines
 **[4/8] Investigate and fix the bug** - Actual development work
-**[5/8] $check-frontend** - Re-verify code against guidelines
+**[5/8] $check** - Re-verify code against guidelines
 **[6/8] $finish-work** - Holistic cross-layer review
 **[7/8] Human tests and commits** - Human validates before code enters repo
 **[8/8] $record-session** - Persist memory for future sessions
@@ -233,9 +233,9 @@ All the context AI built during this session will be lost when session ends. The
 ### Example 3: Code Review Fixes
 
 **[1/6] $start** - Resume context from previous session
-**[2/6] $before-backend-dev** - Re-inject guidelines before fixes
+**[2/6] $before-dev** - Re-inject guidelines before fixes
 **[3/6] Fix each CR issue** - Address feedback with guidelines in context
-**[4/6] $check-backend** - Verify fixes didn't introduce new issues
+**[4/6] $check** - Verify fixes did not introduce new issues
 **[5/6] $finish-work** - Document lessons from CR
 **[6/6] Human commits, then $record-session** - Preserve CR lessons
 
@@ -250,9 +250,9 @@ All the context AI built during this session will be lost when session ends. The
 ### Example 5: Debug Session
 
 **[1/6] $start** - See if this bug was investigated before
-**[2/6] $before-backend-dev** - Guidelines might document known gotchas
+**[2/6] $before-dev** - Guidelines might document known gotchas
 **[3/6] Investigation** - Actual debugging work
-**[4/6] $check-backend** - Verify debug changes don't break other things
+**[4/6] $check** - Verify debug changes do not break other things
 **[5/6] $finish-work** - Debug findings might need documentation
 **[6/6] Human commits, then $record-session** - Debug knowledge is valuable
 

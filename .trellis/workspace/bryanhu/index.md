@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 7
-- **Last Active**: 2026-03-28
+- **Total Sessions**: 0
+- **Last Active**: -
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~316 | Active |
+| `journal-1.md` | ~0 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -27,15 +27,8 @@
 ## Session History
 
 <!-- @@@auto:session-history -->
-| # | Date | Title | Commits |
-|---|------|-------|---------|
-| 7 | 2026-03-28 | 阅读器全局搜索快捷键 | `6c8ed1c` |
-| 6 | 2026-03-27 | 优化移动端阅读布局 | `d5749a0` |
-| 5 | 2026-03-27 | 收敛阅读器主题视觉层级 | `a87c45f` |
-| 4 | 2026-03-27 | 优化 light 主题 SaaS UI | `792c3c6` |
-| 3 | 2026-03-27 | 补充前端规范并修正文章视图测试 | `9e64fd7` |
-| 2 | 2026-03-27 | 补齐后端规范文档 | `fe2ba79` |
-| 1 | 2026-03-27 | Reader global search | `4817895` |
+| # | Date | Title | Commits | Branch |
+|---|------|-------|---------|--------|
 <!-- @@@/auto:session-history -->
 
 ---

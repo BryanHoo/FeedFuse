@@ -1,6 +1,6 @@
 ---
 name: start
-description: "Start Session"
+description: "Initializes an AI development session by reading workflow guides, developer identity, git status, active tasks, and project guidelines from .trellis/. Classifies incoming tasks and routes to brainstorm, direct edit, or task workflow. Use when beginning a new coding session, resuming work, starting a new task, or re-establishing project context."
 ---
 
 # Start Session
@@ -45,9 +45,14 @@ This shows: developer identity, git status, current task (if any), active tasks.
 ### Step 3: Read Guidelines Index
 
 ```bash
-cat .trellis/spec/frontend/index.md  # Frontend guidelines
-cat .trellis/spec/backend/index.md   # Backend guidelines
-cat .trellis/spec/guides/index.md    # Thinking guides
+python3 ./.trellis/scripts/get_context.py --mode packages
+```
+
+This shows available packages and their spec layers. Read the relevant spec indexes:
+
+```bash
+cat .trellis/spec/<package>/<layer>/index.md   # Package-specific guidelines
+cat .trellis/spec/guides/index.md              # Thinking guides (always read)
 ```
 
 > **Important**: The index files are navigation — they list the actual guideline files (e.g., `error-handling.md`, `conventions.md`, `mock-strategies.md`).
@@ -68,8 +73,13 @@ When user describes a task, classify it:
 |------|----------|----------|
 | **Question** | User asks about code, architecture, or how something works | Answer directly |
 | **Trivial Fix** | Typo fix, comment update, single-line change, < 5 minutes | Direct Edit |
-| **Simple Task** | Clear goal, 1-2 files, well-defined scope | Quick confirm → Task Workflow |
-| **Complex Task** | Vague goal, multiple files, architectural decisions | **Brainstorm → Task Workflow** |
+| **Simple Task** | Clear goal, 1-2 files, well-defined scope | `task` + `prd.md` |
+| **Moderate Task** | Multiple files, multi-step work, or cross-session continuation | `task` + `prd.md`, add `plan.md` when execution needs a checklist |
+| **Complex Task** | Vague goal, architecture choices, multiple approaches | `brainstorm` + `prd.md` + optional `plan.md` |
+
+If the task changes behavior, define the test strategy before implementing.
+For simple or moderate tasks, create `task` + `prd.md`.
+Add `plan.md` only when the task is multi-step, cross-file, multi-agent, or needs cross-session continuity.
 
 ### Decision Rule
 

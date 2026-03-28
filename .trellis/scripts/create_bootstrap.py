@@ -36,6 +36,7 @@ from common.paths import (
     get_tasks_dir,
     set_current_task,
 )
+from common.config import get_spec_base, resolve_package
 
 
 # =============================================================================
@@ -58,7 +59,7 @@ def write_prd_header() -> str:
 Welcome to Trellis! This is your first task.
 
 AI agents use `.trellis/spec/` to understand YOUR project's coding conventions.
-**Empty templates = AI writes generic code that doesn't match your project style.**
+**Starting from scratch = AI writes generic code that doesn't match your project style.**
 
 Filling these guidelines is a one-time setup that pays off for every future AI session.
 
@@ -70,36 +71,36 @@ Fill in the guideline files based on your **existing codebase**.
 """
 
 
-def write_prd_backend_section() -> str:
+def write_prd_backend_section(spec_base: str) -> str:
     """Write PRD backend section."""
-    return """
+    return f"""
 
 ### Backend Guidelines
 
 | File | What to Document |
 |------|------------------|
-| `.trellis/spec/backend/directory-structure.md` | Where different file types go (routes, services, utils) |
-| `.trellis/spec/backend/database-guidelines.md` | ORM, migrations, query patterns, naming conventions |
-| `.trellis/spec/backend/error-handling.md` | How errors are caught, logged, and returned |
-| `.trellis/spec/backend/logging-guidelines.md` | Log levels, format, what to log |
-| `.trellis/spec/backend/quality-guidelines.md` | Code review standards, testing requirements |
+| `.trellis/{spec_base}/backend/directory-structure.md` | Where different file types go (routes, services, utils) |
+| `.trellis/{spec_base}/backend/database-guidelines.md` | ORM, migrations, query patterns, naming conventions |
+| `.trellis/{spec_base}/backend/error-handling.md` | How errors are caught, logged, and returned |
+| `.trellis/{spec_base}/backend/logging-guidelines.md` | Log levels, format, what to log |
+| `.trellis/{spec_base}/backend/quality-guidelines.md` | Code review standards, testing requirements |
 """
 
 
-def write_prd_frontend_section() -> str:
+def write_prd_frontend_section(spec_base: str) -> str:
     """Write PRD frontend section."""
-    return """
+    return f"""
 
 ### Frontend Guidelines
 
 | File | What to Document |
 |------|------------------|
-| `.trellis/spec/frontend/directory-structure.md` | Component/page/hook organization |
-| `.trellis/spec/frontend/component-guidelines.md` | Component patterns, props conventions |
-| `.trellis/spec/frontend/hook-guidelines.md` | Custom hook naming, patterns |
-| `.trellis/spec/frontend/state-management.md` | State library, patterns, what goes where |
-| `.trellis/spec/frontend/type-safety.md` | TypeScript conventions, type organization |
-| `.trellis/spec/frontend/quality-guidelines.md` | Linting, testing, accessibility |
+| `.trellis/{spec_base}/frontend/directory-structure.md` | Component/page/hook organization |
+| `.trellis/{spec_base}/frontend/component-guidelines.md` | Component patterns, props conventions |
+| `.trellis/{spec_base}/frontend/hook-guidelines.md` | Custom hook naming, patterns |
+| `.trellis/{spec_base}/frontend/state-management.md` | State library, patterns, what goes where |
+| `.trellis/{spec_base}/frontend/type-safety.md` | TypeScript conventions, type organization |
+| `.trellis/{spec_base}/frontend/quality-guidelines.md` | Linting, testing, accessibility |
 """
 
 
@@ -168,17 +169,17 @@ After completing this task:
 """
 
 
-def write_prd(task_dir: Path, project_type: str) -> None:
+def write_prd(task_dir: Path, project_type: str, spec_base: str) -> None:
     """Write prd.md file."""
     content = write_prd_header()
 
     if project_type == "frontend":
-        content += write_prd_frontend_section()
+        content += write_prd_frontend_section(spec_base)
     elif project_type == "backend":
-        content += write_prd_backend_section()
+        content += write_prd_backend_section(spec_base)
     else:  # fullstack
-        content += write_prd_backend_section()
-        content += write_prd_frontend_section()
+        content += write_prd_backend_section(spec_base)
+        content += write_prd_frontend_section(spec_base)
 
     content += write_prd_footer()
 
@@ -190,7 +191,7 @@ def write_prd(task_dir: Path, project_type: str) -> None:
 # Task JSON
 # =============================================================================
 
-def write_task_json(task_dir: Path, developer: str, project_type: str) -> None:
+def write_task_json(task_dir: Path, developer: str, project_type: str, spec_base: str) -> None:
     """Write task.json file."""
     today = datetime.now().strftime("%Y-%m-%d")
 
@@ -200,20 +201,20 @@ def write_task_json(task_dir: Path, developer: str, project_type: str) -> None:
             {"name": "Fill frontend guidelines", "status": "pending"},
             {"name": "Add code examples", "status": "pending"},
         ]
-        related_files = [".trellis/spec/frontend/"]
+        related_files = [f".trellis/{spec_base}/frontend/"]
     elif project_type == "backend":
         subtasks = [
             {"name": "Fill backend guidelines", "status": "pending"},
             {"name": "Add code examples", "status": "pending"},
         ]
-        related_files = [".trellis/spec/backend/"]
+        related_files = [f".trellis/{spec_base}/backend/"]
     else:  # fullstack
         subtasks = [
             {"name": "Fill backend guidelines", "status": "pending"},
             {"name": "Fill frontend guidelines", "status": "pending"},
             {"name": "Add code examples", "status": "pending"},
         ]
-        related_files = [".trellis/spec/backend/", ".trellis/spec/frontend/"]
+        related_files = [f".trellis/{spec_base}/backend/", f".trellis/{spec_base}/frontend/"]
 
     task_data = {
         "id": TASK_NAME,
@@ -264,6 +265,10 @@ def main() -> int:
         print(f"Run: python3 ./{DIR_WORKFLOW}/{DIR_SCRIPTS}/init_developer.py <your-name>")
         return 1
 
+    # Resolve spec base path (monorepo: spec/<package>, single-repo: spec)
+    package = resolve_package(repo_root=repo_root)
+    spec_base = get_spec_base(package, repo_root)
+
     tasks_dir = get_tasks_dir(repo_root)
     task_dir = tasks_dir / TASK_NAME
     relative_path = f"{DIR_WORKFLOW}/{DIR_TASKS}/{TASK_NAME}"
@@ -277,8 +282,8 @@ def main() -> int:
     task_dir.mkdir(parents=True, exist_ok=True)
 
     # Write files
-    write_task_json(task_dir, developer, project_type)
-    write_prd(task_dir, project_type)
+    write_task_json(task_dir, developer, project_type, spec_base)
+    write_prd(task_dir, project_type, spec_base)
 
     # Set as current task
     set_current_task(relative_path, repo_root)

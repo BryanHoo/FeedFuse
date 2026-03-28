@@ -1,4 +1,0 @@
-{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
-{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend development guide"}
-{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Shared UI primitives and feature composition rules for theme polish"}
-{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Keep styling updates within existing typed component APIs"}

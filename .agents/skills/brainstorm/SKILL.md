@@ -1,6 +1,6 @@
 ---
 name: brainstorm
-description: "Brainstorm - Requirements Discovery (AI Coding Enhanced)"
+description: "Collaborative requirements discovery session optimized for AI coding workflows. Creates task directories, seeds PRDs, runs codebase research, proposes concrete implementation approaches with trade-offs, and converges on MVP scope through structured Q&A. Use when requirements are unclear, multiple implementation paths exist, trade-offs need evaluation, or a complex feature needs scoping before development."
 ---
 
 # Brainstorm - Requirements Discovery (AI Coding Enhanced)
@@ -426,6 +426,12 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 
 * [ ] ...
 
+## Testing Strategy
+
+- New feature: which failing test proves the new behavior first
+- Bug fix: which regression test reproduces the bug before the fix
+- Non-behavior change: why no new test is required
+
 ## Definition of Done
 
 * ...
@@ -480,6 +486,10 @@ Task Workflow Phase 3 (Execute)
 ```
 
 The task directory and PRD already exist from brainstorm, so Phase 1 of the Task Workflow is skipped entirely.
+
+After PRD approval:
+- For moderate multi-step work, add `plan.md`
+- Keep `plan.md` focused on files, steps, verification, and risks
 
 ---
 

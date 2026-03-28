@@ -73,6 +73,7 @@ This will:
 
 Each session should include:
 - Summary: One-line description
+- Branch: Which branch the work was done on
 - Main Changes: What was modified
 - Git Commits: Commit hashes and messages
 - Next Steps: What to do next
@@ -88,6 +89,7 @@ Use this template when recording sessions:
 
 **Date**: YYYY-MM-DD
 **Task**: {task-name}
+**Branch**: `{branch-name}`
 
 ### Summary
 

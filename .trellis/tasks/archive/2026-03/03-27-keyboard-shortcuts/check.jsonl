@@ -1,5 +1,0 @@
-{"file": ".agents/skills/finish-work/SKILL.md", "reason": "Finish work checklist"}
-{"file": ".agents/skills/check-frontend/SKILL.md", "reason": "Frontend check spec"}
-{"file": "src/features/reader/ReaderLayout.tsx", "reason": "阅读器布局层持有 searchOpen，是快捷键实现落点"}
-{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "补充前端行为测试并验证副作用与可访问性"}
-{"file": "src/features/reader/GlobalSearchDialog.tsx", "reason": "搜索弹窗负责焦点与 debounce 行为，需要保持逻辑不变"}

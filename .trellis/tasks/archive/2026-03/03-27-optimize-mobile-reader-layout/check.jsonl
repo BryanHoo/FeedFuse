@@ -1,4 +1,0 @@
-{"file": ".agents/skills/finish-work/SKILL.md", "reason": "Finish work checklist"}
-{"file": ".agents/skills/check-frontend/SKILL.md", "reason": "Frontend check spec"}
-{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "检查 ReaderLayout 是否仍为组合层并保留无障碍语义"}
-{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "检查测试覆盖与语义 token 使用是否满足前端规范"}

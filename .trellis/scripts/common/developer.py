@@ -123,8 +123,8 @@ def init_developer(name: str, repo_root: Path | None = None) -> bool:
 ## Session History
 
 <!-- @@@auto:session-history -->
-| # | Date | Title | Commits |
-|---|------|-------|---------|
+| # | Date | Title | Commits | Branch |
+|---|------|-------|---------|--------|
 <!-- @@@/auto:session-history -->
 
 ---

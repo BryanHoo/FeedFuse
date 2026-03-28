@@ -1,5 +1,0 @@
-{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
-{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend development guide"}
-{"file": ".trellis/spec/frontend/state-management.md", "reason": "移动端布局切换只能复用现有 store 状态，避免新增重复状态源"}
-{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "布局重构需要同步维护行为测试与语义 token 使用"}
-{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "ReaderLayout 是特性级组合组件，移动端重构必须保持职责边界与可访问性"}

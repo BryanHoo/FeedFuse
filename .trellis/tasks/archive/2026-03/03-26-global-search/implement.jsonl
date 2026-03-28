@@ -1,8 +1,0 @@
-{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
-{"file": ".trellis/spec/backend/index.md", "reason": "Backend development guide"}
-{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend development guide"}
-{"file": ".trellis/spec/frontend/type-safety.md", "reason": "新增搜索 DTO 与高亮状态需要保持类型边界清晰"}
-{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "请求、高亮与测试覆盖需符合前端质量约束"}
-{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "搜索弹窗与阅读器 UI 需要遵循组件和可访问性约束"}
-{"file": ".trellis/spec/frontend/state-management.md", "reason": "三栏选择和搜索状态需要沿用现有 Zustand 分层"}
-{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "新增搜索 API 和前端联动属于跨层数据流改动"}

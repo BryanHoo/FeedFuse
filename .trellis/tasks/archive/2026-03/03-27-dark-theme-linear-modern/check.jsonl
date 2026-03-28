@@ -1,5 +1,0 @@
-{"file": ".agents/skills/finish-work/SKILL.md", "reason": "Finish work checklist"}
-{"file": ".agents/skills/check-frontend/SKILL.md", "reason": "Frontend check spec"}
-{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "检查样式改动是否仍留在正确层级"}
-{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "检查共享样式是否被合理抽取与复用"}
-{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "检查 semantic token、contract test 与验证要求"}

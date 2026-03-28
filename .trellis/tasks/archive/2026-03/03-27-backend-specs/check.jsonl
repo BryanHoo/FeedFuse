@@ -1,7 +1,0 @@
-{"file": ".agents/skills/finish-work/SKILL.md", "reason": "Finish work checklist"}
-{"file": ".agents/skills/check-backend/SKILL.md", "reason": "Backend check spec"}
-{"file": "package.json", "reason": "后端质量规范需要引用 lint type-check test 命令"}
-{"file": "src/server/logging/systemLogger.ts", "reason": "日志规范需要覆盖最小级别过滤与持久化模式"}
-{"file": "src/server/http/errors.ts", "reason": "错误规范需要与 AppError 分层保持一致"}
-{"file": "src/worker/index.ts", "reason": "目录结构规范需要覆盖 worker 与 queue 的职责边界"}
-{"file": "src/server/env.ts", "reason": "类型规范需要覆盖环境变量的 zod 解析边界"}
