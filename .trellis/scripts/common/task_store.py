@@ -316,14 +316,29 @@ def cmd_archive(args: argparse.Namespace) -> int:
 def _auto_commit_archive(task_name: str, repo_root: Path) -> None:
     """Stage .trellis/tasks/ changes and commit after archive."""
     tasks_rel = f"{DIR_WORKFLOW}/{DIR_TASKS}"
-    run_git(["add", "-A", tasks_rel], cwd=repo_root)
+    # Don't continue to index inspection if staging failed.
+    rc, _, err = run_git(["add", "-A", tasks_rel], cwd=repo_root)
+    if rc != 0:
+        detail = err.strip() or "unknown error"
+        print(
+            f"[WARN] Auto-commit skipped: git add failed: {detail}",
+            file=sys.stderr,
+        )
+        return
 
     # Check if there are staged changes
-    rc, _, _ = run_git(
+    rc, _, err = run_git(
         ["diff", "--cached", "--quiet", "--", tasks_rel], cwd=repo_root
     )
     if rc == 0:
         print("[OK] No task changes to commit.", file=sys.stderr)
+        return
+    if rc != 1:
+        detail = err.strip() or "unknown error"
+        print(
+            f"[WARN] Auto-commit skipped: git diff --cached failed: {detail}",
+            file=sys.stderr,
+        )
         return
 
     commit_msg = f"chore(task): archive {task_name}"

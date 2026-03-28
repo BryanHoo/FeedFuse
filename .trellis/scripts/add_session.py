@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import argparse
 import re
-import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -316,29 +315,40 @@ def update_index(
 def _auto_commit_workspace(repo_root: Path) -> None:
     """Stage .trellis/workspace and .trellis/tasks, then commit with a configured message."""
     commit_msg = get_session_commit_message(repo_root)
-    subprocess.run(
-        ["git", "add", "-A", ".trellis/workspace", ".trellis/tasks"],
-        cwd=repo_root,
-        capture_output=True,
-    )
+    targets = [".trellis/workspace", ".trellis/tasks"]
+
+    # Don't inspect the index if staging itself failed, or we'll misreport
+    # the failure as "no changes to commit".
+    rc, _, err = run_git(["add", "-A", *targets], cwd=repo_root)
+    if rc != 0:
+        detail = err.strip() or "unknown error"
+        print(
+            f"[WARN] Auto-commit skipped: git add failed: {detail}",
+            file=sys.stderr,
+        )
+        return
+
     # Check if there are staged changes
-    result = subprocess.run(
-        ["git", "diff", "--cached", "--quiet", "--", ".trellis/workspace", ".trellis/tasks"],
+    rc, _, err = run_git(
+        ["diff", "--cached", "--quiet", "--", *targets],
         cwd=repo_root,
     )
-    if result.returncode == 0:
+    if rc == 0:
         print("[OK] No workspace changes to commit.", file=sys.stderr)
         return
-    commit_result = subprocess.run(
-        ["git", "commit", "-m", commit_msg],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-    )
-    if commit_result.returncode == 0:
+    if rc != 1:
+        detail = err.strip() or "unknown error"
+        print(
+            f"[WARN] Auto-commit skipped: git diff --cached failed: {detail}",
+            file=sys.stderr,
+        )
+        return
+
+    rc, _, err = run_git(["commit", "-m", commit_msg], cwd=repo_root)
+    if rc == 0:
         print(f"[OK] Auto-committed: {commit_msg}", file=sys.stderr)
     else:
-        print(f"[WARN] Auto-commit failed: {commit_result.stderr.strip()}", file=sys.stderr)
+        print(f"[WARN] Auto-commit failed: {err.strip()}", file=sys.stderr)
 
 
 def add_session(

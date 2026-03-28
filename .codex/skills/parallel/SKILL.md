@@ -199,6 +199,6 @@ The dispatch agent in the worktree will automatically execute:
 ## Core Rules
 
 - **Don't write code directly** - delegate to agents in worktrees
-- **Don't execute git commit** - the flow handles it in the worktree pipeline
+- **Don't execute ad hoc `git commit` during dispatch** - let the workflow's final step handle the commit after checks pass
 - **Delegate complex analysis before dispatch** - find specs, inspect code structure, and reduce ambiguity
 - **Prefer focused tasks** - parallelism works best when each worktree has a narrow scope
