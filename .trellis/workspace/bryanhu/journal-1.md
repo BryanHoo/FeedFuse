@@ -282,3 +282,35 @@ Completed the Trellis backend specification set so future backend work can load 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 7: 阅读器全局搜索快捷键
+
+**Date**: 2026-03-28
+**Task**: 阅读器全局搜索快捷键
+
+### Summary
+
+为阅读器新增 Cmd/Ctrl+F 全局搜索快捷键，并补充快捷键与可编辑区域行为测试。
+
+### Main Changes
+
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6c8ed1c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
