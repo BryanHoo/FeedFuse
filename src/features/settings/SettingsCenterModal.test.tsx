@@ -160,6 +160,20 @@ describe('SettingsCenterModal', () => {
           );
         }
 
+        if (url.includes('/api/settings/auth/password') && method === 'POST') {
+          return new Response(JSON.stringify({ ok: true, data: { updated: true } }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+
+        if (url.includes('/api/auth/logout') && method === 'POST') {
+          return new Response(JSON.stringify({ ok: true, data: { authenticated: false } }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+
         if (url.includes('/api/reader/snapshot')) {
           return new Response(
             JSON.stringify({
@@ -279,7 +293,7 @@ describe('SettingsCenterModal', () => {
     expect(screen.getByText('主题')).toBeInTheDocument();
   });
 
-  it('renders logging as the fourth settings section', async () => {
+  it('renders logging as the fifth settings section', async () => {
     resetSettingsStore();
     renderWithNotifications();
     fireEvent.click(screen.getByLabelText('打开设置'));
@@ -289,8 +303,27 @@ describe('SettingsCenterModal', () => {
     });
 
     const tabs = screen.getAllByRole('tab');
-    expect(tabs[3]).toHaveAttribute('data-testid', 'settings-section-tab-logging');
+    expect(tabs[3]).toHaveAttribute('data-testid', 'settings-section-tab-security');
+    expect(tabs[4]).toHaveAttribute('data-testid', 'settings-section-tab-logging');
     expect('logs' in (useSettingsStore.getState().draft as Record<string, unknown>)).toBe(false);
+  });
+
+  it('moves login and password controls into a dedicated security section', async () => {
+    resetSettingsStore();
+    renderWithNotifications();
+    fireEvent.click(screen.getByLabelText('打开设置'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('settings-center-modal')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByLabelText('当前密码')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('settings-section-tab-security'));
+
+    expect(await screen.findByLabelText('当前密码')).toBeInTheDocument();
+    expect(screen.getByLabelText('新密码')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '退出登录' })).toBeInTheDocument();
   });
 
   it('does not show removed sidebar-collapsed and rss-fulltext settings items', async () => {

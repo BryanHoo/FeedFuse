@@ -26,3 +26,15 @@ export class ConflictError extends AppError {
     super(message, 'conflict', 409, fields);
   }
 }
+
+export class UnauthorizedError extends AppError {
+  constructor(message = '请先登录') {
+    super(message, 'unauthorized', 401);
+  }
+}
+
+export class ServiceUnavailableError extends AppError {
+  constructor(message = '服务暂时不可用，请稍后重试') {
+    super(message, 'service_unavailable', 503);
+  }
+}

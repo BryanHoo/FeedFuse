@@ -1,3 +1,4 @@
+import { requireApiSession } from '@/server/auth/session';
 import Parser from 'rss-parser';
 import { ok } from '../../../../server/http/apiResponse';
 import { fetchRssXml } from '../../../../server/http/externalHttpClient';
@@ -87,6 +88,11 @@ function normalizeHttpUrl(value: unknown): string | null {
 }
 
 export async function GET(request: Request) {
+  const authResponse = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
+  }
+
   const urlParam = new URL(request.url).searchParams.get('url') ?? '';
 
   let url: URL;

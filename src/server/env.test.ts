@@ -12,6 +12,24 @@ describe('env', () => {
     expect(Object.prototype.hasOwnProperty.call(env, 'AI_API_KEY')).toBe(false);
   });
 
+  it('treats empty AUTH_INITIAL_PASSWORD as undefined', () => {
+    const env = parseEnv({
+      DATABASE_URL: 'postgres://example',
+      AUTH_INITIAL_PASSWORD: '',
+    });
+
+    expect(env.AUTH_INITIAL_PASSWORD).toBeUndefined();
+  });
+
+  it('parses AUTH_INITIAL_PASSWORD when provided', () => {
+    const env = parseEnv({
+      DATABASE_URL: 'postgres://example',
+      AUTH_INITIAL_PASSWORD: 'initial-password',
+    });
+
+    expect(env.AUTH_INITIAL_PASSWORD).toBe('initial-password');
+  });
+
   it('treats empty IMAGE_PROXY_SECRET as undefined', () => {
     const env = parseEnv({
       DATABASE_URL: 'postgres://example',

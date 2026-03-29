@@ -1,3 +1,4 @@
+import { requireApiSession } from '@/server/auth/session';
 import { z } from 'zod';
 import { getPool } from '../../../../server/db/pool';
 import { fail, ok } from '../../../../server/http/apiResponse';
@@ -14,6 +15,11 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const authResponse = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
+  }
+
   try {
     const json = await request.json().catch(() => null);
     const parsed = bodySchema.safeParse(json);

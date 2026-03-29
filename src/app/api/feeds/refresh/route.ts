@@ -1,3 +1,4 @@
+import { requireApiSession } from '@/server/auth/session';
 import { ok, fail } from '../../../../server/http/apiResponse';
 import { getQueueSendOptions } from '../../../../server/queue/contracts';
 import { JOB_REFRESH_ALL } from '../../../../server/queue/jobs';
@@ -9,6 +10,11 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST() {
+  const authResponse = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
+  }
+
   try {
     const run = await initializeFeedRefreshRun(getPool(), {
       scope: 'all',

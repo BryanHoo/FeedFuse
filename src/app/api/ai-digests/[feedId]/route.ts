@@ -1,3 +1,4 @@
+import { requireApiSession } from '@/server/auth/session';
 import { z } from 'zod';
 import { getPool } from '../../../../server/db/pool';
 import { ok, fail } from '../../../../server/http/apiResponse';
@@ -78,6 +79,11 @@ export async function GET(
   _request: Request,
   context: { params: Promise<{ feedId: string }> },
 ) {
+  const authResponse = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
+  }
+
   try {
     const params = await context.params;
     const paramsParsed = paramsSchema.safeParse(params);
@@ -108,6 +114,11 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ feedId: string }> },
 ) {
+  const authResponse = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
+  }
+
   try {
     const params = await context.params;
     const paramsParsed = paramsSchema.safeParse(params);

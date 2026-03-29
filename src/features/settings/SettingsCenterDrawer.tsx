@@ -1,4 +1,4 @@
-import { Bot, Palette, Rss, ScrollText, type LucideIcon } from 'lucide-react';
+import { Bot, KeyRound, Palette, Rss, ScrollText, type LucideIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
   AlertDialog,
@@ -24,6 +24,7 @@ import GeneralSettingsPanel from './panels/GeneralSettingsPanel';
 import AISettingsPanel from './panels/AISettingsPanel';
 import LogsSettingsPanel from './panels/LogsSettingsPanel';
 import RssSettingsPanel from './panels/RssSettingsPanel';
+import SecuritySettingsPanel from './panels/SecuritySettingsPanel';
 import type { OpmlTransferResultSummary } from './panels/OpmlTransferSection';
 import { useSettingsAutosave } from './useSettingsAutosave';
 import {
@@ -36,7 +37,7 @@ interface SettingsCenterDrawerProps {
   onClose: () => void;
 }
 
-type SettingsSectionKey = 'general' | 'rss' | 'ai' | 'logging';
+type SettingsSectionKey = 'general' | 'rss' | 'ai' | 'security' | 'logging';
 
 interface SettingsSectionItem {
   key: SettingsSectionKey;
@@ -49,6 +50,7 @@ const sectionItems: SettingsSectionItem[] = [
   { key: 'general', label: '通用', hint: '外观与阅读', icon: Palette },
   { key: 'rss', label: 'RSS', hint: '抓取与过滤', icon: Rss },
   { key: 'ai', label: 'AI', hint: '模型与接口', icon: Bot },
+  { key: 'security', label: '账号安全', hint: '登录与密码', icon: KeyRound },
   { key: 'logging', label: '日志', hint: '开关与查看', icon: ScrollText },
 ];
 
@@ -184,6 +186,7 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
     general: validationErrorKeys.filter((field) => field.startsWith('general.')).length,
     rss: validationErrorKeys.filter((field) => field.startsWith('rss.')).length,
     ai: validationErrorKeys.filter((field) => field.startsWith('ai.')).length,
+    security: 0,
     logging: 0,
   };
 
@@ -353,6 +356,9 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
                           onChange={(updater) => handleDraftChange('ai', updater)}
                           errors={validationErrors}
                         />
+                      </TabsContent>
+                      <TabsContent value="security" className="mt-0 h-full overflow-y-auto">
+                        <SecuritySettingsPanel />
                       </TabsContent>
                       <TabsContent value="logging" className="mt-0 h-full min-h-0">
                         <LogsSettingsPanel

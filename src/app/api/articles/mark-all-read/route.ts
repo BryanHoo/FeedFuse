@@ -1,3 +1,4 @@
+import { requireApiSession } from '@/server/auth/session';
 import { z } from 'zod';
 import { getPool } from '../../../../server/db/pool';
 import { ok, fail } from '../../../../server/http/apiResponse';
@@ -26,6 +27,11 @@ function zodIssuesToFields(error: z.ZodError): Record<string, string> {
 }
 
 export async function POST(request: Request) {
+  const authResponse = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
+  }
+
   try {
     const json = await request.json().catch(() => ({}));
     const parsed = bodySchema.safeParse(json);

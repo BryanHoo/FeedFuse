@@ -1,3 +1,4 @@
+import { requireApiSession } from '@/server/auth/session';
 import { z } from 'zod';
 import { ok, fail } from '../../../../../server/http/apiResponse';
 import { ValidationError } from '../../../../../server/http/errors';
@@ -28,6 +29,11 @@ export async function POST(
   _request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
+  const authResponse = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
+  }
+
   try {
     const params = await context.params;
     const paramsParsed = paramsSchema.safeParse(params);

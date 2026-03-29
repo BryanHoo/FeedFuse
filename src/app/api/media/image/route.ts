@@ -1,3 +1,4 @@
+import { requireApiSession } from '@/server/auth/session';
 import { z } from 'zod';
 import { getServerEnv } from '../../../../server/env';
 import { fetchImageStream } from '../../../../server/http/externalHttpClient';
@@ -21,6 +22,11 @@ const querySchema = z.object({
 const MAX_REDIRECTS = 3;
 
 export async function GET(request: Request) {
+  const authResponse = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
+  }
+
   const url = new URL(request.url);
   const parsed = querySchema.safeParse({
     url: url.searchParams.get('url'),

@@ -1,3 +1,4 @@
+import { requireApiSession } from '@/server/auth/session';
 import { z } from 'zod';
 import { getPool } from '../../../../server/db/pool';
 import { ok, fail } from '../../../../server/http/apiResponse';
@@ -44,6 +45,11 @@ async function writeCategoryReorderFailure(err: unknown, context?: Record<string
 }
 
 export async function PATCH(request: Request) {
+  const authResponse = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
+  }
+
   try {
     const json = await request.json().catch(() => null);
     const parsed = reorderBodySchema.safeParse(json);

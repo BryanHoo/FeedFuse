@@ -1,3 +1,4 @@
+import { requireApiSession } from '@/server/auth/session';
 import { z } from 'zod';
 import { getPool } from '../../../../server/db/pool';
 import { ok, fail } from '../../../../server/http/apiResponse';
@@ -31,6 +32,11 @@ function zodIssuesToFields(error: z.ZodError): Record<string, string> {
 }
 
 export async function GET(request: Request) {
+  const authResponse = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
+  }
+
   try {
     const url = new URL(request.url);
     const parsed = querySchema.safeParse({

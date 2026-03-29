@@ -1,5 +1,7 @@
 import type { Pool, PoolClient } from 'pg';
 
+type DbClient = Pool | PoolClient;
+
 export interface AppSettingsRow {
   aiSummaryEnabled: boolean;
   aiTranslateEnabled: boolean;
@@ -10,7 +12,12 @@ export interface AppSettingsRow {
   rssTimeoutMs: number;
 }
 
-export async function getUiSettings(pool: Pool | PoolClient): Promise<unknown> {
+export interface AuthSettingsRow {
+  authPasswordHash: string;
+  authSessionSecret: string;
+}
+
+export async function getUiSettings(pool: DbClient): Promise<unknown> {
   const { rows } = await pool.query<{ uiSettings: unknown }>(`
     select ui_settings as "uiSettings"
     from app_settings
@@ -19,7 +26,7 @@ export async function getUiSettings(pool: Pool | PoolClient): Promise<unknown> {
   return rows[0]?.uiSettings ?? {};
 }
 
-export async function updateUiSettings(pool: Pool | PoolClient, uiSettings: unknown): Promise<unknown> {
+export async function updateUiSettings(pool: DbClient, uiSettings: unknown): Promise<unknown> {
   const { rows } = await pool.query<{ uiSettings: unknown }>(
     `
       update app_settings
@@ -88,6 +95,46 @@ export async function setTranslationApiKey(pool: Pool, apiKey: string): Promise<
 
 export async function clearTranslationApiKey(pool: Pool): Promise<string> {
   return setTranslationApiKey(pool, '');
+}
+
+export async function getAuthSettings(pool: DbClient): Promise<AuthSettingsRow> {
+  const { rows } = await pool.query<AuthSettingsRow>(`
+    select
+      auth_password_hash as "authPasswordHash",
+      auth_session_secret as "authSessionSecret"
+    from app_settings
+    where id = 1
+  `);
+
+  return rows[0] ?? {
+    authPasswordHash: '',
+    authSessionSecret: '',
+  };
+}
+
+export async function updateAuthPassword(
+  pool: DbClient,
+  authPasswordHash: string,
+): Promise<AuthSettingsRow> {
+  const { rows } = await pool.query<AuthSettingsRow>(
+    `
+      update app_settings
+      set
+        auth_password_hash = $1,
+        auth_session_secret = encode(gen_random_bytes(32), 'hex'),
+        updated_at = now()
+      where id = 1
+      returning
+        auth_password_hash as "authPasswordHash",
+        auth_session_secret as "authSessionSecret"
+    `,
+    [authPasswordHash],
+  );
+
+  return rows[0] ?? {
+    authPasswordHash,
+    authSessionSecret: '',
+  };
 }
 
 export async function getAppSettings(pool: Pool): Promise<AppSettingsRow> {

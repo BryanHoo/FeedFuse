@@ -20,6 +20,7 @@ Use these files as implementation references before editing backend code.
 |-------|-------------|--------|
 | [Directory Structure](./directory-structure.md) | Module ownership and backend layout | Filled |
 | [API Guidelines](./api-guidelines.md) | App Router route patterns, validation, response envelopes | Filled |
+| [Auth Guidelines](./auth-guidelines.md) | Single-user password auth, session cookie, auth contract | Filled |
 | [Service Guidelines](./service-guidelines.md) | Service-layer orchestration and transaction rules | Filled |
 | [Data Access Guidelines](./data-access-guidelines.md) | Repository SQL mapping and persistence boundaries | Filled |
 | [Async Jobs Guidelines](./async-jobs-guidelines.md) | Queue contracts, worker registration, job patterns | Filled |
@@ -34,8 +35,9 @@ Always read these files first for any backend behavior change:
 
 1. [Directory Structure](./directory-structure.md)
 2. [API Guidelines](./api-guidelines.md)
-3. [Type Safety](./type-safety.md)
-4. [Quality Guidelines](./quality-guidelines.md)
+3. [Auth Guidelines](./auth-guidelines.md)
+4. [Type Safety](./type-safety.md)
+5. [Quality Guidelines](./quality-guidelines.md)
 
 Then read the area-specific guide that matches your task:
 

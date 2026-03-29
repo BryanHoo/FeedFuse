@@ -1,3 +1,4 @@
+import { requireApiSession } from '@/server/auth/session';
 import { getPool } from '../../../../../server/db/pool';
 import { cleanupAiRuntimeState } from '../../../../../server/ai/cleanupAiRuntimeState';
 import {
@@ -24,6 +25,11 @@ function readApiKey(input: unknown): string {
 }
 
 export async function GET() {
+  const authResponse = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
+  }
+
   try {
     const pool = getPool();
     const apiKey = await getTranslationApiKey(pool);
@@ -34,6 +40,11 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
+  const authResponse = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
+  }
+
   try {
     const json = await request.json().catch(() => null);
     const apiKey = readApiKey(json);
@@ -73,6 +84,11 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE() {
+  const authResponse = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
+  }
+
   try {
     const pool = getPool();
     const [uiSettings, aiApiKey, currentTranslationApiKey] = await Promise.all([

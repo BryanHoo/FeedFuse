@@ -1,3 +1,4 @@
+import { requireApiSession } from '@/server/auth/session';
 import { z } from 'zod';
 import { getPool } from '../../../server/db/pool';
 import { ok, fail } from '../../../server/http/apiResponse';
@@ -56,6 +57,11 @@ async function writeAiDigestCreateFailure(err: unknown) {
 }
 
 export async function POST(request: Request) {
+  const authResponse = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
+  }
+
   try {
     const json = await request.json().catch(() => null);
     if (json && typeof json === 'object' && 'selectedCategoryIds' in (json as Record<string, unknown>)) {

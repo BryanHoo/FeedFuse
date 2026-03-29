@@ -1,3 +1,4 @@
+import { requireApiSession } from '@/server/auth/session';
 import { getPool } from '../../../server/db/pool';
 import { ok, fail } from '../../../server/http/apiResponse';
 import { cleanupAiRuntimeState } from '../../../server/ai/cleanupAiRuntimeState';
@@ -24,6 +25,11 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  const authResponse = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
+  }
+
   try {
     const pool = getPool();
     const raw = await getUiSettings(pool);
@@ -34,6 +40,11 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
+  const authResponse = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
+  }
+
   const pool = getPool();
 
   try {

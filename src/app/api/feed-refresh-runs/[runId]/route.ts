@@ -1,3 +1,4 @@
+import { requireApiSession } from '@/server/auth/session';
 import { z } from 'zod';
 import { getPool } from '../../../../server/db/pool';
 import { fail, ok } from '../../../../server/http/apiResponse';
@@ -25,6 +26,11 @@ export async function GET(
   _request: Request,
   context: { params: Promise<{ runId: string }> },
 ) {
+  const authResponse = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
+  }
+
   try {
     const params = await context.params;
     const parsed = paramsSchema.safeParse(params);

@@ -1,3 +1,5 @@
+import { redirect } from 'next/navigation';
+import { isAuthenticated } from '@/server/auth/session';
 import ReaderApp from './ReaderApp';
 import type { ViewType } from '../../types';
 
@@ -14,6 +16,10 @@ function normalizeViewSearchParam(input: string | string[] | undefined): ViewTyp
 }
 
 export default async function ReaderPage({ searchParams }: ReaderPageProps = {}) {
+  if (!(await isAuthenticated())) {
+    redirect('/login');
+  }
+
   const resolvedSearchParams = searchParams ? await Promise.resolve(searchParams) : undefined;
 
   return (

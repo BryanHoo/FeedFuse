@@ -39,6 +39,7 @@ type ApiEnvelope<T> = ApiOk<T> | ApiFail;
 export interface RequestApiOptions {
   notifyOnError?: boolean;
   notifyMessage?: string;
+  redirectOnUnauthorized?: boolean;
 }
 
 const api = ky.create({
@@ -85,6 +86,18 @@ function throwInvalidResponseApiError(
   throw new ApiError('服务返回了无效数据，请稍后重试', 'invalid_response', undefined, {
     status,
   });
+}
+
+function redirectToLoginIfNeeded(options?: RequestApiOptions) {
+  if (
+    options?.redirectOnUnauthorized === false ||
+    typeof window === 'undefined' ||
+    window.location.pathname === '/login'
+  ) {
+    return;
+  }
+
+  window.location.assign('/login');
 }
 
 function parseContentDispositionFileName(value: string | null): string | null {
@@ -147,6 +160,9 @@ async function requestApi<T>(
   if (envelope.ok) return envelope.data;
 
   const payload = envelope.error;
+  if (res.status === 401 || payload?.code === 'unauthorized') {
+    redirectToLoginIfNeeded(options);
+  }
   const message = options?.notifyMessage ?? payload?.message ?? '暂时无法完成请求，请稍后重试';
   if (options?.notifyOnError !== false) {
     notifyApiError(message);
@@ -167,6 +183,55 @@ export interface OpmlImportResult {
   createdCategoryCount: number;
   duplicates: Array<{ title: string; xmlUrl: string; reason: 'duplicate_in_file' | 'duplicate_in_db' }>;
   invalidItems: Array<{ title: string | null; xmlUrl: string | null; reason: 'missing_xml_url' | 'invalid_url' }>;
+}
+
+export async function login(
+  input: { password: string },
+  options?: RequestApiOptions,
+): Promise<{ authenticated: boolean }> {
+  return requestApi(
+    '/api/auth/login',
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+    {
+      ...(options ?? {}),
+      redirectOnUnauthorized: false,
+    },
+  );
+}
+
+export async function logout(options?: RequestApiOptions): Promise<{ authenticated: boolean }> {
+  return requestApi(
+    '/api/auth/logout',
+    {
+      method: 'POST',
+    },
+    {
+      ...(options ?? {}),
+      redirectOnUnauthorized: false,
+    },
+  );
+}
+
+export async function changePassword(
+  input: { currentPassword: string; nextPassword: string },
+  options?: RequestApiOptions,
+): Promise<{ updated: boolean }> {
+  return requestApi(
+    '/api/settings/auth/password',
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+    {
+      ...(options ?? {}),
+      redirectOnUnauthorized: false,
+    },
+  );
 }
 
 export async function importOpml(input: {

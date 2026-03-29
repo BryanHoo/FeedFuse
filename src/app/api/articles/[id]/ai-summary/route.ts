@@ -1,3 +1,4 @@
+import { requireApiSession } from '@/server/auth/session';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { normalizePersistedSettings } from '../../../../../features/settings/settingsSchema';
@@ -125,6 +126,11 @@ export async function GET(
   _request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
+  const authResponse = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
+  }
+
   try {
     const params = await context.params;
     const paramsParsed = paramsSchema.safeParse(params);
@@ -150,6 +156,11 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
+  const authResponse = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
+  }
+
   try {
     const params = await context.params;
     const paramsParsed = paramsSchema.safeParse(params);

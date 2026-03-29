@@ -1,3 +1,5 @@
+'use client';
+
 import { Monitor, Moon, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -249,7 +251,6 @@ export default function GeneralSettingsPanel({ draft, onChange }: GeneralSetting
               </Button>
             </div>
           </div>
-
         </div>
       </div>
     </section>

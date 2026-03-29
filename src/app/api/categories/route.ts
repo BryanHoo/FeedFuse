@@ -1,3 +1,4 @@
+import { requireApiSession } from '@/server/auth/session';
 import { z } from 'zod';
 import { getPool } from '../../../server/db/pool';
 import { ok, fail } from '../../../server/http/apiResponse';
@@ -48,6 +49,11 @@ async function writeCategoryCreateFailure(err: unknown) {
 }
 
 export async function GET() {
+  const authResponse = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
+  }
+
   try {
     const pool = getPool();
     const categories = await listCategories(pool);
@@ -58,6 +64,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const authResponse = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
+  }
+
   try {
     const json = await request.json().catch(() => null);
     const parsed = createCategoryBodySchema.safeParse(json);

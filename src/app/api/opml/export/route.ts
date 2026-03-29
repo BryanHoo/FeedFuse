@@ -1,3 +1,4 @@
+import { requireApiSession } from '@/server/auth/session';
 import { getPool } from '../../../../server/db/pool';
 import { fail } from '../../../../server/http/apiResponse';
 import {
@@ -7,6 +8,11 @@ import {
 import { exportOpml } from '../../../../server/services/opmlService';
 
 export async function GET() {
+  const authResponse = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
+  }
+
   try {
     const pool = getPool();
     const result = await exportOpml(pool);
