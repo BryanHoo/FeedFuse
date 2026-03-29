@@ -215,6 +215,47 @@ describe('readerSnapshotService (preview image)', () => {
     expect(snapshot.feeds[0]?.iconUrl).not.toContain('q=');
   });
 
+  it('keeps internal feed favicon routes unchanged', async () => {
+    vi.stubEnv('DATABASE_URL', 'postgres://example');
+    vi.stubEnv('IMAGE_PROXY_SECRET', 'test-image-proxy-secret');
+    listCategoriesMock.mockResolvedValue([]);
+    listFeedsMock.mockResolvedValue([
+      {
+        id: 'feed-1',
+        title: 'Hello Feed',
+        url: 'https://example.com/rss.xml',
+        siteUrl: 'https://example.com',
+        iconUrl: '/api/feeds/feed-1/favicon',
+        enabled: true,
+        fullTextOnOpenEnabled: false,
+        aiSummaryOnOpenEnabled: false,
+        aiSummaryOnFetchEnabled: false,
+        bodyTranslateOnFetchEnabled: false,
+        bodyTranslateOnOpenEnabled: false,
+        titleTranslateEnabled: false,
+        bodyTranslateEnabled: false,
+        articleListDisplayMode: 'card',
+        categoryId: null,
+        fetchIntervalMinutes: 60,
+        lastFetchStatus: null,
+        lastFetchError: null,
+      },
+    ]);
+    getUiSettingsMock.mockResolvedValue({});
+
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ totalCount: 0 }] });
+
+    const pool = { query } as unknown as Pool;
+    const mod = (await import('./readerSnapshotService')) as typeof import('./readerSnapshotService');
+    const snapshot = await mod.getReaderSnapshot(pool, { view: 'all', limit: 1 });
+
+    expect(snapshot.feeds[0]?.iconUrl).toBe('/api/feeds/feed-1/favicon');
+  });
+
   it('includes aiSummarySession in snapshot article items so reload can preserve summary state', async () => {
     vi.stubEnv('DATABASE_URL', 'postgres://example');
     listCategoriesMock.mockResolvedValue([]);

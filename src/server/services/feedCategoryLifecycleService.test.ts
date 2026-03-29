@@ -197,4 +197,120 @@ describe('feedCategoryLifecycleService', () => {
       ['cat-tech'],
     );
   });
+
+  it('sets the persisted icon url to the internal favicon route when creating an rss feed with siteUrl', async () => {
+    const { pool, client } = createMockPool();
+
+    client.query
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'feed-1',
+            kind: 'rss',
+            title: 'Example',
+            url: 'https://example.com/feed.xml',
+            siteUrl: 'https://example.com',
+            iconUrl: null,
+            enabled: true,
+            fullTextOnOpenEnabled: false,
+            aiSummaryOnOpenEnabled: false,
+            aiSummaryOnFetchEnabled: false,
+            bodyTranslateOnFetchEnabled: false,
+            bodyTranslateOnOpenEnabled: false,
+            titleTranslateEnabled: false,
+            bodyTranslateEnabled: false,
+            articleListDisplayMode: 'card',
+            categoryId: null,
+            fetchIntervalMinutes: 30,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'feed-1',
+            kind: 'rss',
+            title: 'Example',
+            url: 'https://example.com/feed.xml',
+            siteUrl: 'https://example.com',
+            iconUrl: '/api/feeds/feed-1/favicon',
+            enabled: true,
+            fullTextOnOpenEnabled: false,
+            aiSummaryOnOpenEnabled: false,
+            aiSummaryOnFetchEnabled: false,
+            bodyTranslateOnFetchEnabled: false,
+            bodyTranslateOnOpenEnabled: false,
+            titleTranslateEnabled: false,
+            bodyTranslateEnabled: false,
+            articleListDisplayMode: 'card',
+            categoryId: null,
+            fetchIntervalMinutes: 30,
+          },
+        ],
+      })
+      .mockResolvedValueOnce(undefined);
+
+    const created = await createFeedWithCategoryResolution(pool, {
+      title: 'Example',
+      url: 'https://example.com/feed.xml',
+      siteUrl: 'https://example.com',
+    });
+
+    expect(client.query).toHaveBeenCalledWith(
+      expect.stringContaining('update feeds'),
+      ['/api/feeds/feed-1/favicon', 'feed-1'],
+    );
+    expect(created.iconUrl).toBe('/api/feeds/feed-1/favicon');
+  });
+
+  it('clears cached favicon data when siteUrl changes', async () => {
+    const { pool, client } = createMockPool();
+
+    client.query
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'feed-1',
+            categoryId: null,
+            siteUrl: 'https://old.example.com',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'feed-1',
+            kind: 'rss',
+            title: 'Updated',
+            url: 'https://example.com/feed.xml',
+            siteUrl: 'https://new.example.com',
+            iconUrl: '/api/feeds/feed-1/favicon',
+            enabled: true,
+            fullTextOnOpenEnabled: false,
+            aiSummaryOnOpenEnabled: false,
+            aiSummaryOnFetchEnabled: false,
+            bodyTranslateOnFetchEnabled: false,
+            bodyTranslateOnOpenEnabled: false,
+            titleTranslateEnabled: false,
+            bodyTranslateEnabled: false,
+            articleListDisplayMode: 'card',
+            categoryId: null,
+            fetchIntervalMinutes: 30,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rowCount: 1 })
+      .mockResolvedValueOnce(undefined);
+
+    await updateFeedWithCategoryResolution(pool, 'feed-1', {
+      siteUrl: 'https://new.example.com',
+    });
+
+    expect(client.query).toHaveBeenCalledWith(
+      expect.stringContaining('delete from feed_favicons'),
+      ['feed-1'],
+    );
+  });
 });

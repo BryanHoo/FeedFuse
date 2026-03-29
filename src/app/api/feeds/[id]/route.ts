@@ -8,7 +8,6 @@ import {
   NotFoundError,
   ValidationError,
 } from '../../../../server/http/errors';
-import { deriveFeedIconUrl } from '../../../../server/rss/deriveFeedIconUrl';
 import { isSafeExternalUrl } from '../../../../server/rss/ssrfGuard';
 import {
   deleteFeedAndCleanupCategory,
@@ -175,9 +174,6 @@ export async function PATCH(
 
     const input = normalizeFeedAutoTriggerFlags({
       ...bodyParsed.data,
-      ...(typeof bodyParsed.data.siteUrl !== 'undefined'
-        ? { iconUrl: deriveFeedIconUrl(bodyParsed.data.siteUrl) }
-        : {}),
     });
 
     const pool = getPool();

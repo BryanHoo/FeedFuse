@@ -13,6 +13,8 @@ import {
   type FeedRow,
   updateFeed,
 } from '../repositories/feedsRepo';
+import { deleteFeedFaviconCache } from '../repositories/feedFaviconsRepo';
+import { buildFeedFaviconPath } from '../rss/feedFaviconUrl';
 
 interface CategoryResolutionInput {
   categoryId?: string | null;
@@ -110,8 +112,13 @@ export async function createFeedWithCategoryResolution(
       categoryId: resolvedCategoryId,
     });
 
+    const nextCreated =
+      created.siteUrl && created.kind === 'rss'
+        ? await updateFeed(client, created.id, { iconUrl: buildFeedFaviconPath(created.id) })
+        : created;
+
     await client.query('commit');
-    return created;
+    return nextCreated ?? created;
   } catch (error) {
     await client.query('rollback');
     throw error;
@@ -143,6 +150,10 @@ export async function updateFeedWithCategoryResolution(
       nextInput.categoryId = await resolveCategoryId(client, input);
     }
 
+    if (typeof input.siteUrl !== 'undefined') {
+      nextInput.iconUrl = input.siteUrl ? buildFeedFaviconPath(id) : null;
+    }
+
     const updated = await updateFeed(client, id, nextInput);
     if (!updated) {
       await client.query('commit');
@@ -151,6 +162,10 @@ export async function updateFeedWithCategoryResolution(
 
     if (existing.categoryId !== updated.categoryId) {
       await cleanupCategoryIfEmpty(client, existing.categoryId);
+    }
+
+    if (typeof input.siteUrl !== 'undefined' && existing.siteUrl !== updated.siteUrl) {
+      await deleteFeedFaviconCache(client, id);
     }
 
     await client.query('commit');

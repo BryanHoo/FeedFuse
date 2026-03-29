@@ -334,14 +334,13 @@ describe('/api/feeds', () => {
     expect(json.ok).toBe(true);
   });
 
-  it('POST /api/feeds forwards siteUrl and derived iconUrl', async () => {
+  it('POST /api/feeds forwards siteUrl and leaves icon resolution to the lifecycle service', async () => {
     createFeedWithCategoryResolutionMock.mockResolvedValue({
       id: feedId,
       title: 'Example',
       url: 'https://1.1.1.1/rss.xml',
       siteUrl: 'https://example.com/',
-      iconUrl:
-        'https://www.google.com/s2/favicons?sz=64&domain_url=https%3A%2F%2Fexample.com',
+      iconUrl: '/api/feeds/1001/favicon',
       enabled: true,
       fullTextOnOpenEnabled: false,
       aiSummaryOnOpenEnabled: false,
@@ -367,8 +366,12 @@ describe('/api/feeds', () => {
       pool,
       expect.objectContaining({
         siteUrl: 'https://example.com/',
-        iconUrl:
-          'https://www.google.com/s2/favicons?sz=64&domain_url=https%3A%2F%2Fexample.com',
+      }),
+    );
+    expect(createFeedWithCategoryResolutionMock).not.toHaveBeenCalledWith(
+      pool,
+      expect.objectContaining({
+        iconUrl: expect.anything(),
       }),
     );
     expect(json.ok).toBe(true);
@@ -632,8 +635,7 @@ describe('/api/feeds', () => {
       title: 'Updated',
       url: 'https://2.2.2.2/rss.xml',
       siteUrl: 'https://example.org/',
-      iconUrl:
-        'https://www.google.com/s2/favicons?sz=64&domain_url=https%3A%2F%2Fexample.org',
+      iconUrl: '/api/feeds/1001/favicon',
       enabled: true,
       fullTextOnOpenEnabled: false,
       aiSummaryOnOpenEnabled: false,
@@ -663,8 +665,6 @@ describe('/api/feeds', () => {
         title: 'Updated',
         url: 'https://2.2.2.2/rss.xml',
         siteUrl: 'https://example.org/',
-        iconUrl:
-          'https://www.google.com/s2/favicons?sz=64&domain_url=https%3A%2F%2Fexample.org',
       }),
     );
     expect(json.ok).toBe(true);

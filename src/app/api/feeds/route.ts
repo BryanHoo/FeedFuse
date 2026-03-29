@@ -5,7 +5,6 @@ import { ok, fail } from '../../../server/http/apiResponse';
 import { numericIdSchema } from '../../../server/http/idSchemas';
 import { ConflictError, ValidationError } from '../../../server/http/errors';
 import { listFeeds } from '../../../server/repositories/feedsRepo';
-import { deriveFeedIconUrl } from '../../../server/rss/deriveFeedIconUrl';
 import { isSafeExternalUrl } from '../../../server/rss/ssrfGuard';
 import { createFeedWithCategoryResolution } from '../../../server/services/feedCategoryLifecycleService';
 import { normalizeFeedAutoTriggerFlags } from '../../../lib/feedAutoTriggerPolicy';
@@ -144,7 +143,6 @@ export async function POST(request: Request) {
     const created = await createFeedWithCategoryResolution(pool, normalizeFeedAutoTriggerFlags({
       ...parsed.data,
       siteUrl,
-      iconUrl: deriveFeedIconUrl(siteUrl),
       fullTextOnOpenEnabled: parsed.data.fullTextOnOpenEnabled ?? false,
       fullTextOnFetchEnabled: parsed.data.fullTextOnFetchEnabled ?? false,
       aiSummaryOnOpenEnabled: parsed.data.aiSummaryOnOpenEnabled ?? false,

@@ -275,16 +275,45 @@ export async function deleteFeed(db: DbClient, id: string): Promise<boolean> {
 export async function getFeedCategoryAssignment(
   db: DbClient,
   id: string,
-): Promise<{ id: string; categoryId: string | null } | null> {
-  const { rows } = await db.query<{ id: string; categoryId: string | null }>(
+): Promise<{ id: string; categoryId: string | null; siteUrl: string | null } | null> {
+  const { rows } = await db.query<{ id: string; categoryId: string | null; siteUrl: string | null }>(
     `
-      select id, category_id as "categoryId"
+      select
+        id,
+        category_id as "categoryId",
+        site_url as "siteUrl"
       from feeds
       where id = $1
       limit 1
     `,
     [id],
   );
+  return rows[0] ?? null;
+}
+
+export async function getFeedFaviconTarget(
+  db: DbClient,
+  id: string,
+): Promise<{ id: string; kind: FeedKind; siteUrl: string | null; iconUrl: string | null } | null> {
+  const { rows } = await db.query<{
+    id: string;
+    kind: FeedKind;
+    siteUrl: string | null;
+    iconUrl: string | null;
+  }>(
+    `
+      select
+        id,
+        kind,
+        site_url as "siteUrl",
+        icon_url as "iconUrl"
+      from feeds
+      where id = $1
+      limit 1
+    `,
+    [id],
+  );
+
   return rows[0] ?? null;
 }
 

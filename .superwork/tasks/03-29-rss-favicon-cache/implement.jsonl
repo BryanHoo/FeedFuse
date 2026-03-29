@@ -1,0 +1,5 @@
+{"file": ".superwork/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".superwork/spec/backend/index.md", "reason": "Backend development guide"}
+{"file": ".superwork/spec/backend/type-safety.md", "reason": "favicon 抓取边界与类型约束"}
+{"file": ".superwork/spec/backend/api-guidelines.md", "reason": "新增 favicon route 约束"}
+{"file": ".superwork/spec/backend/directory-structure.md", "reason": "backend 分层职责"}

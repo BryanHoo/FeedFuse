@@ -125,7 +125,6 @@ describe('importOpml', () => {
       title: 'New',
       url: 'https://example.com/b.xml',
       siteUrl: null,
-      iconUrl: null,
       categoryName: 'Tech',
     });
     expect(result).toMatchObject({
@@ -143,7 +142,7 @@ describe('importOpml', () => {
     ]);
   });
 
-  it('imports htmlUrl as siteUrl and derives iconUrl for imported feeds', async () => {
+  it('imports htmlUrl as siteUrl and lets the lifecycle service resolve favicon routing', async () => {
     listCategoriesMock.mockResolvedValue([]);
     listFeedsMock.mockResolvedValue([]);
     createFeedWithCategoryResolutionMock.mockResolvedValue({
@@ -151,8 +150,7 @@ describe('importOpml', () => {
       title: 'New',
       url: 'https://example.com/b.xml',
       siteUrl: 'https://example.com/blog',
-      iconUrl:
-        'https://www.google.com/s2/favicons?sz=64&domain_url=https%3A%2F%2Fexample.com',
+      iconUrl: '/api/feeds/feed-2/favicon',
       enabled: true,
       fullTextOnOpenEnabled: false,
       aiSummaryOnOpenEnabled: false,
@@ -174,8 +172,6 @@ describe('importOpml', () => {
       title: 'New',
       url: 'https://example.com/b.xml',
       siteUrl: 'https://example.com/blog',
-      iconUrl:
-        'https://www.google.com/s2/favicons?sz=64&domain_url=https%3A%2F%2Fexample.com',
       categoryName: 'Tech',
     });
   });

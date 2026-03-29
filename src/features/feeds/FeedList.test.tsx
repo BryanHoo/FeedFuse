@@ -237,12 +237,7 @@ describe('FeedList manage', () => {
 
           let iconUrl: string | null = null;
           if (typeof body.siteUrl === 'string') {
-            try {
-              const { origin } = new URL(body.siteUrl);
-              iconUrl = `https://www.google.com/s2/favicons?sz=64&domain_url=${encodeURIComponent(origin)}`;
-            } catch {
-              iconUrl = null;
-            }
+            iconUrl = '/api/feeds/feed-1/favicon';
           }
 
           return jsonResponse({
@@ -551,7 +546,7 @@ describe('FeedList manage', () => {
           ? {
               ...feed,
               url: 'https://rss-proxy.example.com/feed.xml',
-              icon: 'https://www.google.com/s2/favicons?sz=64&domain_url=https%3A%2F%2Forigin.example.com',
+              icon: '/api/feeds/feed-1/favicon',
             }
           : feed,
       ),
@@ -562,9 +557,7 @@ describe('FeedList manage', () => {
     const feedButton = screen.getByRole('button', { name: /My Feed.*2/ });
     const iconImg = feedButton.querySelector('img[aria-hidden="true"]') as HTMLImageElement | null;
     expect(iconImg).toBeTruthy();
-    expect(iconImg?.getAttribute('src')).toBe(
-      'https://www.google.com/s2/favicons?sz=64&domain_url=https%3A%2F%2Forigin.example.com',
-    );
+    expect(iconImg?.getAttribute('src')).toBe('/api/feeds/feed-1/favicon');
   });
 
   it('clears 全部文章 active classes after selecting a feed', async () => {

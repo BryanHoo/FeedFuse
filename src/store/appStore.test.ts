@@ -992,8 +992,7 @@ describe('appStore api integration', () => {
             title: 'New Title',
             url: 'https://new.example.com/rss.xml',
             siteUrl: 'https://new.example.com/',
-            iconUrl:
-              'https://www.google.com/s2/favicons?sz=64&domain_url=https%3A%2F%2Fnew.example.com',
+            iconUrl: '/api/feeds/feed-1/favicon',
             enabled: true,
             fullTextOnOpenEnabled: false,
             aiSummaryOnOpenEnabled: false,
@@ -1021,8 +1020,7 @@ describe('appStore api integration', () => {
                 title: 'New Title',
                 url: 'https://new.example.com/rss.xml',
                 siteUrl: 'https://new.example.com/',
-                iconUrl:
-                  'https://www.google.com/s2/favicons?sz=64&domain_url=https%3A%2F%2Fnew.example.com',
+                iconUrl: '/api/feeds/feed-1/favicon',
                 enabled: true,
                 fullTextOnOpenEnabled: false,
                 aiSummaryOnOpenEnabled: false,
@@ -1056,9 +1054,7 @@ describe('appStore api integration', () => {
 
     const updated = useAppStore.getState().feeds.find((feed) => feed.id === 'feed-1');
     expect(updated?.url).toBe('https://new.example.com/rss.xml');
-    expect(updated?.icon).toBe(
-      'https://www.google.com/s2/favicons?sz=64&domain_url=https%3A%2F%2Fnew.example.com',
-    );
+    expect(updated?.icon).toBe('/api/feeds/feed-1/favicon');
     expect(updated?.unreadCount).toBe(7);
     expect(snapshotCalls).toBe(1);
   });

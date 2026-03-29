@@ -23,6 +23,7 @@ Use these files as implementation references before editing backend code.
 | [Auth Guidelines](./auth-guidelines.md) | Single-user password auth, session cookie, auth contract | Filled |
 | [Service Guidelines](./service-guidelines.md) | Service-layer orchestration and transaction rules | Filled |
 | [Data Access Guidelines](./data-access-guidelines.md) | Repository SQL mapping and persistence boundaries | Filled |
+| [Feed Favicon Guidelines](./feed-favicon-guidelines.md) | RSS favicon discovery, cache, and route contract | Filled |
 | [Async Jobs Guidelines](./async-jobs-guidelines.md) | Queue contracts, worker registration, job patterns | Filled |
 | [Type Safety](./type-safety.md) | Runtime validation and backend typing conventions | Filled |
 | [Quality Guidelines](./quality-guidelines.md) | Tests, forbidden patterns, review checklist | Filled |
@@ -45,6 +46,8 @@ Then read the area-specific guide that matches your task:
   [Service Guidelines](./service-guidelines.md)
 - SQL or persistence work:
   [Data Access Guidelines](./data-access-guidelines.md)
+- RSS favicon discovery, cache, or route changes:
+  [Feed Favicon Guidelines](./feed-favicon-guidelines.md)
 - queue, scheduler, or worker changes:
   [Async Jobs Guidelines](./async-jobs-guidelines.md)
 

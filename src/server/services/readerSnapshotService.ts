@@ -214,6 +214,7 @@ function rewriteImageUrl(imageUrl: string | null): string | null {
 
   const normalizedImageUrl = decodeHtmlEntities(imageUrl).trim();
   if (!normalizedImageUrl) return null;
+  if (normalizedImageUrl.startsWith('/')) return normalizedImageUrl;
   if (isExpiredSignedImageUrl(normalizedImageUrl)) return null;
 
   const secret = getOptionalImageProxySecret(getServerEnv().IMAGE_PROXY_SECRET);
