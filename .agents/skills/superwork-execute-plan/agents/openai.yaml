@@ -1,0 +1,4 @@
+interface:
+  display_name: "Execute Plan"
+  short_description: "Implement approved plans in small verified delivery steps"
+  default_prompt: "Use $superwork-execute-plan to implement this approved plan in verified steps."

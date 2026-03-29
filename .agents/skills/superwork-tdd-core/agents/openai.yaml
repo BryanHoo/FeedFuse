@@ -1,0 +1,4 @@
+interface:
+  display_name: "TDD Core"
+  short_description: "Run tight Red-Green-Refactor loops before production code"
+  default_prompt: "Use $superwork-tdd-core to apply Red-Green-Refactor before writing production code."

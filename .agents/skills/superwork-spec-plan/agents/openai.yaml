@@ -1,0 +1,4 @@
+interface:
+  display_name: "Spec Plan"
+  short_description: "Lightweight spec, scope, plan, and verification setup"
+  default_prompt: "Use $superwork-spec-plan to create a lightweight spec and execution plan for this change."
