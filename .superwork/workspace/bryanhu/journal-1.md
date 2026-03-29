@@ -86,3 +86,55 @@ Filled frontend and backend Superwork spec docs from existing code patterns, ini
 ### Next Steps
 
 - None - task complete
+
+
+## Session 3: 修复 RSS favicon 获取并缓存
+
+**Date**: 2026-03-29
+**Task**: 修复 RSS favicon 获取并缓存
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项目 | 说明 |
+|------|------|
+| Favicon 路由 | 新增 `GET /api/feeds/:id/favicon`，通过内部路由稳定提供 RSS favicon |
+| 缓存策略 | 将 favicon 二进制与失败负缓存持久化到 `feed_favicons`，避免重复请求外站 |
+| 数据流修复 | RSS feed 的 `iconUrl` 改为内部路由，并在 `siteUrl` 变更时清理旧缓存 |
+| 规范同步 | 新增 feed favicon backend spec，并补齐迁移、service、route、snapshot 与前端消费测试 |
+
+**验证**：
+- `pnpm lint`
+- `pnpm type-check`
+- `pnpm test`
+
+**关键文件**：
+- `src/app/api/feeds/[id]/favicon/route.ts`
+- `src/server/services/feedFaviconService.ts`
+- `src/server/repositories/feedFaviconsRepo.ts`
+- `src/server/rss/discoverFeedFavicon.ts`
+- `src/server/db/migrations/0027_feed_favicons.sql`
+- `.superwork/spec/backend/feed-favicon-guidelines.md`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7e2ad39` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
