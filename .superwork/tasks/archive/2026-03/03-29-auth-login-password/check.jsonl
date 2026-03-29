@@ -1,0 +1,6 @@
+{"file": ".agents/skills/finish-work/SKILL.md", "reason": "Finish work checklist"}
+{"file": ".agents/skills/check/SKILL.md", "reason": "Code quality check spec"}
+{"file": ".superwork/spec/backend/api-guidelines.md", "reason": "Review auth routes against envelope and validation rules"}
+{"file": ".superwork/spec/backend/quality-guidelines.md", "reason": "Review backend auth tests and boundaries"}
+{"file": ".superwork/spec/frontend/quality-guidelines.md", "reason": "Review login UI and client API usage"}
+{"file": ".superwork/spec/guides/cross-layer-thinking-guide.md", "reason": "Review auth contract across env, db, route and client"}

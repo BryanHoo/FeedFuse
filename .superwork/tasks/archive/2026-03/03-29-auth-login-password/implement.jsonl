@@ -1,0 +1,10 @@
+{"file": ".superwork/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".superwork/spec/backend/index.md", "reason": "Backend development guide"}
+{"file": ".superwork/spec/frontend/index.md", "reason": "Frontend development guide"}
+{"file": ".superwork/spec/backend/type-safety.md", "reason": "Env parsing and auth payload validation"}
+{"file": ".superwork/spec/backend/quality-guidelines.md", "reason": "Auth route and repo tests required"}
+{"file": ".superwork/spec/backend/data-access-guidelines.md", "reason": "app_settings persistence changes"}
+{"file": ".superwork/spec/frontend/component-guidelines.md", "reason": "Login page and settings password UI composition"}
+{"file": ".superwork/spec/guides/cross-layer-thinking-guide.md", "reason": "Auth spans env, db, route, page and client"}
+{"file": ".superwork/spec/frontend/state-management.md", "reason": "Password form should stay local state"}
+{"file": ".superwork/spec/frontend/quality-guidelines.md", "reason": "Client API boundary and tests"}
