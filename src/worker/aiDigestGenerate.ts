@@ -38,6 +38,7 @@ const DEFAULT_DIGEST_MODEL = 'gpt-4o-mini';
 const DEFAULT_DIGEST_API_BASE_URL = 'https://api.openai.com/v1';
 const MAX_CANDIDATES = 500;
 const RERANK_BATCH_SIZE = 12;
+const CLUSTER_TITLE_SIMILARITY_THRESHOLD = 0.88;
 
 type AiDigestGenerateDeps = {
   getAiDigestRunById: typeof getAiDigestRunById;
@@ -101,6 +102,143 @@ function chunk<T>(items: T[], size: number): T[][] {
   return out;
 }
 
+function normalizeClusterText(value: string | null | undefined): string {
+  return (value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s*[-|｜:：]\s*[^-|｜:：]{1,40}$/u, '')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function canonicalizeLink(link: string | null | undefined): string | null {
+  if (!link?.trim()) return null;
+
+  try {
+    const url = new URL(link);
+    url.hash = '';
+
+    const nextParams = new URLSearchParams();
+    for (const [key, value] of url.searchParams.entries()) {
+      if (isRemovableTrackingParam(key)) {
+        continue;
+      }
+      nextParams.append(key, value);
+    }
+
+    const search = nextParams.toString();
+    return `${url.hostname.toLowerCase()}${url.pathname}${search ? `?${search}` : ''}`;
+  } catch {
+    return link.trim().toLowerCase();
+  }
+}
+
+function isRemovableTrackingParam(key: string): boolean {
+  return /^utm_/i.test(key) || ['ref', 'source', 'feature'].includes(key.toLowerCase());
+}
+
+function toTitleBigrams(value: string): Set<string> {
+  const compact = value.replace(/\s+/g, '');
+  if (!compact) return new Set();
+  if (compact.length === 1) return new Set([compact]);
+
+  const out = new Set<string>();
+  for (let index = 0; index < compact.length - 1; index += 1) {
+    out.add(compact.slice(index, index + 2));
+  }
+  return out;
+}
+
+function computeJaccardSimilarity(left: Set<string>, right: Set<string>): number {
+  if (left.size === 0 || right.size === 0) return 0;
+
+  let intersection = 0;
+  for (const item of left) {
+    if (right.has(item)) intersection += 1;
+  }
+
+  return intersection / (left.size + right.size - intersection);
+}
+
+function scoreClusterRepresentative(article: AiDigestCandidateArticleRow): number {
+  let score = 0;
+  if (article.contentFullHtml) score += 4;
+  if (article.summary?.trim()) score += 2;
+  score += Math.min(3, Math.floor((article.summary?.trim().length ?? 0) / 80));
+
+  const fetchedAt = Date.parse(article.fetchedAt);
+  if (Number.isFinite(fetchedAt)) {
+    score += fetchedAt / 1_000_000_000_000;
+  }
+
+  return score;
+}
+
+type CandidateClusterSignature = {
+  canonicalLink: string | null;
+  titleKey: string;
+  titleBigrams: Set<string>;
+};
+
+type CandidateCluster = {
+  representative: AiDigestCandidateArticleRow;
+  representativeScore: number;
+  signature: CandidateClusterSignature;
+};
+
+function buildCandidateClusterSignature(article: AiDigestCandidateArticleRow): CandidateClusterSignature {
+  const titleKey = normalizeClusterText(article.title);
+  return {
+    canonicalLink: canonicalizeLink(article.link),
+    titleKey,
+    titleBigrams: toTitleBigrams(titleKey),
+  };
+}
+
+function shouldClusterCandidate(
+  current: CandidateClusterSignature,
+  existing: CandidateClusterSignature,
+): boolean {
+  if (current.canonicalLink && existing.canonicalLink && current.canonicalLink === existing.canonicalLink) {
+    return true;
+  }
+
+  if (current.titleKey && existing.titleKey && current.titleKey === existing.titleKey) {
+    return true;
+  }
+
+  const titleSimilarity = computeJaccardSimilarity(current.titleBigrams, existing.titleBigrams);
+  return titleSimilarity >= CLUSTER_TITLE_SIMILARITY_THRESHOLD;
+}
+
+function dedupeClusteredArticles(
+  articles: AiDigestCandidateArticleRow[],
+): AiDigestCandidateArticleRow[] {
+  const clusters: CandidateCluster[] = [];
+
+  for (const article of articles) {
+    const signature = buildCandidateClusterSignature(article);
+    const representativeScore = scoreClusterRepresentative(article);
+    const existingCluster = clusters.find((cluster) =>
+      shouldClusterCandidate(signature, cluster.signature),
+    );
+
+    if (!existingCluster) {
+      clusters.push({ representative: article, representativeScore, signature });
+      continue;
+    }
+
+    if (representativeScore > existingCluster.representativeScore) {
+      existingCluster.representative = article;
+      existingCluster.representativeScore = representativeScore;
+      existingCluster.signature = signature;
+    }
+  }
+
+  return clusters.map((cluster) => cluster.representative);
+}
+
 function uniq(values: string[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
@@ -150,18 +288,34 @@ function resolveTargetFeedIds(input: {
   return uniq(input.config.selectedFeedIds.filter((id) => rssFeedIds.has(id)));
 }
 
-async function pickTopNArticles(input: {
+function createSkippedNoUpdatesPatch(model: string | null): {
+  status: 'skipped_no_updates';
+  selectedCount: number;
+  articleId: null;
+  model: string | null;
+  errorCode: null;
+  errorMessage: null;
+} {
+  return {
+    status: 'skipped_no_updates',
+    selectedCount: 0,
+    articleId: null,
+    model,
+    errorCode: null,
+    errorMessage: null,
+  };
+}
+
+async function selectRelevantArticles(input: {
   deps: AiDigestGenerateDeps;
   apiBaseUrl: string;
   apiKey: string;
   model: string;
   prompt: string;
-  topN: number;
   candidates: AiDigestCandidateArticleRow[];
 }): Promise<AiDigestCandidateArticleRow[]> {
-  const topN = Math.max(1, Math.floor(input.topN));
-  if (input.candidates.length <= topN) {
-    return input.candidates.slice(0, topN);
+  if (input.candidates.length === 0) {
+    return [];
   }
 
   const rerankItems: AiDigestRerankItem[] = input.candidates.map((candidate) => ({
@@ -174,30 +328,24 @@ async function pickTopNArticles(input: {
   }));
 
   try {
-    let shortlist: AiDigestRerankItem[] = [];
+    const selectedIds = new Set<string>();
     for (const batch of chunk(rerankItems, RERANK_BATCH_SIZE)) {
       const ids = await input.deps.aiDigestRerank({
         apiBaseUrl: input.apiBaseUrl,
         apiKey: input.apiKey,
         model: input.model,
         prompt: input.prompt,
-        topN,
-        shortlist,
         batch,
       });
-
-      const byId = new Map<string, AiDigestRerankItem>();
-      for (const item of [...shortlist, ...batch]) {
-        byId.set(item.id, item);
+      for (const id of ids) {
+        selectedIds.add(id);
       }
-      shortlist = ids.map((id) => byId.get(id)).filter((item): item is AiDigestRerankItem => Boolean(item));
     }
 
-    const selectedIdSet = new Set(shortlist.map((item) => item.id));
-    const selected = input.candidates.filter((candidate) => selectedIdSet.has(candidate.id));
-    return selected.slice(0, topN);
+    return input.candidates.filter((candidate) => selectedIds.has(candidate.id));
   } catch {
-    return input.candidates.slice(0, topN);
+    // 筛选失败时宁可保留候选，也不要因为模型异常漏掉本应纳入报告的相关内容。
+    return input.candidates;
   }
 }
 
@@ -341,14 +489,11 @@ async function executeAiDigestRun(input: {
   });
 
   if (candidates.length === 0) {
-    await input.deps.updateAiDigestRun(input.pool, input.run.id, {
-      status: 'skipped_no_updates',
-      selectedCount: 0,
-      articleId: null,
-      model: null,
-      errorCode: null,
-      errorMessage: null,
-    });
+    await input.deps.updateAiDigestRun(
+      input.pool,
+      input.run.id,
+      createSkippedNoUpdatesPatch(null),
+    );
     await input.deps.updateAiDigestConfigLastWindowEndAt(input.pool, input.run.feedId, input.run.windowEndAt);
     return 'skipped_no_updates';
   }
@@ -365,26 +510,37 @@ async function executeAiDigestRun(input: {
   const apiBaseUrl = settings.ai.apiBaseUrl.trim() || DEFAULT_DIGEST_API_BASE_URL;
   const maxStoredArticlesPerFeed = settings.rss.maxStoredArticlesPerFeed;
 
-  const selected = await pickTopNArticles({
+  const selected = await selectRelevantArticles({
     deps: input.deps,
     apiBaseUrl,
     apiKey: aiApiKey,
     model,
     prompt: config.prompt,
-    topN: config.topN,
     candidates,
   });
+
+  const clusteredSelected = dedupeClusteredArticles(selected);
+
+  if (clusteredSelected.length === 0) {
+    await input.deps.updateAiDigestRun(
+      input.pool,
+      input.run.id,
+      createSkippedNoUpdatesPatch(model),
+    );
+    await input.deps.updateAiDigestConfigLastWindowEndAt(input.pool, input.run.feedId, input.run.windowEndAt);
+    return 'skipped_no_updates';
+  }
 
   const composed = await input.deps.aiDigestCompose({
     apiBaseUrl,
     apiKey: aiApiKey,
     model,
     prompt: config.prompt,
-    articles: toComposeArticles(selected),
+    articles: toComposeArticles(clusteredSelected),
   });
   await input.ensureSharedConfigCurrent();
 
-  const title = composed.title.trim() || aiDigestFeed?.title || '(AI解读)';
+  const title = composed.title.trim() || aiDigestFeed?.title || '(智能报告)';
   const sanitized = input.deps.sanitizeContent(composed.html);
   if (!sanitized) {
     throw new Error('Invalid ai digest result: empty html');
@@ -421,7 +577,7 @@ async function executeAiDigestRun(input: {
 
   await input.deps.replaceAiDigestRunSources(input.pool, {
     runId: input.run.id,
-    sources: selected.map((candidate, index) => ({
+    sources: clusteredSelected.map((candidate, index) => ({
       sourceArticleId: candidate.id,
       position: index,
     })),
@@ -429,7 +585,7 @@ async function executeAiDigestRun(input: {
 
   await input.deps.updateAiDigestRun(input.pool, input.run.id, {
     status: 'succeeded',
-    selectedCount: selected.length,
+    selectedCount: clusteredSelected.length,
     articleId,
     model,
     errorCode: null,

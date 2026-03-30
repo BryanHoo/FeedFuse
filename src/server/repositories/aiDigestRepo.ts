@@ -93,7 +93,7 @@ export async function createAiDigestConfig(
       input.feedId,
       input.prompt,
       input.intervalMinutes,
-      input.topN ?? 10,
+      input.topN ?? 500,
       input.selectedFeedIds,
       input.lastWindowEndAt,
     ],
@@ -132,6 +132,7 @@ export async function updateAiDigestConfig(
   patch: Partial<{
     prompt: string;
     intervalMinutes: number;
+    topN: number;
     selectedFeedIds: string[];
     lastWindowEndAt: string;
   }>,
@@ -147,6 +148,10 @@ export async function updateAiDigestConfig(
   if (typeof patch.intervalMinutes !== 'undefined') {
     fields.push(`interval_minutes = $${paramIndex++}`);
     values.push(patch.intervalMinutes);
+  }
+  if (typeof patch.topN !== 'undefined') {
+    fields.push(`top_n = $${paramIndex++}`);
+    values.push(patch.topN);
   }
   if (typeof patch.selectedFeedIds !== 'undefined') {
     fields.push(`selected_feed_ids = $${paramIndex++}::bigint[]`);

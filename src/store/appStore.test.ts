@@ -2329,7 +2329,7 @@ describe('appStore api integration', () => {
           ok: true,
           data: {
             categories: [],
-            feeds: [createSnapshotFeed('feed-1', 'AI解读', 1)],
+            feeds: [createSnapshotFeed('feed-1', '智能报告', 1)],
             articles: {
               items: [
                 {
@@ -2353,7 +2353,7 @@ describe('appStore api integration', () => {
         {
           id: 'feed-1',
           kind: 'ai_digest',
-          title: 'AI解读',
+          title: '智能报告',
           url: 'https://example.com/feed-1.xml',
           unreadCount: 1,
           enabled: true,

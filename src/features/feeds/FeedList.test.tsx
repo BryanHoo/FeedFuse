@@ -594,7 +594,7 @@ describe('FeedList manage', () => {
     renderWithNotifications();
 
     const starredArticlesButton = screen.getByRole('button', { name: '收藏文章' });
-    const aiDigestArticlesButton = screen.getByRole('button', { name: '智能解读' });
+    const aiDigestArticlesButton = screen.getByRole('button', { name: '智能报告' });
     const categoryButton = screen.getByRole('button', { name: /未分类/ });
     const feedButton = screen.getByRole('button', { name: /My Feed.*2/ });
 
@@ -605,12 +605,12 @@ describe('FeedList manage', () => {
     expect(screen.queryByRole('button', { name: '未读文章' })).not.toBeInTheDocument();
   });
 
-  it('renders smart views in 全部文章、收藏文章、智能解读 order', () => {
+  it('renders smart views in 全部文章、收藏文章、智能报告 order', () => {
     renderWithNotifications();
 
     const allArticlesButton = screen.getByRole('button', { name: '全部文章' });
     const starredArticlesButton = screen.getByRole('button', { name: '收藏文章' });
-    const aiDigestArticlesButton = screen.getByRole('button', { name: '智能解读' });
+    const aiDigestArticlesButton = screen.getByRole('button', { name: '智能报告' });
 
     expect(screen.queryByRole('button', { name: '未读文章' })).not.toBeInTheDocument();
     expect(allArticlesButton.compareDocumentPosition(starredArticlesButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
@@ -621,7 +621,7 @@ describe('FeedList manage', () => {
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
-  it('shows unread badges for 全部文章 and 智能解读 smart views', () => {
+  it('shows unread badges for 全部文章 and 智能报告 smart views', () => {
     useAppStore.setState((state) => ({
       ...state,
       feeds: [
@@ -656,7 +656,7 @@ describe('FeedList manage', () => {
     renderWithNotifications();
 
     const allArticlesButton = screen.getByRole('button', { name: '全部文章' });
-    const aiDigestArticlesButton = screen.getByRole('button', { name: '智能解读' });
+    const aiDigestArticlesButton = screen.getByRole('button', { name: '智能报告' });
     const allArticlesBadge = within(allArticlesButton).getByText('5');
     const aiDigestBadge = within(aiDigestArticlesButton).getByText('3');
 
@@ -760,7 +760,7 @@ describe('FeedList manage', () => {
     renderWithNotifications();
 
     const allArticlesButton = screen.getByRole('button', { name: '全部文章' });
-    const aiDigestArticlesButton = screen.getByRole('button', { name: '智能解读' });
+    const aiDigestArticlesButton = screen.getByRole('button', { name: '智能报告' });
 
     expect(within(allArticlesButton).getByText('5')).toBeInTheDocument();
     expect(within(aiDigestArticlesButton).getByText('3')).toBeInTheDocument();
@@ -775,7 +775,7 @@ describe('FeedList manage', () => {
     });
   });
 
-  it('switches to 智能解读 smart view after click', async () => {
+  it('switches to 智能报告 smart view after click', async () => {
     useAppStore.setState({
       selectedView: 'all',
       selectedArticleId: null,
@@ -783,7 +783,7 @@ describe('FeedList manage', () => {
 
     renderWithNotifications();
 
-    fireEvent.click(screen.getByRole('button', { name: '智能解读' }));
+    fireEvent.click(screen.getByRole('button', { name: '智能报告' }));
 
     await waitFor(() => {
       expect(useAppStore.getState().selectedView).toBe(AI_DIGEST_VIEW_ID);
@@ -854,7 +854,7 @@ describe('FeedList manage', () => {
     fireEvent.contextMenu(screen.getByRole('button', { name: /My Digest/ }));
     fireEvent.click(await screen.findByRole('menuitem', { name: '编辑' }));
 
-    expect(await screen.findByRole('dialog', { name: '编辑 AI 解读源' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: '编辑智能报告源' })).toBeInTheDocument();
   });
 
 
@@ -1738,7 +1738,7 @@ describe('FeedList manage', () => {
     fireEvent.click(screen.getByRole('button', { name: '添加订阅' }));
 
     expect(await screen.findByRole('button', { name: '添加 RSS 源' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '添加 AI解读' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '添加智能报告' })).toBeInTheDocument();
   });
 
   it('does not commit again when unrelated app store state changes', () => {

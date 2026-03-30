@@ -115,7 +115,7 @@ export default function FeedList({
   const smartViews = [
     { id: 'all', name: '全部文章', Icon: Newspaper, unreadCount: allArticlesUnreadCount },
     { id: 'starred', name: '收藏文章', Icon: Star, unreadCount: 0 },
-    { id: AI_DIGEST_VIEW_ID, name: '智能解读', Icon: Sparkles, unreadCount: aiDigestUnreadCount },
+    { id: AI_DIGEST_VIEW_ID, name: '智能报告', Icon: Sparkles, unreadCount: aiDigestUnreadCount },
   ] as const;
 
   const openAddFeedModal = () => setAddFeedOpen(true);
@@ -395,7 +395,7 @@ export default function FeedList({
                     openAddAiDigestModal();
                   }}
                 >
-                  添加 AI解读
+                  添加智能报告
                 </Button>
               </div>
             </PopoverContent>

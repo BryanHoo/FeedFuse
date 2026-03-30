@@ -68,7 +68,7 @@ describe('AddAiDigestDialog', () => {
       </StrictMode>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '创建 AI解读源' }));
+    fireEvent.click(screen.getByRole('button', { name: '创建智能报告源' }));
     expect(screen.getByText('标题为必填项')).toBeInTheDocument();
     expect(screen.getByText('AI 提示词为必填项')).toBeInTheDocument();
     expect(screen.getByText('请至少选择一个来源')).toBeInTheDocument();

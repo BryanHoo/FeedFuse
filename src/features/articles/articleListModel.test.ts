@@ -82,7 +82,7 @@ describe('buildArticleListDerivedState', () => {
     );
   });
 
-  it('为 AI 解读视图筛选文章，并优先使用 previewImage 生成预览图索引', () => {
+  it('为智能报告视图筛选文章，并优先使用 previewImage 生成预览图索引', () => {
     const result = buildArticleListDerivedState({
       articles: [
         createArticle({

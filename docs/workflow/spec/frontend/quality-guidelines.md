@@ -30,3 +30,4 @@
 - 只改组件样式，没有同步更新 contract test
 - 在组件里直接调 API，绕过 `apiClient` 和 store 造成状态不一致
 - 改了 settings shape，但没有同步 `settingsStore` 草稿和归一化流程
+- 轮询型 AI 操作把 `skipped_no_updates` 误当作普通成功，导致“没有相关内容”仍提示“已生成”；智能报告这类流程需要把终态文案和运行状态一起校准

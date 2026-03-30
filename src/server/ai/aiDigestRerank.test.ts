@@ -32,9 +32,7 @@ describe('aiDigestRerank', () => {
       apiBaseUrl: 'https://api.openai.com/v1',
       apiKey: 'sk-test',
       model: 'gpt-4o-mini',
-      prompt: '解读这些文章',
-      topN: 2,
-      shortlist: [],
+      prompt: '整理这些文章的智能报告',
       batch: [
         {
           id: 'a1',

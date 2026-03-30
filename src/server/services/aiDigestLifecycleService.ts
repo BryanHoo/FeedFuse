@@ -18,6 +18,8 @@ import {
   updateAiDigestConfig,
 } from '../repositories/aiDigestRepo';
 
+const LEGACY_AI_DIGEST_RELEVANT_CAP = 500;
+
 type CategoryResolutionInput = {
   categoryId?: string | null;
   categoryName?: string | null;
@@ -86,7 +88,8 @@ export async function createAiDigestWithCategoryResolution(
       feedId: createdFeed.id,
       prompt: input.prompt,
       intervalMinutes: input.intervalMinutes,
-      topN: 10,
+      // 兼容保留 top_n 字段，但实际策略改为“纳入所有判定为相关的候选”。
+      topN: LEGACY_AI_DIGEST_RELEVANT_CAP,
       selectedFeedIds: input.selectedFeedIds,
       lastWindowEndAt: new Date().toISOString(),
     });
@@ -128,7 +131,7 @@ export async function updateAiDigestWithCategoryResolution(
 
     const nextCategoryId = await resolveCategoryId(client as never, input);
 
-    // 编辑 AI 解读时同时更新 feeds 与 ai_digest_configs，确保同事务一致。
+    // 编辑智能报告源时同时更新 feeds 与 ai_digest_configs，确保同事务一致。
     const updatedFeed = await updateFeed(client as never, input.feedId, {
       title: input.title,
       categoryId: nextCategoryId,
@@ -141,6 +144,7 @@ export async function updateAiDigestWithCategoryResolution(
     const updatedConfig = await updateAiDigestConfig(client as never, input.feedId, {
       prompt: input.prompt,
       intervalMinutes: input.intervalMinutes,
+      topN: LEGACY_AI_DIGEST_RELEVANT_CAP,
       selectedFeedIds: input.selectedFeedIds,
     });
     if (!updatedConfig) {

@@ -67,7 +67,7 @@ async function pollAiDigestRunStatus(input: {
     }
 
     if (run.status === 'succeeded' || run.status === 'skipped_no_updates') {
-      return { ok: true as const };
+      return { ok: true as const, status: run.status };
     }
 
     if (run.status === 'failed') {
@@ -510,7 +510,7 @@ export default function ArticleList({
 
   const selectedFeed = isAggregateView ? null : feedById.get(renderedSelectedView) ?? selectedFeedFromStore;
   const headerTitle =
-    renderedSelectedView === AI_DIGEST_VIEW_ID ? "智能解读" : (selectedFeed?.title ?? "文章");
+    renderedSelectedView === AI_DIGEST_VIEW_ID ? "智能报告" : (selectedFeed?.title ?? "文章");
   const isAiDigestView = Boolean(selectedFeed && (selectedFeed.kind ?? "rss") === "ai_digest");
 
   useEffect(() => {
@@ -586,7 +586,7 @@ export default function ArticleList({
     }
 
     if (renderedSelectedView === AI_DIGEST_VIEW_ID) {
-      return "还没有智能解读文章";
+      return "还没有智能报告";
     }
 
     if (selectedFeed) {
@@ -826,6 +826,10 @@ export default function ArticleList({
             resolveDeferredOperation({
               actionKey: 'aiDigest.generate',
               trackingKey: result.runId,
+              context:
+                runResult.status === 'skipped_no_updates'
+                  ? { outcome: 'no_relevant_updates' }
+                  : undefined,
             });
             await loadSnapshot({ view }).catch((err) => {
               console.error(err);

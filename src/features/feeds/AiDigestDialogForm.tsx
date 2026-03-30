@@ -105,7 +105,7 @@ export default function AiDigestDialogForm({
               autoComplete="off"
               value={title}
               onChange={(event) => onTitleChange(event.target.value)}
-              placeholder="例如：每日科技解读"
+              placeholder="例如：每日科技智能报告"
               disabled={isBusy}
               aria-invalid={titleFieldError ? "true" : "false"}
               aria-errormessage={
@@ -132,7 +132,7 @@ export default function AiDigestDialogForm({
               name="prompt"
               value={prompt}
               onChange={(event) => onPromptChange(event.target.value)}
-              placeholder="例如：请用要点总结这些文章的核心观点，并给出你的解读与建议。"
+              placeholder="例如：请围绕 AI 行业进展整理主题脉络、关键信号、分歧点与后续建议。"
               className="min-h-24"
               disabled={isBusy}
               aria-invalid={promptFieldError ? "true" : "false"}
@@ -150,8 +150,7 @@ export default function AiDigestDialogForm({
               </p>
             ) : (
               <p className="text-xs text-muted-foreground">
-                只会解读窗口内新增/更新的文章，并最终纳入相关性最高的 Top 10
-                篇。
+                只会检查时间窗口内新增或更新的文章，并把所有可判断为相关的内容纳入本次智能报告。
               </p>
             )}
           </div>

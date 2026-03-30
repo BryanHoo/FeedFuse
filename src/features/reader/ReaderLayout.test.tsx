@@ -392,7 +392,7 @@ describe('ReaderLayout', () => {
     fireEvent.click(addSubscriptionButton);
 
     expect(screen.getByRole('button', { name: '添加 RSS 源' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '添加 AI解读' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '添加智能报告' })).toBeInTheDocument();
   });
 
   it('renders mobile reading context and quick actions for selected articles', () => {

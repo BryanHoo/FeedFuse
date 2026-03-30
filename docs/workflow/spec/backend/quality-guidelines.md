@@ -32,3 +32,4 @@
 - 改了 repository 返回字段，但忘记同步 `src/types` 或 `apiClient` DTO 映射
 - 在 API 里塞入长耗时逻辑，导致本该进 worker 的流程阻塞请求
 - 新增 migration 但没有补排序编号或测试
+- 调整 `ai_digest` 候选筛选时误把 `ai_digest_configs.top_n` 当成用户可见上限；当前约定是该字段仅作兼容保留，运行时应优先按“是否相关”筛选，并在筛选结果为空时落 `skipped_no_updates`

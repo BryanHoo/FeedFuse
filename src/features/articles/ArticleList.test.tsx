@@ -1173,14 +1173,14 @@ describe('ArticleList', () => {
         await Promise.resolve();
       });
 
-      expect(screen.getByText('已开始生成 AI 解读')).toBeInTheDocument();
+      expect(screen.getByText('已开始生成智能报告')).toBeInTheDocument();
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(2_000);
         await Promise.resolve();
       });
 
-      expect(screen.getByText('AI 解读已生成')).toBeInTheDocument();
+      expect(screen.getByText('智能报告已生成')).toBeInTheDocument();
       expect(screen.queryByText('已在生成中')).not.toBeInTheDocument();
       expect(runStatusCalls).toBeGreaterThan(1);
       expect(loadSnapshotMock).toHaveBeenCalledWith({ view: 'digest-1' });
@@ -1497,7 +1497,7 @@ describe('ArticleList', () => {
     expect(screen.getByText('0 篇')).toBeInTheDocument();
   });
 
-  it('shows only AI digest articles and supports unread toggle in 智能解读 smart view', () => {
+  it('shows only AI digest articles and supports unread toggle in 智能报告 smart view', () => {
     useAppStore.setState({
       feeds: [
         {
@@ -1567,7 +1567,7 @@ describe('ArticleList', () => {
 
     renderWithNotifications();
 
-    expect(screen.getByRole('heading', { level: 2, name: '智能解读' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: '智能报告' })).toBeInTheDocument();
     expect(screen.getByText('Digest Article A')).toBeInTheDocument();
     expect(screen.getByText('Digest Article Read')).toBeInTheDocument();
     expect(screen.queryByText('RSS Article')).not.toBeInTheDocument();
@@ -1601,7 +1601,7 @@ describe('ArticleList', () => {
           id: 'digest-article-brief',
           feedId: 'digest-1',
           title: 'Digest Article With Brief',
-          content: '<p>这是一段 AI 解读的简要内容。</p><p>第二段。</p>',
+          content: '<p>这是一段智能报告的简要内容。</p><p>第二段。</p>',
           summary: '',
           publishedAt: new Date('2026-02-24T00:00:00.000Z').toISOString(),
           link: 'https://example.com/digest-brief',
@@ -1617,7 +1617,7 @@ describe('ArticleList', () => {
     renderWithNotifications();
 
     expect(screen.getByTestId('article-card-digest-article-brief-summary')).toHaveTextContent(
-      '这是一段 AI 解读的简要内容。 第二段。',
+      '这是一段智能报告的简要内容。 第二段。',
     );
   });
 

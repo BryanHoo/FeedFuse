@@ -64,8 +64,6 @@ export async function aiDigestRerank(input: {
   apiKey: string;
   model: string;
   prompt: string;
-  topN: number;
-  shortlist: AiDigestRerankItem[];
   batch: AiDigestRerankItem[];
 }): Promise<string[]> {
   const client = createOpenAIClient({
@@ -74,9 +72,7 @@ export async function aiDigestRerank(input: {
     source: 'server/ai/aiDigestRerank',
     requestLabel: 'AI digest rerank request',
   });
-  const allowedIds = new Set(
-    [...input.shortlist, ...input.batch].map((item) => item.id).filter((id) => Boolean(id)),
-  );
+  const allowedIds = new Set(input.batch.map((item) => item.id).filter((id) => Boolean(id)));
 
   const completion = await client.chat.completions.create({
     model: input.model,
@@ -85,16 +81,14 @@ export async function aiDigestRerank(input: {
       {
         role: 'system',
         content:
-          '你是信息筛选助手。根据用户的解读提示词，从候选文章中选出最相关的文章。只输出 JSON 字符串数组，元素为文章 id；不要输出解释、不要输出 Markdown。',
+          '你是信息筛选助手。根据用户的智能报告提示词，判断本批候选文章里哪些内容与主题相关。只输出 JSON 字符串数组，元素为相关文章 id；不要输出解释、不要输出 Markdown。',
       },
       {
         role: 'user',
         content: JSON.stringify({
           prompt: input.prompt,
-          topN: input.topN,
-          shortlist: input.shortlist,
           batch: input.batch,
-          outputContract: 'JSON string array of ids, subset of (shortlist + batch), length <= topN',
+          outputContract: 'JSON string array of ids, subset of batch',
         }),
       },
     ],
@@ -110,5 +104,5 @@ export async function aiDigestRerank(input: {
     }
   }
 
-  return ids.slice(0, Math.max(0, input.topN));
+  return ids;
 }

@@ -12,7 +12,7 @@ export interface AiDigestComposeArticle {
 }
 
 const MAP_BATCH_SIZE = 4;
-const MAX_ARTICLE_TEXT_CHARS = 6000;
+const DEFAULT_MAX_ARTICLE_TEXT_CHARS = 6000;
 const MAX_REDUCE_NOTES_CHARS = 60_000;
 const MAX_FOLD_ROUNDS = 3;
 
@@ -26,11 +26,36 @@ function extractTextFromHtml(html: string): string {
   return normalizeWhitespace(text);
 }
 
-function toArticleText(article: AiDigestComposeArticle): string {
-  const fallback = normalizeWhitespace([article.title, article.summary ?? ''].filter(Boolean).join('\n'));
-  const base = article.contentFullHtml ? extractTextFromHtml(article.contentFullHtml) : fallback;
-  const normalized = base || fallback;
-  return normalized.length > MAX_ARTICLE_TEXT_CHARS ? normalized.slice(0, MAX_ARTICLE_TEXT_CHARS) : normalized;
+function resolveMaxArticleTextChars(articleCount: number): number {
+  if (articleCount >= 120) return 900;
+  if (articleCount >= 60) return 1400;
+  if (articleCount >= 24) return 2200;
+  if (articleCount >= 8) return 3600;
+  return DEFAULT_MAX_ARTICLE_TEXT_CHARS;
+}
+
+function clipText(value: string, maxChars: number): string {
+  return value.length > maxChars ? value.slice(0, maxChars) : value;
+}
+
+function buildArticleTextSections(article: AiDigestComposeArticle): string[] {
+  const summaryText = normalizeWhitespace(article.summary ?? '');
+  const bodyText = article.contentFullHtml ? extractTextFromHtml(article.contentFullHtml) : '';
+
+  return [
+    article.title ? `标题：${article.title}` : '',
+    summaryText ? `摘要：${summaryText}` : '',
+    bodyText ? `正文摘录：${bodyText}` : '',
+  ].filter(Boolean);
+}
+
+function toArticleText(article: AiDigestComposeArticle, maxChars: number): string {
+  const sections = buildArticleTextSections(article);
+  const summaryText = normalizeWhitespace(article.summary ?? '');
+  const fallback = normalizeWhitespace([article.title, summaryText].filter(Boolean).join('\n'));
+  const base = normalizeWhitespace(sections.join('\n')) || fallback;
+
+  return clipText(base, maxChars);
 }
 
 function unwrapCodeFence(value: string): string {
@@ -139,7 +164,7 @@ async function mapBatch(input: {
     model: input.model,
     requestLabel: 'AI digest map request',
     system:
-      '你是中文信息提炼助手。根据用户的解读提示词，为每篇文章提炼 2-4 条要点。只输出 JSON 对象：{ "items": [{ "id": "...", "points": ["..."] }] }，不要输出解释或 Markdown。',
+      '你是中文信息提炼助手。根据用户的智能报告提示词，为每篇文章提炼 2-4 条关键事实、变化或信号。只输出 JSON 对象：{ "items": [{ "id": "...", "points": ["..."] }] }，不要输出解释或 Markdown。',
     user: {
       prompt: input.prompt,
       articles: input.articles.map((a) => ({
@@ -225,13 +250,15 @@ export async function aiDigestCompose(input: {
   prompt: string;
   articles: AiDigestComposeArticle[];
 }): Promise<{ title: string; html: string }> {
+  const maxArticleTextChars = resolveMaxArticleTextChars(input.articles.length);
   const prepared = input.articles.map((article) => ({
     id: article.id,
     feedTitle: article.feedTitle,
     title: article.title,
     link: article.link,
     fetchedAt: article.fetchedAt,
-    text: toArticleText(article),
+    // 相关篇数变多时压缩单篇表示，避免“全部相关都纳入”把单次上下文推爆。
+    text: toArticleText(article, maxArticleTextChars),
   }));
 
   // Fast-path for small inputs: keep a single completion (makes unit tests deterministic).
@@ -249,7 +276,7 @@ export async function aiDigestCompose(input: {
         {
           role: 'system',
           content:
-            '你是中文阅读解读助手。根据用户提示词与文章内容生成一篇解读文章。只输出 JSON：{ "title": "...", "html": "<p>...</p>" }，不要输出解释或 Markdown。',
+            '你是中文智能报告助手。根据用户提示词与文章内容生成一篇结构化智能报告，突出主题、变化、信号与可执行结论。只输出 JSON：{ "title": "...", "html": "<p>...</p>" }，不要输出解释或 Markdown。',
         },
         {
           role: 'user',
@@ -307,7 +334,7 @@ export async function aiDigestCompose(input: {
       {
         role: 'system',
         content:
-          '你是中文阅读解读助手。根据用户提示词与文章要点生成一篇解读文章。只输出 JSON：{ "title": "...", "html": "<p>...</p>" }，不要输出解释或 Markdown。',
+          '你是中文智能报告助手。根据用户提示词与文章要点生成一篇结构化智能报告，突出主题、变化、信号与可执行结论。只输出 JSON：{ "title": "...", "html": "<p>...</p>" }，不要输出解释或 Markdown。',
       },
       {
         role: 'user',

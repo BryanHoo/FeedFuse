@@ -48,7 +48,7 @@ export default function AiDigestDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        closeLabel={isEditMode ? "关闭编辑AI解读源" : "关闭添加AI解读源"}
+        closeLabel={isEditMode ? "关闭编辑智能报告源" : "关闭添加智能报告源"}
         className={DIALOG_FORM_CONTENT_CLASS_NAME}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
@@ -56,9 +56,9 @@ export default function AiDigestDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle>{isEditMode ? "编辑 AI 解读源" : "添加 AI 解读源"}</DialogTitle>
+          <DialogTitle>{isEditMode ? "编辑智能报告源" : "添加智能报告源"}</DialogTitle>
           <DialogDescription>
-            选择要解读的来源与重复时间。系统会按时间窗口生成新的解读文章。
+            选择要分析的来源与重复时间。系统会按提示词筛选相关更新，并生成新的智能报告。
           </DialogDescription>
         </DialogHeader>
 
@@ -67,7 +67,7 @@ export default function AiDigestDialog({
           loadingInitialValues={form.loadingInitialValues}
           submitting={form.submitting}
           submitError={form.submitError}
-          submitButtonLabel={isEditMode ? "保存 AI 解读源" : "创建 AI解读源"}
+          submitButtonLabel={isEditMode ? "保存智能报告源" : "创建智能报告源"}
           submittingButtonLabel={isEditMode ? "保存中…" : "创建中…"}
           title={form.title}
           titleInputRef={form.titleInputRef}

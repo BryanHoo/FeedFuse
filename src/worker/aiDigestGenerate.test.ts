@@ -48,7 +48,7 @@ describe('runAiDigestGenerate', () => {
     });
 
     const listFeedsMock = vi.fn().mockResolvedValue([
-      { id: 'feed-ai', kind: 'ai_digest', title: 'AI解读', categoryId: null },
+      { id: 'feed-ai', kind: 'ai_digest', title: '智能报告', categoryId: null },
       { id: 'feed-rss-1', kind: 'rss', title: 'RSS 1', categoryId: null },
     ]);
 
@@ -120,7 +120,7 @@ describe('runAiDigestGenerate', () => {
     });
 
     const listFeedsMock = vi.fn().mockResolvedValue([
-      { id: 'feed-ai', kind: 'ai_digest', title: 'AI解读', categoryId: null },
+      { id: 'feed-ai', kind: 'ai_digest', title: '智能报告', categoryId: null },
       { id: 'feed-rss-1', kind: 'rss', title: 'RSS 1', categoryId: 'cat-tech' },
     ]);
     const listAiDigestCandidateArticlesMock = vi.fn().mockResolvedValue([]);
@@ -181,7 +181,7 @@ describe('runAiDigestGenerate', () => {
           selectedCategoryIds: [],
         }),
         listFeeds: vi.fn().mockResolvedValue([
-          { id: 'feed-ai', kind: 'ai_digest', title: 'AI解读', categoryId: null },
+          { id: 'feed-ai', kind: 'ai_digest', title: '智能报告', categoryId: null },
           { id: 'feed-rss-1', kind: 'rss', title: 'RSS 1', categoryId: null },
         ]) as never,
         listAiDigestCandidateArticles: vi.fn().mockResolvedValue([
@@ -250,6 +250,184 @@ describe('runAiDigestGenerate', () => {
     );
   });
 
+  it('deduplicates clustered articles before composing the report', async () => {
+    writeUserOperationStartedLogMock.mockReset();
+    writeUserOperationSucceededLogMock.mockReset();
+    writeUserOperationFailedLogMock.mockReset();
+    const replaceAiDigestRunSourcesMock = vi.fn().mockResolvedValue(undefined);
+    const aiDigestComposeMock = vi.fn().mockResolvedValue({ title: 'Digest', html: '<p>digest</p>' });
+    const insertArticleIgnoreDuplicateMock = vi.fn().mockResolvedValue({ id: 'digest-article-dedupe' });
+    const pool = { query: vi.fn() } as unknown as Pool;
+
+    const { runAiDigestGenerate } = await import('./aiDigestGenerate');
+    await runAiDigestGenerate({
+      pool,
+      runId: 'run-dedupe',
+      jobId: null,
+      isFinalAttempt: true,
+      deps: {
+        getAiDigestRunById: vi.fn().mockResolvedValue({
+          id: 'run-dedupe',
+          feedId: 'feed-ai',
+          windowStartAt: '2026-03-17T00:00:00.000Z',
+          windowEndAt: '2026-03-17T01:00:00.000Z',
+          status: 'queued',
+        }),
+        getAiDigestConfigByFeedId: vi.fn().mockResolvedValue({
+          feedId: 'feed-ai',
+          prompt: 'x',
+          intervalMinutes: 60,
+          topN: 10,
+          selectedFeedIds: ['feed-rss-1'],
+          selectedCategoryIds: [],
+        }),
+        listFeeds: vi.fn().mockResolvedValue([
+          { id: 'feed-ai', kind: 'ai_digest', title: '智能报告', categoryId: null },
+          { id: 'feed-rss-1', kind: 'rss', title: 'RSS 1', categoryId: null },
+        ]) as never,
+        listAiDigestCandidateArticles: vi.fn().mockResolvedValue([
+          {
+            id: 'candidate-1',
+            feedId: 'feed-rss-1',
+            feedTitle: 'RSS 1',
+            title: 'OpenAI 发布新模型',
+            summary: '短摘要',
+            link: 'https://example.com/openai?utm_source=rss',
+            fetchedAt: '2026-03-17T00:30:00.000Z',
+            contentFullHtml: null,
+          },
+          {
+            id: 'candidate-2',
+            feedId: 'feed-rss-1',
+            feedTitle: 'RSS 1',
+            title: 'OpenAI 发布新模型 | RSS 1',
+            summary: '更长一点的摘要内容，用来测试代表文章替换。',
+            link: 'https://example.com/openai?utm_medium=email',
+            fetchedAt: '2026-03-17T00:29:00.000Z',
+            contentFullHtml: '<p>Full content</p>',
+          },
+          {
+            id: 'candidate-3',
+            feedId: 'feed-rss-1',
+            feedTitle: 'RSS 1',
+            title: 'Anthropic 发布新功能',
+            summary: '另一篇',
+            link: 'https://example.com/anthropic',
+            fetchedAt: '2026-03-17T00:20:00.000Z',
+            contentFullHtml: null,
+          },
+        ]),
+        updateAiDigestRun: vi.fn().mockResolvedValue(undefined),
+        updateAiDigestConfigLastWindowEndAt: vi.fn().mockResolvedValue(undefined),
+        getAiApiKey: vi.fn().mockResolvedValue('k'),
+        getUiSettings: vi.fn().mockResolvedValue({ rss: { maxStoredArticlesPerFeed: 1000 } }),
+        aiDigestRerank: vi.fn().mockResolvedValue(['candidate-1', 'candidate-2', 'candidate-3']),
+        aiDigestCompose: aiDigestComposeMock,
+        sanitizeContent: vi.fn().mockReturnValue('<p>digest</p>'),
+        insertArticleIgnoreDuplicate: insertArticleIgnoreDuplicateMock,
+        queryArticleIdByDedupeKey: vi.fn().mockResolvedValue('digest-article-dedupe'),
+        replaceAiDigestRunSources: replaceAiDigestRunSourcesMock,
+        pruneFeedArticlesToLimit: vi.fn().mockResolvedValue(undefined),
+      } as never,
+    });
+
+    expect(aiDigestComposeMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        articles: [
+          expect.objectContaining({ id: 'candidate-2' }),
+          expect.objectContaining({ id: 'candidate-3' }),
+        ],
+      }),
+    );
+    expect(replaceAiDigestRunSourcesMock).toHaveBeenCalledWith(
+      pool,
+      expect.objectContaining({
+        runId: 'run-dedupe',
+        sources: [
+          { sourceArticleId: 'candidate-2', position: 0 },
+          { sourceArticleId: 'candidate-3', position: 1 },
+        ],
+      }),
+    );
+    expect(insertArticleIgnoreDuplicateMock).toHaveBeenCalledOnce();
+  });
+
+  it('skips report generation when candidates exist but none are relevant to the prompt', async () => {
+    writeUserOperationStartedLogMock.mockReset();
+    writeUserOperationSucceededLogMock.mockReset();
+    writeUserOperationFailedLogMock.mockReset();
+    const updateAiDigestRunMock = vi.fn().mockResolvedValue(undefined);
+    const updateAiDigestConfigLastWindowEndAtMock = vi.fn().mockResolvedValue(undefined);
+    const insertArticleIgnoreDuplicateMock = vi.fn().mockResolvedValue({ id: 'digest-article-skip' });
+    const pool = { query: vi.fn() } as unknown as Pool;
+
+    const { runAiDigestGenerate } = await import('./aiDigestGenerate');
+    await runAiDigestGenerate({
+      pool,
+      runId: 'run-no-relevant',
+      jobId: null,
+      isFinalAttempt: true,
+      deps: {
+        getAiDigestRunById: vi.fn().mockResolvedValue({
+          id: 'run-no-relevant',
+          feedId: 'feed-ai',
+          windowStartAt: '2026-03-17T00:00:00.000Z',
+          windowEndAt: '2026-03-17T01:00:00.000Z',
+          status: 'queued',
+        }),
+        getAiDigestConfigByFeedId: vi.fn().mockResolvedValue({
+          feedId: 'feed-ai',
+          prompt: '只关注监管变化',
+          intervalMinutes: 60,
+          topN: 10,
+          selectedFeedIds: ['feed-rss-1'],
+          selectedCategoryIds: [],
+        }),
+        listFeeds: vi.fn().mockResolvedValue([
+          { id: 'feed-ai', kind: 'ai_digest', title: '智能报告', categoryId: null },
+          { id: 'feed-rss-1', kind: 'rss', title: 'RSS 1', categoryId: null },
+        ]) as never,
+        listAiDigestCandidateArticles: vi.fn().mockResolvedValue([
+          {
+            id: 'candidate-1',
+            feedTitle: 'RSS 1',
+            title: '来源1',
+            summary: 's1',
+            link: null,
+            fetchedAt: '2026-03-17T00:30:00.000Z',
+            contentFullHtml: null,
+          },
+        ]),
+        updateAiDigestRun: updateAiDigestRunMock,
+        updateAiDigestConfigLastWindowEndAt: updateAiDigestConfigLastWindowEndAtMock,
+        getAiApiKey: vi.fn().mockResolvedValue('k'),
+        getUiSettings: vi.fn().mockResolvedValue({ rss: { maxStoredArticlesPerFeed: 1000 } }),
+        aiDigestRerank: vi.fn().mockResolvedValue([]),
+        aiDigestCompose: vi.fn(),
+        sanitizeContent: vi.fn(),
+        insertArticleIgnoreDuplicate: insertArticleIgnoreDuplicateMock,
+        queryArticleIdByDedupeKey: vi.fn().mockResolvedValue(null),
+        replaceAiDigestRunSources: vi.fn().mockResolvedValue(undefined),
+        pruneFeedArticlesToLimit: vi.fn().mockResolvedValue(undefined),
+      } as never,
+    });
+
+    expect(updateAiDigestRunMock).toHaveBeenCalledWith(
+      pool,
+      'run-no-relevant',
+      expect.objectContaining({
+        status: 'skipped_no_updates',
+        selectedCount: 0,
+      }),
+    );
+    expect(updateAiDigestConfigLastWindowEndAtMock).toHaveBeenCalledWith(
+      pool,
+      'feed-ai',
+      '2026-03-17T01:00:00.000Z',
+    );
+    expect(insertArticleIgnoreDuplicateMock).not.toHaveBeenCalled();
+  });
+
   it('stores a text summary for generated AI digest articles', async () => {
     writeUserOperationStartedLogMock.mockReset();
     writeUserOperationSucceededLogMock.mockReset();
@@ -281,7 +459,7 @@ describe('runAiDigestGenerate', () => {
           selectedCategoryIds: [],
         }),
         listFeeds: vi.fn().mockResolvedValue([
-          { id: 'feed-ai', kind: 'ai_digest', title: 'AI解读', categoryId: null },
+          { id: 'feed-ai', kind: 'ai_digest', title: '智能报告', categoryId: null },
           { id: 'feed-rss-1', kind: 'rss', title: 'RSS 1', categoryId: null },
         ]) as never,
         listAiDigestCandidateArticles: vi.fn().mockResolvedValue([
@@ -302,11 +480,11 @@ describe('runAiDigestGenerate', () => {
         aiDigestRerank: vi.fn().mockResolvedValue(['candidate-1']),
         aiDigestCompose: vi.fn().mockResolvedValue({
           title: 'Digest',
-          html: '<h1>Digest</h1><p>这是 AI 解读摘要。</p><p>后续段落。</p>',
+          html: '<h1>Digest</h1><p>这是智能报告摘要。</p><p>后续段落。</p>',
         }),
         sanitizeContent: vi
           .fn()
-          .mockReturnValue('<h1>Digest</h1><p>这是 AI 解读摘要。</p><p>后续段落。</p>'),
+          .mockReturnValue('<h1>Digest</h1><p>这是智能报告摘要。</p><p>后续段落。</p>'),
         insertArticleIgnoreDuplicate: insertArticleIgnoreDuplicateMock,
         pruneFeedArticlesToLimit: pruneFeedArticlesToLimitMock,
         queryArticleIdByDedupeKey: vi.fn().mockResolvedValue('digest-article-2'),
@@ -317,7 +495,7 @@ describe('runAiDigestGenerate', () => {
     expect(insertArticleIgnoreDuplicateMock).toHaveBeenCalledWith(
       pool,
       expect.objectContaining({
-        summary: 'Digest 这是 AI 解读摘要。 后续段落。',
+        summary: 'Digest 这是智能报告摘要。 后续段落。',
       }),
     );
   });
@@ -353,7 +531,7 @@ describe('runAiDigestGenerate', () => {
             selectedCategoryIds: [],
           }),
           listFeeds: vi.fn().mockResolvedValue([
-            { id: 'feed-ai', kind: 'ai_digest', title: 'AI解读', categoryId: null },
+            { id: 'feed-ai', kind: 'ai_digest', title: '智能报告', categoryId: null },
             { id: 'feed-rss-1', kind: 'rss', title: 'RSS 1', categoryId: null },
           ]) as never,
           listAiDigestCandidateArticles: vi.fn().mockResolvedValue([
@@ -428,7 +606,7 @@ describe('runAiDigestGenerate', () => {
             lastWindowEndAt: '2026-03-17T00:00:00.000Z',
           }),
           listFeeds: vi.fn().mockResolvedValue([
-            { id: 'feed-ai', kind: 'ai_digest', title: 'AI解读', categoryId: null },
+            { id: 'feed-ai', kind: 'ai_digest', title: '智能报告', categoryId: null },
             { id: 'feed-rss-1', kind: 'rss', title: 'RSS 1', categoryId: null },
           ]) as never,
           listAiDigestCandidateArticles: vi.fn().mockResolvedValue([

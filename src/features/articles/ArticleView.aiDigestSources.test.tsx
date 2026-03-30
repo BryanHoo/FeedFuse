@@ -95,7 +95,7 @@ function seedState(input: {
       {
         id: 'feed-1',
         kind: 'ai_digest',
-        title: 'AI解读',
+        title: '智能报告',
         url: 'https://example.com/feed.xml',
         unreadCount: 1,
         enabled: true,
@@ -157,7 +157,7 @@ describe('ArticleView ai digest sources', () => {
 
   it('renders sources module only for ai_digest article', async () => {
     seedState({
-      feed: { id: 'feed-digest', kind: 'ai_digest', title: 'AI解读' },
+      feed: { id: 'feed-digest', kind: 'ai_digest', title: '智能报告' },
       article: {
         id: 'digest-1',
         feedId: 'feed-digest',
@@ -183,7 +183,7 @@ describe('ArticleView ai digest sources', () => {
 
   it('renders source section after article html container for ai_digest article', async () => {
     seedState({
-      feed: { id: 'feed-digest', kind: 'ai_digest', title: 'AI解读' },
+      feed: { id: 'feed-digest', kind: 'ai_digest', title: '智能报告' },
       article: {
         id: 'digest-order-1',
         feedId: 'feed-digest',
@@ -226,7 +226,7 @@ describe('ArticleView ai digest sources', () => {
 
   it('shows empty state for ai_digest article without sources', async () => {
     seedState({
-      feed: { id: 'feed-digest', kind: 'ai_digest', title: 'AI解读' },
+      feed: { id: 'feed-digest', kind: 'ai_digest', title: '智能报告' },
       article: { id: 'digest-2', feedId: 'feed-digest', aiDigestSources: [] },
     });
 
@@ -237,7 +237,7 @@ describe('ArticleView ai digest sources', () => {
 
   it('uses an internal scroll container when sources exceed three items', async () => {
     seedState({
-      feed: { id: 'feed-digest', kind: 'ai_digest', title: 'AI解读' },
+      feed: { id: 'feed-digest', kind: 'ai_digest', title: '智能报告' },
       article: {
         id: 'digest-4',
         feedId: 'feed-digest',
@@ -299,7 +299,7 @@ describe('ArticleView ai digest sources', () => {
     const setSelectedArticle = vi.fn();
 
     seedState({
-      feed: { id: 'feed-digest', kind: 'ai_digest', title: 'AI解读' },
+      feed: { id: 'feed-digest', kind: 'ai_digest', title: '智能报告' },
       article: {
         id: 'digest-3',
         feedId: 'feed-digest',

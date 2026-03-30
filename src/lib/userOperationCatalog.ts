@@ -208,21 +208,22 @@ const catalog: Record<UserOperationActionKey, UserOperationCatalogEntry> = {
   'aiDigest.create': {
     mode: 'immediate',
     category: 'ai_digest',
-    successMessage: () => '已创建 AI 解读源',
-    errorPrefix: () => '创建 AI 解读源失败',
+    successMessage: () => '已创建智能报告源',
+    errorPrefix: () => '创建智能报告源失败',
   },
   'aiDigest.update': {
     mode: 'immediate',
     category: 'ai_digest',
-    successMessage: () => '已更新 AI 解读源',
-    errorPrefix: () => '更新 AI 解读源失败',
+    successMessage: () => '已更新智能报告源',
+    errorPrefix: () => '更新智能报告源失败',
   },
   'aiDigest.generate': {
     mode: 'deferred',
     category: 'ai_digest',
-    startMessage: () => '已开始生成 AI 解读',
-    successMessage: () => 'AI 解读已生成',
-    errorPrefix: () => '生成 AI 解读失败',
+    startMessage: () => '已开始生成智能报告',
+    successMessage: (context) =>
+      context?.outcome === 'no_relevant_updates' ? '当前时间窗口没有相关内容' : '智能报告已生成',
+    errorPrefix: () => '生成智能报告失败',
   },
   'settings.save': {
     mode: 'immediate',

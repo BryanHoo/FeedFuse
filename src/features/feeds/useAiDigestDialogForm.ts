@@ -157,7 +157,7 @@ export function useAiDigestDialogForm(input: UseAiDigestDialogFormInput) {
     }
     if (!input.feedId) {
       setLoadingInitialValues(false);
-      setSubmitError("缺少 AI 解读源 ID，无法编辑");
+      setSubmitError("缺少智能报告源 ID，无法编辑");
       return;
     }
 
@@ -185,7 +185,7 @@ export function useAiDigestDialogForm(input: UseAiDigestDialogFormInput) {
         );
       } catch {
         if (cancelled) return;
-        setSubmitError("暂时无法加载 AI 解读源配置，请稍后重试");
+        setSubmitError("暂时无法加载智能报告源配置，请稍后重试");
       } finally {
         if (!cancelled) {
           setLoadingInitialValues(false);
@@ -238,7 +238,7 @@ export function useAiDigestDialogForm(input: UseAiDigestDialogFormInput) {
       // 保持 payload 与服务端 Zod schema 字段命名一致。
       if (isEditMode) {
         if (!input.feedId) {
-          setSubmitError("缺少 AI 解读源 ID，无法编辑");
+          setSubmitError("缺少智能报告源 ID，无法编辑");
           return;
         }
 
@@ -277,8 +277,8 @@ export function useAiDigestDialogForm(input: UseAiDigestDialogFormInput) {
 
       setSubmitError(
         isEditMode
-          ? "暂时无法更新 AI 解读源，请稍后重试"
-          : "暂时无法创建 AI 解读源，请稍后重试",
+          ? "暂时无法更新智能报告源，请稍后重试"
+          : "暂时无法创建智能报告源，请稍后重试",
       );
     } finally {
       setSubmitting(false);

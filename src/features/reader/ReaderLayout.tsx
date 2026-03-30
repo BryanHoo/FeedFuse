@@ -42,7 +42,7 @@ const MOBILE_SMART_VIEW_LABELS: Record<string, string> = {
   all: '全部文章',
   unread: '未读文章',
   starred: '收藏文章',
-  'ai-digest': '智能解读',
+  'ai-digest': '智能报告',
 };
 const GLOBAL_SEARCH_SHORTCUT_KEY = 'f';
 
