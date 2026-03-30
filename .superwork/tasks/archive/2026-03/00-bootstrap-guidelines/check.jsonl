@@ -1,6 +1,0 @@
-{"file": ".agents/skills/finish-work/SKILL.md", "reason": "Finish work checklist"}
-{"file": ".agents/skills/check/SKILL.md", "reason": "Code quality check spec"}
-{"file": "eslint.config.js", "reason": "Lint rules and ignored paths"}
-{"file": "package.json", "reason": "Canonical quality commands and toolchain"}
-{"file": "src/features/settings/settingsSchema.ts", "reason": "Normalization and runtime-safe settings shape example"}
-{"file": "src/types/index.ts", "reason": "Shared type organization example"}

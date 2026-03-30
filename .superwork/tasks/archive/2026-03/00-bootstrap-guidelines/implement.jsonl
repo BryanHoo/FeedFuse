@@ -1,8 +1,0 @@
-{"file": ".superwork/workflow.md", "reason": "Project workflow and conventions"}
-{"file": ".superwork/spec/frontend/index.md", "reason": "Frontend development guide"}
-{"file": ".superwork/spec/guides/index.md", "reason": "Thinking guides index for documenting reusable conventions"}
-{"file": "AGENTS.md", "reason": "Existing project-wide assistant conventions to extract into spec docs"}
-{"file": "src/app/(reader)/ReaderApp.tsx", "reason": "Reader entry composition and store/hook wiring example"}
-{"file": "src/store/appStore.ts", "reason": "Global UI/server snapshot state pattern with Zustand"}
-{"file": "src/features/articles/ArticleList.tsx", "reason": "Feature component structure and UI composition example"}
-{"file": "src/store/settingsStore.ts", "reason": "Persisted settings store pattern with Zustand persist middleware"}

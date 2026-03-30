@@ -1,4 +1,0 @@
-interface:
-  display_name: "Debug Root Cause"
-  short_description: "Reproduce, trace evidence, find root cause, then fix safely"
-  default_prompt: "Use $superwork-debug-root-cause to reproduce the issue, trace the root cause, and fix it safely."

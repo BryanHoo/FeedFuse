@@ -1,22 +1,30 @@
-<!-- SUPERWORK:START -->
-# Superwork Instructions
+<!-- WORKFLOW-PROJECT-SPEC:START -->
 
-These instructions are for AI assistants working in this project.
+# Workflow Project Spec
 
-Use the `/superwork:start` command when starting a new session to:
-- Initialize your developer identity
-- Understand current project context
-- Read relevant guidelines
+This repository keeps durable implementation context in `docs/workflow/spec/`.
 
-Use `@/.superwork/` to learn:
-- Development workflow (`workflow.md`)
-- Project structure guidelines (`spec/`)
-- Developer workspace (`workspace/`)
+When a task needs project-specific context:
 
-If you're using Codex, project-scoped helpers may also live in:
-- `.agents/skills/` for reusable Superwork skills
-- `.codex/agents/` for optional custom subagents
+1. Read `docs/workflow/spec/project/overview.md`.
+2. Read `docs/workflow/spec/project/commands.md`.
+3. Read `docs/workflow/spec/guides/index.md`.
+4. Read the relevant layer index listed below.
+5. Read only the detailed spec files linked from those indexes.
+6. Read `docs/workflow/spec/project/glossary.md` when domain language is ambiguous.
 
-Keep this managed block so 'superwork update' can refresh the instructions.
+## Shared Spec Entry Points
 
-<!-- SUPERWORK:END -->
+- `docs/workflow/spec/project/overview.md`
+- `docs/workflow/spec/project/commands.md`
+- `docs/workflow/spec/guides/index.md`
+- `docs/workflow/spec/project/glossary.md`
+
+## Available Layer Indexes
+
+- `docs/workflow/spec/backend/index.md`
+- `docs/workflow/spec/frontend/index.md`
+
+Keep this managed block so `workflow-project-spec` can refresh the spec entry points after re-initialization.
+
+<!-- WORKFLOW-PROJECT-SPEC:END -->

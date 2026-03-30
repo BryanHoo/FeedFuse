@@ -1,5 +1,0 @@
-{"file": ".agents/skills/finish-work/SKILL.md", "reason": "Finish work checklist"}
-{"file": ".agents/skills/check/SKILL.md", "reason": "Code quality check spec"}
-{"file": "package.json", "reason": "Canonical backend quality commands"}
-{"file": "src/server/services/aiDigestLifecycleService.test.ts", "reason": "Representative service-layer test style"}
-{"file": "src/app/api/feeds/routes.test.ts", "reason": "Representative App Router route test style"}
