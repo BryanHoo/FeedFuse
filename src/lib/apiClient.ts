@@ -8,6 +8,7 @@ import type {
 } from '../types';
 import { notifyApiError } from './apiErrorNotifier';
 import { normalizeFeedAutoTriggerFlags } from './feedAutoTriggerPolicy';
+import { AI_DIGEST_ICON_URL } from './feedIcons';
 import { isRecord } from './utils';
 
 export interface ApiErrorPayload {
@@ -1159,6 +1160,8 @@ export async function deleteTranslationApiKey(
 
 export function mapFeedDto(dto: FeedDtoLike, categories: Category[]): Feed {
   const categoryNameById = new Map(categories.map((category) => [category.id, category.name]));
+  const resolvedIconUrl =
+    dto.kind === 'ai_digest' ? (dto.iconUrl ?? AI_DIGEST_ICON_URL) : dto.iconUrl;
   const normalizedTriggers = normalizeFeedAutoTriggerFlags({
     fullTextOnOpenEnabled: dto.fullTextOnOpenEnabled,
     fullTextOnFetchEnabled: dto.fullTextOnFetchEnabled,
@@ -1173,7 +1176,7 @@ export function mapFeedDto(dto: FeedDtoLike, categories: Category[]): Feed {
     title: dto.title,
     url: dto.url,
     siteUrl: dto.siteUrl,
-    icon: dto.iconUrl ?? undefined,
+    icon: resolvedIconUrl ?? undefined,
     unreadCount: 'unreadCount' in dto ? dto.unreadCount ?? 0 : 0,
     enabled: dto.enabled,
     fullTextOnOpenEnabled: Boolean(normalizedTriggers.fullTextOnOpenEnabled),

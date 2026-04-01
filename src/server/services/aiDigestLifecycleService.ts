@@ -1,4 +1,5 @@
 import type { Pool } from 'pg';
+import { AI_DIGEST_ICON_URL } from '@/lib/feedIcons';
 import {
   createCategory,
   deleteCategory,
@@ -83,6 +84,13 @@ export async function createAiDigestWithCategoryResolution(
       title: input.title,
       categoryId,
     });
+    // 智能报告使用固定内置图标，创建时直接回写到 feed 记录。
+    const createdFeedWithIcon =
+      createdFeed.iconUrl === AI_DIGEST_ICON_URL
+        ? createdFeed
+        : ((await updateFeed(client as never, createdFeed.id, {
+            iconUrl: AI_DIGEST_ICON_URL,
+          })) ?? createdFeed);
 
     await createAiDigestConfig(client as never, {
       feedId: createdFeed.id,
@@ -95,7 +103,7 @@ export async function createAiDigestWithCategoryResolution(
     });
 
     await client.query('commit');
-    return createdFeed;
+    return createdFeedWithIcon;
   } catch (error) {
     await client.query('rollback');
     throw error;
@@ -135,6 +143,7 @@ export async function updateAiDigestWithCategoryResolution(
     const updatedFeed = await updateFeed(client as never, input.feedId, {
       title: input.title,
       categoryId: nextCategoryId,
+      iconUrl: AI_DIGEST_ICON_URL,
     });
     if (!updatedFeed) {
       await client.query('commit');

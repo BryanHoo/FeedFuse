@@ -9,6 +9,7 @@ const getNextCategoryPositionMock = vi.fn();
 const createCategoryMock = vi.fn();
 const createAiDigestFeedMock = vi.fn();
 const createAiDigestConfigMock = vi.fn();
+const updateFeedMock = vi.fn();
 
 vi.mock('../repositories/categoriesRepo', () => ({
   findCategoryByNormalizedName: (...args: unknown[]) =>
@@ -18,6 +19,7 @@ vi.mock('../repositories/categoriesRepo', () => ({
 }));
 vi.mock('../repositories/feedsRepo', () => ({
   createAiDigestFeed: (...args: unknown[]) => createAiDigestFeedMock(...args),
+  updateFeed: (...args: unknown[]) => updateFeedMock(...args),
 }));
 vi.mock('../repositories/aiDigestRepo', () => ({
   createAiDigestConfig: (...args: unknown[]) => createAiDigestConfigMock(...args),
@@ -33,6 +35,7 @@ describe('aiDigestLifecycleService', () => {
     createCategoryMock.mockReset();
     createAiDigestFeedMock.mockReset();
     createAiDigestConfigMock.mockReset();
+    updateFeedMock.mockReset();
 
     queryMock.mockResolvedValue(undefined);
     connectMock.mockResolvedValue({
@@ -43,8 +46,12 @@ describe('aiDigestLifecycleService', () => {
 
   it('reuses an existing category when categoryName matches', async () => {
     findCategoryByNormalizedNameMock.mockResolvedValue({ id: 'cat-tech' });
-    createAiDigestFeedMock.mockResolvedValue({ id: 'feed-1' });
+    createAiDigestFeedMock.mockResolvedValue({ id: 'feed-1', iconUrl: null });
     createAiDigestConfigMock.mockResolvedValue({ feedId: 'feed-1' });
+    updateFeedMock.mockResolvedValue({
+      id: 'feed-1',
+      iconUrl: '/ai-digest-icon.svg',
+    });
 
     const pool = { connect: connectMock };
     const { createAiDigestWithCategoryResolution } = await import('./aiDigestLifecycleService');
@@ -64,6 +71,11 @@ describe('aiDigestLifecycleService', () => {
       expect.anything(),
       expect.objectContaining({ categoryId: 'cat-tech' }),
     );
+    expect(updateFeedMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'feed-1',
+      expect.objectContaining({ iconUrl: '/ai-digest-icon.svg' }),
+    );
     expect(createAiDigestConfigMock).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -80,8 +92,12 @@ describe('aiDigestLifecycleService', () => {
     findCategoryByNormalizedNameMock.mockResolvedValue(null);
     getNextCategoryPositionMock.mockResolvedValue(3);
     createCategoryMock.mockResolvedValue({ id: 'cat-new' });
-    createAiDigestFeedMock.mockResolvedValue({ id: 'feed-1' });
+    createAiDigestFeedMock.mockResolvedValue({ id: 'feed-1', iconUrl: null });
     createAiDigestConfigMock.mockResolvedValue({ feedId: 'feed-1' });
+    updateFeedMock.mockResolvedValue({
+      id: 'feed-1',
+      iconUrl: '/ai-digest-icon.svg',
+    });
 
     const pool = { connect: connectMock };
     const { createAiDigestWithCategoryResolution } = await import('./aiDigestLifecycleService');

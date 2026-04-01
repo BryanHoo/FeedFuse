@@ -42,3 +42,14 @@
 - 至少两个调用点确实需要复用
 - 现有模块职责已经明显过载
 - 新抽象能减少跨层耦合，而不是制造一层新的中转包装
+
+<!-- workflow-project-spec:feed -->
+## Convention: 约定：feed 类型专属图标路径集中在共享常量
+
+像 ai_digest 这类不走 RSS favicon 发现链路的源，图标路径应集中定义在 src/lib/feedIcons.ts，并由服务端持久化与客户端 DTO 映射共同复用，避免前后端各自硬编码。
+
+### Examples
+- `src/lib/feedIcons.ts`
+
+### Why This Matters
+- Explain the failure mode or future confusion this section prevents.

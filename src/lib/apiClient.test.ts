@@ -84,6 +84,36 @@ describe('mapFeedDto', () => {
     expect(mapped.kind).toBe('ai_digest');
   });
 
+  it('falls back to the default ai_digest icon when iconUrl is missing', () => {
+    const mapped = mapFeedDto(
+      {
+        id: 'feed-0',
+        kind: 'ai_digest',
+        title: 'Digest',
+        url: 'http://localhost/__feedfuse_ai_digest__/feed-0',
+        siteUrl: null,
+        iconUrl: null,
+        enabled: true,
+        fullTextOnOpenEnabled: false,
+        aiSummaryOnOpenEnabled: false,
+        aiSummaryOnFetchEnabled: false,
+        bodyTranslateOnFetchEnabled: false,
+        bodyTranslateOnOpenEnabled: false,
+        titleTranslateEnabled: false,
+        bodyTranslateEnabled: false,
+        articleListDisplayMode: 'card',
+        categoryId: null,
+        fetchIntervalMinutes: 30,
+        unreadCount: 0,
+        lastFetchStatus: null,
+        lastFetchError: null,
+      } as Parameters<typeof mapFeedDto>[0],
+      [],
+    );
+
+    expect(mapped.icon).toBe('/ai-digest-icon.svg');
+  });
+
   it('maps fetch result fields from snapshot feeds', () => {
     const mapped = mapFeedDto(
       {
