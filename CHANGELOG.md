@@ -6,6 +6,14 @@
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-04-01
+
+这一版聚焦已读状态批量更新边界，修正未指定订阅源时的仓储层筛选条件，避免“全部标为已读”只作用于 RSS 源文章。
+
+### 修复
+
+- 修正 `markAllRead` 在省略 `feedId` 时附加 RSS 限制的问题，确保批量已读更新覆盖全部订阅源文章。
+
 ## [0.1.1] - 2026-04-01
 
 本次发布聚焦智能报告体验修复，统一入口图标并收紧筛选与提示行为，减少旧数据和交互文案带来的理解偏差。
@@ -79,7 +87,8 @@
 - 修复图片代理、全文抓取、AI 任务状态、OPML 图标回填、阅读器选中态与多处可访问性和构建问题。
 - 增强 RSS 拉取异常提示、错误映射与配置校验，降低边界场景下的失败率。
 
-[Unreleased]: https://github.com/BryanHoo/FeedFuse/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/BryanHoo/FeedFuse/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/BryanHoo/FeedFuse/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/BryanHoo/FeedFuse/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/BryanHoo/FeedFuse/compare/v0.0.3...v0.1.0
 [0.0.3]: https://github.com/BryanHoo/FeedFuse/compare/v0.0.2...v0.0.3
