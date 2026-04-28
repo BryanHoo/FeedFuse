@@ -89,13 +89,11 @@ export function serializeSessionCookie(
   token: string,
   maxAgeSeconds = AUTH_SESSION_MAX_AGE_SECONDS,
 ): string {
-  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
-  return `${AUTH_SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}${secure}`;
+  return `${AUTH_SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}`;
 }
 
 export function serializeExpiredSessionCookie(): string {
-  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
-  return `${AUTH_SESSION_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
+  return `${AUTH_SESSION_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
 }
 
 export async function createSessionCookieHeader(secret?: string): Promise<string> {

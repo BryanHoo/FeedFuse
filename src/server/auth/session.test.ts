@@ -72,5 +72,7 @@ describe('auth session helpers', () => {
     expect(cookie).toContain('Max-Age=3600');
     expect(expiredCookie).toContain(`${AUTH_SESSION_COOKIE_NAME}=`);
     expect(expiredCookie).toContain('Max-Age=0');
+    expect(cookie).not.toContain('Secure');
+    expect(expiredCookie).not.toContain('Secure');
   });
 });

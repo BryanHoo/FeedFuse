@@ -1,7 +1,11 @@
 import { z } from 'zod';
 import { getPool } from '@/server/db/pool';
 import { AUTH_INITIAL_PASSWORD_SETUP_MESSAGE } from '@/server/auth/shared';
-import { createSessionCookieHeader, requireApiSession, verifyPasswordAgainstAuthConfig } from '@/server/auth/session';
+import {
+  createSessionCookieHeader,
+  requireApiSession,
+  verifyPasswordAgainstAuthConfig,
+} from '@/server/auth/session';
 import { hashPassword } from '@/server/auth/password';
 import { ok, fail } from '@/server/http/apiResponse';
 import { ServiceUnavailableError, UnauthorizedError, ValidationError } from '@/server/http/errors';

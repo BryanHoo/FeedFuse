@@ -32,6 +32,7 @@ describe('/api/auth/login', () => {
 
     expect(json.ok).toBe(true);
     expect(json.data.authenticated).toBe(true);
+    expect(createSessionCookieHeaderMock).toHaveBeenCalledWith();
     expect(res.headers.get('set-cookie')).toContain('feedfuse_session=signed-token');
   });
 
