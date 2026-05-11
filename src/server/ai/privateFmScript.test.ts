@@ -54,8 +54,15 @@ describe('composePrivateFmScript', () => {
       outputContract?: string;
     };
 
-    expect(systemPrompt).toContain('1800-2600 个中文字符');
-    expect(systemPrompt).toContain('不要写成简短快讯');
+    expect(systemPrompt).toContain('你是一名中文私人 FM 新闻主播');
+    expect(systemPrompt).toContain('像高质量晨间新闻播客');
+    expect(systemPrompt).toContain('正常长度：1800-2600 个中文字符');
+    expect(systemPrompt).toContain('新闻较少时不少于 1200 字');
+    expect(systemPrompt).toContain('请按“主题”组织新闻');
+    expect(systemPrompt).toContain('避免“AI总结感”');
+    expect(systemPrompt).toContain('不要频繁使用');
+    expect(systemPrompt).toContain('不要 Markdown');
+    expect(systemPrompt).toContain('不要括号里的提示词');
     expect(userPayload.targetLength).toBe('1800-2600 Chinese characters');
     expect(userPayload.outputContract).toContain('full-length spoken FM script');
     expect(payload.max_tokens).toBeGreaterThanOrEqual(3200);
