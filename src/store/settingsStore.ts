@@ -5,11 +5,14 @@ import { validateSettingsDraft } from '../features/settings/validateSettingsDraf
 import type { GeneralSettings, PersistedSettings, UserSettings } from '../types';
 import {
   deleteAiApiKey,
+  deletePrivateFmApiKey,
   deleteTranslationApiKey,
   getAiApiKeyStatus,
+  getPrivateFmApiKeyStatus,
   getSettings,
   getTranslationApiKeyStatus,
   putAiApiKey,
+  putPrivateFmApiKey,
   putSettings,
   putTranslationApiKey,
 } from '../lib/apiClient';
@@ -22,6 +25,9 @@ interface SessionSettings {
     translationApiKey?: string;
     hasTranslationApiKey?: boolean;
     clearTranslationApiKey?: boolean;
+    privateFmApiKey?: string;
+    hasPrivateFmApiKey?: boolean;
+    clearPrivateFmApiKey?: boolean;
   };
   rssValidation: Record<
     string,
@@ -70,6 +76,9 @@ const defaultSessionSettings: SessionSettings = {
     translationApiKey: '',
     hasTranslationApiKey: false,
     clearTranslationApiKey: false,
+    privateFmApiKey: '',
+    hasPrivateFmApiKey: false,
+    clearPrivateFmApiKey: false,
   },
   rssValidation: {},
 };
@@ -87,7 +96,7 @@ function cloneDeep<T>(value: T): T {
 }
 
 function createDraft(persistedSettings: PersistedSettings, sessionSettings: SessionSettings): SettingsDraft {
-  const persistedWithTranslation = ensureAiTranslationSettings(persistedSettings);
+  const persistedWithTranslation = ensureAiNestedSettings(persistedSettings);
   return {
     persisted: persistedWithTranslation,
     session: cloneDeep(sessionSettings),
@@ -119,7 +128,7 @@ function extractNormalizeInput(input: unknown): unknown {
   return input;
 }
 
-function ensureAiTranslationSettings(persistedSettings: PersistedSettings): PersistedSettings {
+function ensureAiNestedSettings(persistedSettings: PersistedSettings): PersistedSettings {
   const next = cloneDeep(persistedSettings);
   const ai = next.ai as typeof next.ai & {
     translation?: {
@@ -127,12 +136,28 @@ function ensureAiTranslationSettings(persistedSettings: PersistedSettings): Pers
       model?: string;
       apiBaseUrl?: string;
     };
+    privateFm?: {
+      apiBaseUrl?: string;
+      model?: string;
+      voice?: string;
+      responseFormat?: 'mp3' | 'wav' | 'flac' | 'opus' | 'pcm';
+      speed?: number;
+      volume?: number;
+    };
   };
 
   ai.translation = {
     useSharedAi: ai.translation?.useSharedAi ?? true,
     model: ai.translation?.model ?? '',
     apiBaseUrl: ai.translation?.apiBaseUrl ?? '',
+  };
+  ai.privateFm = {
+    apiBaseUrl: ai.privateFm?.apiBaseUrl ?? 'https://api.stepfun.com/v1',
+    model: ai.privateFm?.model ?? 'stepaudio-2.5-tts',
+    voice: ai.privateFm?.voice ?? 'cixingnansheng',
+    responseFormat: ai.privateFm?.responseFormat ?? 'mp3',
+    speed: ai.privateFm?.speed ?? 1,
+    volume: ai.privateFm?.volume ?? 1,
   };
 
   return next;
@@ -158,10 +183,11 @@ export const useSettingsStore = create<SettingsState>()(
         }
 
         try {
-          const [remoteSettingsResult, apiKeyStatusResult, translationApiKeyStatusResult] = await Promise.allSettled([
+          const [remoteSettingsResult, apiKeyStatusResult, translationApiKeyStatusResult, privateFmApiKeyStatusResult] = await Promise.allSettled([
             getSettings({ notifyOnError: false }),
             getAiApiKeyStatus({ notifyOnError: false }),
             getTranslationApiKeyStatus({ notifyOnError: false }),
+            getPrivateFmApiKeyStatus({ notifyOnError: false }),
           ]);
 
           const remoteSettings =
@@ -175,19 +201,24 @@ export const useSettingsStore = create<SettingsState>()(
             typeof translationApiKeyStatusResult.value.hasApiKey === 'boolean'
               ? translationApiKeyStatusResult.value.hasApiKey
               : null;
+          const hasPrivateFmApiKey =
+            privateFmApiKeyStatusResult.status === 'fulfilled' &&
+            typeof privateFmApiKeyStatusResult.value.hasApiKey === 'boolean'
+              ? privateFmApiKeyStatusResult.value.hasApiKey
+              : null;
 
-          if (!remoteSettings && hasApiKey === null && hasTranslationApiKey === null) {
+          if (!remoteSettings && hasApiKey === null && hasTranslationApiKey === null && hasPrivateFmApiKey === null) {
             return;
           }
 
           set((state) => ({
             ...(remoteSettings
               ? {
-                  persistedSettings: ensureAiTranslationSettings(remoteSettings),
+                  persistedSettings: ensureAiNestedSettings(remoteSettings),
                   settings: pickUserSettings(remoteSettings),
                 }
               : {}),
-            ...(hasApiKey === null && hasTranslationApiKey === null
+            ...(hasApiKey === null && hasTranslationApiKey === null && hasPrivateFmApiKey === null
               ? {}
               : {
                   sessionSettings: {
@@ -198,6 +229,9 @@ export const useSettingsStore = create<SettingsState>()(
                       ...(hasTranslationApiKey === null
                         ? {}
                         : { hasTranslationApiKey }),
+                      ...(hasPrivateFmApiKey === null
+                        ? {}
+                        : { hasPrivateFmApiKey }),
                     },
                   },
                 }),
@@ -234,7 +268,7 @@ export const useSettingsStore = create<SettingsState>()(
           return { ok: false };
         }
 
-        const nextPersistedSettings = ensureAiTranslationSettings(state.draft.persisted);
+        const nextPersistedSettings = ensureAiNestedSettings(state.draft.persisted);
         let settingsSaved = false;
 
         try {
@@ -246,11 +280,15 @@ export const useSettingsStore = create<SettingsState>()(
           const apiKey = state.draft.session.ai.apiKey.trim();
           const shouldClearTranslationApiKey = state.draft.session.ai.clearTranslationApiKey ?? false;
           const translationApiKey = (state.draft.session.ai.translationApiKey ?? '').trim();
+          const shouldClearPrivateFmApiKey = state.draft.session.ai.clearPrivateFmApiKey ?? false;
+          const privateFmApiKey = (state.draft.session.ai.privateFmApiKey ?? '').trim();
 
           let hasApiKey = state.draft.session.ai.hasApiKey;
           let hasTranslationApiKey = state.draft.session.ai.hasTranslationApiKey ?? false;
+          let hasPrivateFmApiKey = state.draft.session.ai.hasPrivateFmApiKey ?? false;
           let clearDraftApiKey = false;
           let clearDraftTranslationApiKey = false;
+          let clearDraftPrivateFmApiKey = false;
 
           if (shouldClearApiKey) {
             const result = await deleteAiApiKey();
@@ -274,6 +312,16 @@ export const useSettingsStore = create<SettingsState>()(
             }
           }
 
+          if (shouldClearPrivateFmApiKey) {
+            const result = await deletePrivateFmApiKey();
+            hasPrivateFmApiKey = result.hasApiKey;
+            clearDraftPrivateFmApiKey = true;
+          } else if (privateFmApiKey) {
+            const result = await putPrivateFmApiKey({ apiKey: privateFmApiKey });
+            hasPrivateFmApiKey = result.hasApiKey;
+            clearDraftPrivateFmApiKey = true;
+          }
+
           const nextSessionSettings: SessionSettings = {
             ai: {
               apiKey: clearDraftApiKey ? '' : state.draft.session.ai.apiKey,
@@ -284,6 +332,11 @@ export const useSettingsStore = create<SettingsState>()(
                 : (state.draft.session.ai.translationApiKey ?? ''),
               hasTranslationApiKey,
               clearTranslationApiKey: false,
+              privateFmApiKey: clearDraftPrivateFmApiKey
+                ? ''
+                : (state.draft.session.ai.privateFmApiKey ?? ''),
+              hasPrivateFmApiKey,
+              clearPrivateFmApiKey: false,
             },
             rssValidation: {},
           };

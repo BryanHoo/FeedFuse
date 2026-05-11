@@ -1120,6 +1120,7 @@ describe('ArticleList', () => {
     vi.useFakeTimers();
     let runStatusCalls = 0;
     const loadSnapshotMock = vi.fn().mockResolvedValue(undefined);
+    const setSelectedArticleMock = vi.fn();
 
     try {
       fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -1140,6 +1141,299 @@ describe('ArticleList', () => {
             data: {
               id: 'run-1',
               status: runStatusCalls > 1 ? 'succeeded' : 'running',
+              candidateTotal: runStatusCalls > 1 ? 8 : 0,
+              selectedCount: runStatusCalls > 1 ? 3 : 0,
+              articleId: runStatusCalls > 1 ? 'digest-article-1' : null,
+              privateFmEnabled: false,
+              privateFmEpisode: null,
+              errorCode: null,
+              errorMessage: null,
+              updatedAt: '2026-03-25T00:00:00.000Z',
+            },
+          });
+        }
+
+        return jsonResponse({ ok: true, data: { updated: true } });
+      });
+
+      useAppStore.setState((state) => ({
+        ...state,
+        loadSnapshot: loadSnapshotMock as unknown as LoadSnapshot,
+        setSelectedArticle: setSelectedArticleMock,
+        feeds: [
+          {
+            ...state.feeds[0],
+            id: 'digest-1',
+            kind: 'ai_digest',
+            title: 'My Digest',
+            url: 'http://localhost/__feedfuse_ai_digest__/digest-1',
+          },
+        ],
+        selectedView: 'digest-1',
+        selectedArticleId: null,
+      }));
+
+      renderWithNotifications();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: '立即生成' }));
+        await Promise.resolve();
+      });
+
+      expect(screen.getByText('已开始生成智能报告')).toBeInTheDocument();
+      expect(screen.getByTestId('ai-digest-generate-status')).toHaveTextContent('正在筛选来源文章');
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_000);
+        await Promise.resolve();
+      });
+
+      expect(screen.getByText('智能报告已生成')).toBeInTheDocument();
+      expect(screen.queryByText('已在生成中')).not.toBeInTheDocument();
+      expect(runStatusCalls).toBeGreaterThan(1);
+      expect(loadSnapshotMock).toHaveBeenCalledWith({ view: 'digest-1' });
+      expect(setSelectedArticleMock).toHaveBeenCalledWith('digest-article-1');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps digest generation status after switching away and back to the digest tab', async () => {
+    vi.useFakeTimers();
+    let runStatusCalls = 0;
+
+    try {
+      fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = getFetchCallUrl(input);
+        const method = getFetchCallMethod(input, init);
+
+        if (url.includes('/api/ai-digests/digest-1/generate') && method === 'POST') {
+          return jsonResponse({
+            ok: true,
+            data: { enqueued: true, jobId: 'job-1', runId: 'run-1' },
+          });
+        }
+
+        if (url.includes('/api/ai-digests/runs/run-1') && method === 'GET') {
+          runStatusCalls += 1;
+          return jsonResponse({
+            ok: true,
+            data: {
+              id: 'run-1',
+              status: 'running',
+              candidateTotal: runStatusCalls > 1 ? 6 : 0,
+              selectedCount: 0,
+              articleId: null,
+              privateFmEnabled: false,
+              privateFmEpisode: null,
+              errorCode: null,
+              errorMessage: null,
+              updatedAt: '2026-03-25T00:00:00.000Z',
+            },
+          });
+        }
+
+        return jsonResponse({ ok: true, data: { updated: true } });
+      });
+
+      useAppStore.setState((state) => ({
+        ...state,
+        feeds: [
+          {
+            ...state.feeds[0],
+            id: 'digest-1',
+            kind: 'ai_digest',
+            title: 'My Digest',
+            url: 'http://localhost/__feedfuse_ai_digest__/digest-1',
+          },
+          {
+            id: 'feed-1',
+            title: 'Example Feed',
+            url: 'https://example.com/rss.xml',
+            unreadCount: 0,
+            enabled: true,
+            fullTextOnOpenEnabled: false,
+            aiSummaryOnOpenEnabled: false,
+            articleListDisplayMode: 'card',
+            categoryId: null,
+          },
+        ],
+        selectedView: 'digest-1',
+        selectedArticleId: null,
+      }));
+
+      renderWithNotifications();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: '立即生成' }));
+        await Promise.resolve();
+      });
+
+      expect(screen.getByTestId('ai-digest-generate-status')).toHaveTextContent('正在筛选来源文章');
+
+      act(() => {
+        useAppStore.setState({ selectedView: 'feed-1' });
+      });
+      expect(screen.queryByTestId('ai-digest-generate-status')).not.toBeInTheDocument();
+
+      act(() => {
+        useAppStore.setState({ selectedView: 'digest-1' });
+      });
+
+      expect(screen.getByTestId('ai-digest-generate-status')).toHaveTextContent('正在筛选来源文章');
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000);
+        await Promise.resolve();
+      });
+
+      expect(screen.getByTestId('ai-digest-generate-status')).toHaveTextContent(
+        '已找到 6 篇候选文章',
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('restores active digest generation status from backend after entering the digest tab', async () => {
+    vi.useFakeTimers();
+    let runStatusCalls = 0;
+
+    try {
+      fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = getFetchCallUrl(input);
+        const method = getFetchCallMethod(input, init);
+
+        if (url.includes('/api/ai-digests/digest-1/runs/active') && method === 'GET') {
+          return jsonResponse({
+            ok: true,
+            data: {
+              run: {
+                id: 'run-1',
+                status: 'running',
+                candidateTotal: 0,
+                selectedCount: 0,
+                articleId: null,
+                privateFmEnabled: false,
+                privateFmEpisode: null,
+                errorCode: null,
+                errorMessage: null,
+                updatedAt: '2026-03-25T00:00:00.000Z',
+              },
+            },
+          });
+        }
+
+        if (url.includes('/api/ai-digests/runs/run-1') && method === 'GET') {
+          runStatusCalls += 1;
+          return jsonResponse({
+            ok: true,
+            data: {
+              id: 'run-1',
+              status: 'running',
+              candidateTotal: runStatusCalls > 1 ? 5 : 0,
+              selectedCount: 0,
+              articleId: null,
+              privateFmEnabled: false,
+              privateFmEpisode: null,
+              errorCode: null,
+              errorMessage: null,
+              updatedAt: '2026-03-25T00:00:00.000Z',
+            },
+          });
+        }
+
+        return jsonResponse({ ok: true, data: { updated: true } });
+      });
+
+      useAppStore.setState((state) => ({
+        ...state,
+        feeds: [
+          {
+            ...state.feeds[0],
+            id: 'digest-1',
+            kind: 'ai_digest',
+            title: 'My Digest',
+            url: 'http://localhost/__feedfuse_ai_digest__/digest-1',
+          },
+          {
+            id: 'feed-1',
+            title: 'Example Feed',
+            url: 'https://example.com/rss.xml',
+            unreadCount: 0,
+            enabled: true,
+            fullTextOnOpenEnabled: false,
+            aiSummaryOnOpenEnabled: false,
+            articleListDisplayMode: 'card',
+            categoryId: null,
+          },
+        ],
+        selectedView: 'feed-1',
+        selectedArticleId: null,
+      }));
+
+      renderWithNotifications();
+
+      await act(async () => {
+        useAppStore.setState({ selectedView: 'digest-1' });
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(screen.getByTestId('ai-digest-generate-status')).toHaveTextContent(
+        '正在筛选来源文章',
+      );
+      expect(screen.getByRole('button', { name: '生成中' })).toBeDisabled();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000);
+        await Promise.resolve();
+      });
+
+      expect(screen.getByTestId('ai-digest-generate-status')).toHaveTextContent(
+        '已找到 5 篇候选文章',
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps digest status visible while private FM is still generating', async () => {
+    vi.useFakeTimers();
+    let runStatusCalls = 0;
+    const loadSnapshotMock = vi.fn().mockResolvedValue(undefined);
+
+    try {
+      fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = getFetchCallUrl(input);
+        const method = getFetchCallMethod(input, init);
+
+        if (url.includes('/api/ai-digests/digest-1/generate') && method === 'POST') {
+          return jsonResponse({
+            ok: true,
+            data: { enqueued: true, jobId: 'job-1', runId: 'run-1' },
+          });
+        }
+
+        if (url.includes('/api/ai-digests/runs/run-1') && method === 'GET') {
+          runStatusCalls += 1;
+          return jsonResponse({
+            ok: true,
+            data: {
+              id: 'run-1',
+              status: 'succeeded',
+              candidateTotal: 8,
+              selectedCount: 3,
+              articleId: 'digest-article-1',
+              privateFmEnabled: true,
+              privateFmEpisode: {
+                id: 'episode-1',
+                status: runStatusCalls > 1 ? 'succeeded' : 'script_ready',
+                hasScript: true,
+                errorCode: null,
+                errorMessage: null,
+                updatedAt: new Date().toISOString(),
+              },
               errorCode: null,
               errorMessage: null,
               updatedAt: '2026-03-25T00:00:00.000Z',
@@ -1173,17 +1467,15 @@ describe('ArticleList', () => {
         await Promise.resolve();
       });
 
-      expect(screen.getByText('已开始生成智能报告')).toBeInTheDocument();
+      expect(screen.getByTestId('ai-digest-generate-status')).toHaveTextContent('口播稿已生成');
 
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(2_000);
+        await vi.advanceTimersByTimeAsync(1_000);
         await Promise.resolve();
       });
 
-      expect(screen.getByText('智能报告已生成')).toBeInTheDocument();
-      expect(screen.queryByText('已在生成中')).not.toBeInTheDocument();
+      expect(screen.getByTestId('ai-digest-generate-status')).toHaveTextContent('已生成');
       expect(runStatusCalls).toBeGreaterThan(1);
-      expect(loadSnapshotMock).toHaveBeenCalledWith({ view: 'digest-1' });
     } finally {
       vi.useRealTimers();
     }

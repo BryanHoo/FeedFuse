@@ -1,4 +1,5 @@
 import type { Pool, PoolClient } from 'pg';
+import { deletePrivateFmAudioPaths } from '../private-fm/mediaStorage';
 
 export type DbClient = Pool | PoolClient;
 
@@ -549,7 +550,7 @@ export async function pruneFeedArticlesToLimit(
   feedId: string,
   maxStoredArticlesPerFeed: number,
 ): Promise<{ deletedCount: number }> {
-  const res = await db.query(
+  const { rows } = await db.query<{ deletedCount: number; audioPaths: string[] }>(
     `
       with overflow as (
         select greatest(count(*)::int - $2::int, 0) as overflow_count
@@ -563,21 +564,41 @@ export async function pruneFeedArticlesToLimit(
           and is_starred = false
         order by coalesce(published_at, fetched_at) asc, id asc
         limit (select overflow_count from overflow)
+      ),
+      fm_audio as (
+        select coalesce(array_agg(path), '{}'::text[]) as audio_paths
+        from private_fm_episodes e
+        join deletable on deletable.id = e.article_id
+        cross join lateral unnest(
+          e.audio_paths || array_remove(array[e.merged_audio_path], null)
+        ) as path
+      ),
+      deleted as (
+        delete from articles
+        where id in (select id from deletable)
+        returning id
       )
-      delete from articles
-      where id in (select id from deletable)
+      select
+        (select count(*)::int from deleted) as "deletedCount",
+        coalesce((select audio_paths from fm_audio), '{}'::text[]) as "audioPaths"
     `,
     [feedId, maxStoredArticlesPerFeed],
   );
 
-  return { deletedCount: res.rowCount ?? 0 };
+  const deletedCount = rows[0]?.deletedCount ?? 0;
+  const audioPaths = rows[0]?.audioPaths ?? [];
+  if (audioPaths.length > 0) {
+    await deletePrivateFmAudioPaths(audioPaths);
+  }
+
+  return { deletedCount };
 }
 
 export async function pruneAllFeedsArticlesToLimit(
   db: DbClient,
   maxStoredArticlesPerFeed: number,
 ): Promise<{ deletedCount: number }> {
-  const res = await db.query(
+  const { rows } = await db.query<{ deletedCount: number; audioPaths: string[] }>(
     `
       with overflow as (
         select
@@ -604,14 +625,34 @@ export async function pruneAllFeedsArticlesToLimit(
         from ranked_unstarred r
         join overflow o on o.feed_id = r.feed_id
         where r.delete_rank <= o.overflow_count
+      ),
+      fm_audio as (
+        select coalesce(array_agg(path), '{}'::text[]) as audio_paths
+        from private_fm_episodes e
+        join deletable on deletable.id = e.article_id
+        cross join lateral unnest(
+          e.audio_paths || array_remove(array[e.merged_audio_path], null)
+        ) as path
+      ),
+      deleted as (
+        delete from articles
+        where id in (select id from deletable)
+        returning id
       )
-      delete from articles
-      where id in (select id from deletable)
+      select
+        (select count(*)::int from deleted) as "deletedCount",
+        coalesce((select audio_paths from fm_audio), '{}'::text[]) as "audioPaths"
     `,
     [maxStoredArticlesPerFeed],
   );
 
-  return { deletedCount: res.rowCount ?? 0 };
+  const deletedCount = rows[0]?.deletedCount ?? 0;
+  const audioPaths = rows[0]?.audioPaths ?? [];
+  if (audioPaths.length > 0) {
+    await deletePrivateFmAudioPaths(audioPaths);
+  }
+
+  return { deletedCount };
 }
 
 export async function setArticleFulltext(

@@ -26,6 +26,7 @@ const bodySchema = z
     prompt: z.string().trim().min(1),
     intervalMinutes: z.number().int(),
     selectedFeedIds: z.array(numericIdSchema).min(1),
+    privateFmEnabled: z.boolean().optional(),
     ...categoryInputShape,
   })
   .refine((value) => !(value.categoryId && value.categoryName), {

@@ -78,6 +78,8 @@ export default function AiDigestDialog({
           onPromptChange={form.setPrompt}
           intervalMinutes={form.intervalMinutes}
           onIntervalMinutesChange={form.setIntervalMinutes}
+          privateFmEnabled={form.privateFmEnabled}
+          onPrivateFmEnabledChange={form.setPrivateFmEnabled}
           categoryInput={form.categoryInput}
           categoryOptions={form.categoryOptions}
           onCategoryInputChange={form.setCategoryInput}

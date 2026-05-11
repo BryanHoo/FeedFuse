@@ -48,6 +48,7 @@ import {
   JOB_ARTICLE_FILTER,
   JOB_ARTICLE_FULLTEXT_FETCH,
   JOB_FEED_FETCH,
+  JOB_PRIVATE_FM_GENERATE,
   JOB_REFRESH_ALL,
   JOB_SYSTEM_LOG_CLEANUP,
 } from '../server/queue/jobs';
@@ -62,6 +63,7 @@ import { runImmersiveTranslateSession } from './immersiveTranslateWorker';
 import { runAiSummaryStreamWorker } from './aiSummaryStreamWorker';
 import { runAiDigestTick } from './aiDigestTick';
 import { runAiDigestGenerate } from './aiDigestGenerate';
+import { runPrivateFmGenerate } from './privateFmGenerate';
 import { runArticleFilterWorker, type ArticleFilterJobData } from './articleFilterWorker';
 import { runSystemLogCleanup } from './systemLogCleanup';
 import {
@@ -804,10 +806,42 @@ async function main() {
     await runSystemLogCleanup({ pool: getPool() });
   };
 
+  const privateFmGenerateHandler = async (jobs: unknown[]) => {
+    const pool = getPool();
+    for (const job of jobs) {
+      const data =
+        typeof job === 'object' && job !== null && 'data' in job
+          ? (job as { data?: unknown }).data
+          : null;
+
+      const episodeId =
+        typeof data === 'object' &&
+        data !== null &&
+        'episodeId' in data &&
+        typeof (data as { episodeId?: unknown }).episodeId === 'string'
+          ? (data as { episodeId: string }).episodeId
+          : null;
+
+      if (!episodeId) throw new Error('Missing episodeId');
+
+      const jobId =
+        typeof job === 'object' &&
+        job !== null &&
+        'id' in job &&
+        (typeof (job as { id?: unknown }).id === 'string' ||
+          typeof (job as { id?: unknown }).id === 'number')
+          ? String((job as { id: string | number }).id)
+          : null;
+
+      await runPrivateFmGenerate({ pool, episodeId, jobId });
+    }
+  };
+
   await registerWorkers(boss, {
     [JOB_REFRESH_ALL]: refreshAllHandler,
     [JOB_AI_DIGEST_TICK]: aiDigestTickHandler,
     [JOB_AI_DIGEST_GENERATE]: aiDigestGenerateHandler,
+    [JOB_PRIVATE_FM_GENERATE]: privateFmGenerateHandler,
     [JOB_FEED_FETCH]: feedFetchHandler,
     [JOB_ARTICLE_FILTER]: articleFilterHandler,
     [JOB_ARTICLE_FULLTEXT_FETCH]: fulltextHandler,

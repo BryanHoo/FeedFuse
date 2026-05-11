@@ -161,6 +161,40 @@ describe('settingsSchema normalize', () => {
     expect(ai.translation?.apiBaseUrl).toBe('');
   });
 
+  it('adds private FM defaults and accepts supported StepFun TTS values', () => {
+    const defaults = normalizePersistedSettings({});
+    expect(defaults.ai.privateFm).toEqual({
+      apiBaseUrl: 'https://api.stepfun.com/v1',
+      model: 'stepaudio-2.5-tts',
+      voice: 'elegantgentle-female',
+      responseFormat: 'mp3',
+      speed: 1,
+      volume: 1,
+    });
+
+    const normalized = normalizePersistedSettings({
+      ai: {
+        privateFm: {
+          apiBaseUrl: 'https://api.stepfun.com/v1',
+          model: 'step-tts-mini',
+          voice: 'lively-girl',
+          responseFormat: 'wav',
+          speed: 1.25,
+          volume: 0.8,
+        },
+      },
+    });
+
+    expect(normalized.ai.privateFm).toEqual({
+      apiBaseUrl: 'https://api.stepfun.com/v1',
+      model: 'step-tts-mini',
+      voice: 'lively-girl',
+      responseFormat: 'wav',
+      speed: 1.25,
+      volume: 0.8,
+    });
+  });
+
   it('adds reader pane width defaults and clamps persisted values', () => {
     const defaults = normalizePersistedSettings({});
 

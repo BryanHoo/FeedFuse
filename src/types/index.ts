@@ -120,6 +120,18 @@ export interface AIPersistedSettings {
     model: string;
     apiBaseUrl: string;
   };
+  privateFm: PrivateFmSettings;
+}
+
+export type PrivateFmAudioFormat = 'mp3' | 'wav' | 'flac' | 'opus' | 'pcm';
+
+export interface PrivateFmSettings {
+  apiBaseUrl: string;
+  model: string;
+  voice: string;
+  responseFormat: PrivateFmAudioFormat;
+  speed: number;
+  volume: number;
 }
 
 export interface RssSourceSetting {

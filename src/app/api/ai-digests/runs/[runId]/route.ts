@@ -5,6 +5,7 @@ import { fail, ok } from '../../../../../server/http/apiResponse';
 import { NotFoundError, ValidationError } from '../../../../../server/http/errors';
 import { numericIdSchema } from '../../../../../server/http/idSchemas';
 import { getAiDigestRunById } from '../../../../../server/repositories/aiDigestRepo';
+import { getPrivateFmEpisodeByRunId } from '../../../../../server/repositories/privateFmRepo';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -38,14 +39,32 @@ export async function GET(
       return fail(new ValidationError('Invalid route params', zodIssuesToFields(parsed.error)));
     }
 
-    const run = await getAiDigestRunById(getPool(), parsed.data.runId);
+    const pool = getPool();
+    const run = await getAiDigestRunById(pool, parsed.data.runId);
     if (!run) {
       return fail(new NotFoundError('AI digest run not found'));
     }
+    const privateFmEpisode = run.privateFmEnabled
+      ? await getPrivateFmEpisodeByRunId(pool, run.id)
+      : null;
 
     return ok({
       id: run.id,
       status: run.status,
+      candidateTotal: run.candidateTotal,
+      selectedCount: run.selectedCount,
+      articleId: run.articleId,
+      privateFmEnabled: run.privateFmEnabled,
+      privateFmEpisode: privateFmEpisode
+          ? {
+            id: privateFmEpisode.id,
+            status: privateFmEpisode.status,
+            hasScript: Boolean(privateFmEpisode.scriptText?.trim()),
+            errorCode: privateFmEpisode.errorCode,
+            errorMessage: privateFmEpisode.errorMessage,
+            updatedAt: privateFmEpisode.updatedAt,
+          }
+        : null,
       errorCode: run.errorCode,
       errorMessage: run.errorMessage,
       updatedAt: run.updatedAt,

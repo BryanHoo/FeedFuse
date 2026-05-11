@@ -97,6 +97,34 @@ export async function clearTranslationApiKey(pool: Pool): Promise<string> {
   return setTranslationApiKey(pool, '');
 }
 
+export async function getPrivateFmApiKey(pool: Pool): Promise<string> {
+  const { rows } = await pool.query<{ privateFmApiKey: string }>(`
+    select private_fm_api_key as "privateFmApiKey"
+    from app_settings
+    where id = 1
+  `);
+  return rows[0]?.privateFmApiKey ?? '';
+}
+
+export async function setPrivateFmApiKey(pool: Pool, apiKey: string): Promise<string> {
+  const { rows } = await pool.query<{ privateFmApiKey: string }>(
+    `
+      update app_settings
+      set
+        private_fm_api_key = $1,
+        updated_at = now()
+      where id = 1
+      returning private_fm_api_key as "privateFmApiKey"
+    `,
+    [apiKey],
+  );
+  return rows[0]?.privateFmApiKey ?? apiKey;
+}
+
+export async function clearPrivateFmApiKey(pool: Pool): Promise<string> {
+  return setPrivateFmApiKey(pool, '');
+}
+
 export async function getAuthSettings(pool: DbClient): Promise<AuthSettingsRow> {
   const { rows } = await pool.query<AuthSettingsRow>(`
     select

@@ -13,6 +13,7 @@ import { useAppStore } from "../../store/appStore";
 import { formatRelativeTime } from "../../utils/date";
 import {
   generateAiDigest,
+  getActiveAiDigestRunStatus,
   getAiDigestRunStatus,
   getFeedRefreshRunStatus,
   patchFeed,
@@ -50,11 +51,129 @@ const sessionVisibleArticleIds = new Set<string>();
 const REFRESH_POLL_INTERVAL_MS = 1000;
 const REFRESH_POLL_MAX_ATTEMPTS = 12;
 const AI_DIGEST_POLL_INTERVAL_MS = 1000;
-const AI_DIGEST_POLL_MAX_ATTEMPTS = 30;
+const AI_DIGEST_POLL_MAX_ATTEMPTS = 180;
+const PRIVATE_FM_PENDING_STALE_MS = 10 * 60 * 1000;
+
+type AiDigestRunStatusSnapshot = Awaited<ReturnType<typeof getAiDigestRunStatus>>;
+
+type AiDigestGenerateStatus =
+  | { phase: "starting"; runId: string | null; message: string; detail?: string }
+  | { phase: "report_running"; runId: string; message: string; detail?: string }
+  | { phase: "fm_running"; runId: string; message: string; detail?: string }
+  | { phase: "succeeded"; runId: string; message: string; detail?: string }
+  | { phase: "skipped"; runId: string; message: string; detail?: string }
+  | { phase: "failed"; runId: string | null; message: string; detail?: string };
+
+const aiDigestGenerateStatusByFeedId = new Map<string, AiDigestGenerateStatus>();
+
+function isAiDigestStatusPending(status: AiDigestGenerateStatus | null): boolean {
+  return status?.phase === "starting" || status?.phase === "report_running" || status?.phase === "fm_running";
+}
+
+function isPrivateFmPending(run: AiDigestRunStatusSnapshot): boolean {
+  if (!run.privateFmEnabled || run.status !== "succeeded") return false;
+  return (
+    !run.privateFmEpisode ||
+    ((run.privateFmEpisode.status === "queued" ||
+      run.privateFmEpisode.status === "running" ||
+      run.privateFmEpisode.status === "script_ready") &&
+      !isPrivateFmEpisodeStale(run.privateFmEpisode))
+  );
+}
+
+function isPrivateFmEpisodeStale(
+  episode: NonNullable<AiDigestRunStatusSnapshot["privateFmEpisode"]>,
+): boolean {
+  const updatedAtMs = new Date(episode.updatedAt).getTime();
+  return Number.isFinite(updatedAtMs) && Date.now() - updatedAtMs > PRIVATE_FM_PENDING_STALE_MS;
+}
+
+function toAiDigestGenerateStatus(run: AiDigestRunStatusSnapshot): AiDigestGenerateStatus {
+  if (run.status === "queued") {
+    return { phase: "report_running", runId: run.id, message: "准备生成", detail: "任务已进入队列" };
+  }
+
+  if (run.status === "running") {
+    return {
+      phase: "report_running",
+      runId: run.id,
+      message: run.candidateTotal > 0 ? "正在生成智能报告" : "正在筛选来源文章",
+      detail: run.candidateTotal > 0 ? `已找到 ${run.candidateTotal} 篇候选文章` : undefined,
+    };
+  }
+
+  if (run.status === "skipped_no_updates") {
+    return {
+      phase: "skipped",
+      runId: run.id,
+      message: "当前时间窗口没有相关内容",
+      detail: "稍后有新文章入库后可再次生成",
+    };
+  }
+
+  if (run.status === "failed") {
+    return {
+      phase: "failed",
+      runId: run.id,
+      message: "生成失败",
+      detail: run.errorMessage ?? run.errorCode ?? "请稍后重试",
+    };
+  }
+
+  if (isPrivateFmPending(run)) {
+    if (run.privateFmEpisode?.status === "script_ready" || run.privateFmEpisode?.hasScript) {
+      return {
+        phase: "fm_running",
+        runId: run.id,
+        message: "口播稿已生成",
+        detail: "正在生成私人 FM 音频",
+      };
+    }
+
+    return {
+      phase: "fm_running",
+      runId: run.id,
+      message: "正在生成私人 FM",
+      detail: run.privateFmEpisode ? "正在生成口播稿" : "正在准备音频任务",
+    };
+  }
+
+  if (
+    run.privateFmEpisode &&
+    (run.privateFmEpisode.status === "queued" ||
+      run.privateFmEpisode.status === "running" ||
+      run.privateFmEpisode.status === "script_ready") &&
+    isPrivateFmEpisodeStale(run.privateFmEpisode)
+  ) {
+    return {
+      phase: "failed",
+      runId: run.id,
+      message: "私人 FM 生成超时",
+      detail: "报告已生成，可在文章页重试 FM",
+    };
+  }
+
+  if (run.privateFmEpisode?.status === "failed") {
+    return {
+      phase: "failed",
+      runId: run.id,
+      message: "私人 FM 生成失败",
+      detail: run.privateFmEpisode.errorMessage ?? run.privateFmEpisode.errorCode ?? "报告已生成，可在文章页重试 FM",
+    };
+  }
+
+  return {
+    phase: "succeeded",
+    runId: run.id,
+    message: "已生成",
+    detail: run.privateFmEpisode?.status === "succeeded" ? "智能报告和私人 FM 已完成" : "智能报告已完成",
+  };
+}
 
 async function pollAiDigestRunStatus(input: {
   runId: string;
   isCurrentRequest: () => boolean;
+  onSnapshot?: (run: AiDigestRunStatusSnapshot) => void;
 }) {
   for (let attempt = 0; attempt < AI_DIGEST_POLL_MAX_ATTEMPTS; attempt += 1) {
     if (!input.isCurrentRequest()) {
@@ -65,15 +184,23 @@ async function pollAiDigestRunStatus(input: {
     if (!input.isCurrentRequest()) {
       return null;
     }
+    input.onSnapshot?.(run);
 
     if (run.status === 'succeeded' || run.status === 'skipped_no_updates') {
-      return { ok: true as const, status: run.status };
+      if (isPrivateFmPending(run)) {
+        if (attempt < AI_DIGEST_POLL_MAX_ATTEMPTS - 1) {
+          await sleep(AI_DIGEST_POLL_INTERVAL_MS);
+          continue;
+        }
+      }
+      return { ok: true as const, status: run.status, run };
     }
 
     if (run.status === 'failed') {
       return {
         ok: false as const,
         err: run.errorMessage ?? run.errorCode ?? '请稍后重试',
+        run,
       };
     }
 
@@ -181,10 +308,14 @@ export default function ArticleList({
   const articleListTotalCount = useAppStore((state) => state.articleListTotalCount);
   const articleListLoadingMore = useAppStore((state) => state.articleListLoadingMore);
   const articleListLoadMoreError = useAppStore((state) => state.articleListLoadMoreError);
+  const selectedViewRef = useRef(selectedView);
   const refreshRequestIdRef = useRef(0);
+  const aiDigestGenerateRequestIdRef = useRef(0);
   const displayModeRequestIdRef = useRef(0);
   const hasInitializedSelectedViewRef = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [aiDigestGenerateStatus, setAiDigestGenerateStatus] =
+    useState<AiDigestGenerateStatus | null>(null);
   const [displayModeSaving, setDisplayModeSaving] = useState(false);
   const renderedSelectedView = useHydratedSelectedView(selectedView, initialSelectedView);
 
@@ -222,6 +353,20 @@ export default function ArticleList({
   const referenceTime = useRenderTimeSnapshot(renderedAt);
 
   useEffect(() => {
+    selectedViewRef.current = selectedView;
+  }, [selectedView]);
+
+  const setAiDigestGenerateStatusForFeed = useCallback(
+    (feedId: string, status: AiDigestGenerateStatus) => {
+      aiDigestGenerateStatusByFeedId.set(feedId, status);
+      if (selectedViewRef.current === feedId) {
+        setAiDigestGenerateStatus(status);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
     if (!hasInitializedSelectedViewRef.current) {
       // Skip the initial selectedView effect so a click right after mount does not
       // invalidate the request id of the operation it just started.
@@ -232,8 +377,104 @@ export default function ArticleList({
     refreshRequestIdRef.current += 1;
     displayModeRequestIdRef.current += 1;
     setRefreshing(false);
+    setAiDigestGenerateStatus(aiDigestGenerateStatusByFeedId.get(selectedView) ?? null);
     setDisplayModeSaving(false);
   }, [selectedView]);
+
+  useEffect(() => {
+    if (!selectedFeedFromStore || (selectedFeedFromStore.kind ?? "rss") !== "ai_digest") {
+      return;
+    }
+
+    const feedId = selectedFeedFromStore.id;
+    const cachedStatus = aiDigestGenerateStatusByFeedId.get(feedId) ?? null;
+    if (cachedStatus) {
+      setAiDigestGenerateStatus(cachedStatus);
+    }
+
+    const cachedRunId = isAiDigestStatusPending(cachedStatus) ? cachedStatus?.runId : null;
+    let cancelled = false;
+    const requestId = aiDigestGenerateRequestIdRef.current + 1;
+    aiDigestGenerateRequestIdRef.current = requestId;
+    const isCurrentRequest = () =>
+      !cancelled && aiDigestGenerateRequestIdRef.current === requestId;
+
+    const pollRestoredRun = async (runId: string) => {
+      setRefreshing(true);
+      const runResult = await pollAiDigestRunStatus({
+        runId,
+        isCurrentRequest,
+        onSnapshot: (run) => {
+          setAiDigestGenerateStatusForFeed(feedId, toAiDigestGenerateStatus(run));
+        },
+      });
+      if (!isCurrentRequest() || !runResult) {
+        return;
+      }
+
+      if (runResult.ok) {
+        setAiDigestGenerateStatusForFeed(feedId, toAiDigestGenerateStatus(runResult.run));
+        await loadSnapshot({ view: feedId }).catch((err) => {
+          console.error(err);
+        });
+        if (runResult.run.articleId) {
+          setSelectedArticle(runResult.run.articleId);
+        }
+        return;
+      }
+
+      setAiDigestGenerateStatusForFeed(feedId, {
+        phase: "failed",
+        runId,
+        message: "生成失败",
+        detail: runResult.err,
+      });
+    };
+
+    void (async () => {
+      try {
+        if (cachedRunId) {
+          await pollRestoredRun(cachedRunId);
+          return;
+        }
+
+        const active = await getActiveAiDigestRunStatus(feedId);
+        if (!isCurrentRequest()) {
+          return;
+        }
+
+        if (!active.run) {
+          if (isAiDigestStatusPending(cachedStatus)) {
+            aiDigestGenerateStatusByFeedId.delete(feedId);
+            if (selectedViewRef.current === feedId) {
+              setAiDigestGenerateStatus(null);
+            }
+          }
+          return;
+        }
+
+        setAiDigestGenerateStatusForFeed(feedId, toAiDigestGenerateStatus(active.run));
+        await pollRestoredRun(active.run.id);
+      } catch (err) {
+        if (isCurrentRequest()) {
+          console.error(err);
+        }
+      } finally {
+        if (isCurrentRequest()) {
+          setRefreshing(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    loadSnapshot,
+    selectedFeedFromStore,
+    setAiDigestGenerateStatusForFeed,
+    setSelectedArticle,
+  ]);
 
   useEffect(() => {
     const unsubscribe = useAppStore.subscribe((state, previousState) => {
@@ -570,6 +811,9 @@ export default function ArticleList({
 
   const canRefresh = (() => {
     if (refreshing) return false;
+    if (isAiDigestView && isAiDigestStatusPending(aiDigestGenerateStatus)) {
+      return false;
+    }
     if (isAggregateView) {
       return feeds.some((feed) => feed.enabled);
     }
@@ -672,7 +916,11 @@ export default function ArticleList({
   const refreshButtonTitle = isAggregateView
     ? "刷新全部订阅源"
     : isAiDigestView
-      ? "立即生成"
+      ? isAiDigestStatusPending(aiDigestGenerateStatus)
+        ? "生成中"
+        : aiDigestGenerateStatus?.phase === "failed"
+          ? "重试生成"
+          : "立即生成"
       : "刷新订阅源";
   const displayModeButtonTitle = effectiveDisplayMode === "card" ? "切换为列表" : "切换为卡片";
   const unreadOnlyButtonLabel = showUnreadOnly ? "显示全部文章" : "仅显示未读文章";
@@ -739,6 +987,54 @@ export default function ArticleList({
     return null;
   };
 
+  const renderAiDigestGenerateStatus = () => {
+    if (!isAiDigestView || !aiDigestGenerateStatus) {
+      return null;
+    }
+
+    const pending = isAiDigestStatusPending(aiDigestGenerateStatus);
+    const failed = aiDigestGenerateStatus.phase === "failed";
+
+    return (
+      <section
+        data-testid="ai-digest-generate-status"
+        role="status"
+        aria-live="polite"
+        className={cn(
+          "mx-4 mt-3 rounded-xl border px-3 py-2.5 text-sm",
+          failed
+            ? "border-destructive/25 bg-destructive/7 text-foreground"
+            : "border-border/65 bg-[color-mix(in_oklab,var(--color-primary)_6%,var(--color-background)_94%)]",
+        )}
+      >
+        <div className="flex items-start gap-2">
+          {pending ? (
+            <span
+              className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-muted-foreground/20 border-t-muted-foreground/70"
+              aria-hidden="true"
+            />
+          ) : (
+            <span
+              className={cn(
+                "mt-1 h-2 w-2 shrink-0 rounded-full",
+                failed ? "bg-destructive" : "bg-primary",
+              )}
+              aria-hidden="true"
+            />
+          )}
+          <div className="min-w-0">
+            <div className="font-medium">{aiDigestGenerateStatus.message}</div>
+            {aiDigestGenerateStatus.detail ? (
+              <div className="mt-0.5 text-xs text-muted-foreground">
+                {aiDigestGenerateStatus.detail}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </section>
+    );
+  };
+
   const onRefreshClick = () => {
     if (!canRefresh) return;
 
@@ -747,8 +1043,20 @@ export default function ArticleList({
     const view = selectedView;
     const isGlobalView = isAggregateView;
     const isDigestView = isAiDigestView;
+    const aiDigestRequestId = aiDigestGenerateRequestIdRef.current + 1;
+    if (isDigestView) {
+      aiDigestGenerateRequestIdRef.current = aiDigestRequestId;
+    }
 
     setRefreshing(true);
+    if (isDigestView) {
+      setAiDigestGenerateStatusForFeed(view, {
+        phase: "starting",
+        runId: null,
+        message: "准备生成",
+        detail: "正在提交生成任务",
+      });
+    }
 
     void (async () => {
       try {
@@ -794,6 +1102,12 @@ export default function ArticleList({
           const result = await generateAiDigest(view, { notifyOnError: false });
 
           if (result.reason === "missing_api_key") {
+            setAiDigestGenerateStatusForFeed(view, {
+              phase: "failed",
+              runId: null,
+              message: "生成失败",
+              detail: "请先在设置中配置 AI API Key",
+            });
             runImmediateFailure({
               actionKey: 'aiDigest.generate',
               err: '请先在设置中配置 AI API Key',
@@ -802,6 +1116,12 @@ export default function ArticleList({
           }
 
           if (!result.runId) {
+            setAiDigestGenerateStatusForFeed(view, {
+              phase: "failed",
+              runId: null,
+              message: "生成失败",
+              detail: "暂时无法获取运行状态，请稍后重试",
+            });
             runImmediateFailure({
               actionKey: 'aiDigest.generate',
               err: '暂时无法获取运行状态，请稍后重试',
@@ -813,16 +1133,26 @@ export default function ArticleList({
             actionKey: 'aiDigest.generate',
             trackingKey: result.runId,
           });
+          setAiDigestGenerateStatusForFeed(view, {
+            phase: "report_running",
+            runId: result.runId,
+            message: "正在生成智能报告",
+            detail: result.enqueued ? "任务已提交" : "已有生成任务正在处理",
+          });
 
           const runResult = await pollAiDigestRunStatus({
             runId: result.runId,
-            isCurrentRequest: () => refreshRequestIdRef.current === requestId,
+            isCurrentRequest: () => aiDigestGenerateRequestIdRef.current === aiDigestRequestId,
+            onSnapshot: (run) => {
+              setAiDigestGenerateStatusForFeed(view, toAiDigestGenerateStatus(run));
+            },
           });
-          if (refreshRequestIdRef.current !== requestId || !runResult) {
+          if (aiDigestGenerateRequestIdRef.current !== aiDigestRequestId || !runResult) {
             return;
           }
 
           if (runResult.ok) {
+            setAiDigestGenerateStatusForFeed(view, toAiDigestGenerateStatus(runResult.run));
             resolveDeferredOperation({
               actionKey: 'aiDigest.generate',
               trackingKey: result.runId,
@@ -834,9 +1164,18 @@ export default function ArticleList({
             await loadSnapshot({ view }).catch((err) => {
               console.error(err);
             });
+            if (runResult.run.articleId) {
+              setSelectedArticle(runResult.run.articleId);
+            }
             return;
           }
 
+          setAiDigestGenerateStatusForFeed(view, {
+            phase: "failed",
+            runId: result.runId,
+            message: "生成失败",
+            detail: runResult.err,
+          });
           failDeferredOperation({
             actionKey: 'aiDigest.generate',
             trackingKey: result.runId,
@@ -882,12 +1221,23 @@ export default function ArticleList({
           });
         }
       } catch (err) {
+        if (isDigestView) {
+          setAiDigestGenerateStatusForFeed(view, {
+            phase: "failed",
+            runId: null,
+            message: "生成失败",
+            detail: err instanceof Error ? err.message : "请稍后重试",
+          });
+        }
         runImmediateFailure({
           actionKey: isDigestView ? 'aiDigest.generate' : isGlobalView ? 'feed.refreshAll' : 'feed.refresh',
           err,
         });
       } finally {
-        if (refreshRequestIdRef.current === requestId) {
+        const isCurrentRequest = isDigestView
+          ? aiDigestGenerateRequestIdRef.current === aiDigestRequestId
+          : refreshRequestIdRef.current === requestId;
+        if (isCurrentRequest) {
           setRefreshing(false);
         }
       }
@@ -1213,6 +1563,8 @@ export default function ArticleList({
           <span className="text-[10px] font-medium text-muted-foreground">{articleCount} 篇</span>
         </div>
       </div>
+
+      {renderAiDigestGenerateStatus()}
 
       <div
         ref={scrollContainerRef}

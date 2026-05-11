@@ -80,19 +80,20 @@ function validateAi(draft: SettingsDraft, errors: Record<string, string>) {
   }
 
   const translation = ai?.translation;
-  if (!translation || translation.useSharedAi) {
-    return;
+  if (translation && !translation.useSharedAi) {
+    const translationApiBaseUrl = translation.apiBaseUrl.trim();
+    if (!translationApiBaseUrl) {
+      errors['ai.translation.apiBaseUrl'] =
+        'Translation API base URL is required when using dedicated translation settings.';
+    } else if (!isValidUrl(translationApiBaseUrl)) {
+      errors['ai.translation.apiBaseUrl'] = 'Translation API base URL must be a valid URL.';
+    }
   }
 
-  const translationApiBaseUrl = translation.apiBaseUrl.trim();
-  if (!translationApiBaseUrl) {
-    errors['ai.translation.apiBaseUrl'] =
-      'Translation API base URL is required when using dedicated translation settings.';
-    return;
-  }
 
-  if (!isValidUrl(translationApiBaseUrl)) {
-    errors['ai.translation.apiBaseUrl'] = 'Translation API base URL must be a valid URL.';
+  const privateFmApiBaseUrl = ai?.privateFm?.apiBaseUrl?.trim();
+  if (privateFmApiBaseUrl && !isValidUrl(privateFmApiBaseUrl)) {
+    errors['ai.privateFm.apiBaseUrl'] = 'Private FM API base URL must be a valid URL.';
   }
 }
 

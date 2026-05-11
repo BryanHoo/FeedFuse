@@ -21,7 +21,10 @@ RUN --mount=type=cache,target=/pnpm/store pnpm install --prod --frozen-lockfile
 FROM node:24-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
-RUN addgroup -S appgroup -g 1001 && adduser -S appuser -u 1001 -G appgroup
+RUN apk add --no-cache ffmpeg \
+  && addgroup -S appgroup -g 1001 \
+  && adduser -S appuser -u 1001 -G appgroup
+RUN mkdir -p /data/feedfuse/media && chown -R appuser:appgroup /data/feedfuse
 
 FROM runtime AS web
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -37,7 +40,7 @@ COPY --from=builder --chown=appuser:appgroup /app/src/server/db/migrations ./src
 USER appuser
 EXPOSE 9559
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:9559/api/health >/dev/null || exit 1
+  CMD wget -qO- "http://$(hostname):9559/api/health" >/dev/null || exit 1
 CMD ["node", "server.js"]
 
 FROM runtime AS worker

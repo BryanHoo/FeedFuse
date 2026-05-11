@@ -513,6 +513,7 @@ export async function createAiDigest(input: {
   prompt: string;
   intervalMinutes: number;
   selectedFeedIds: string[];
+  privateFmEnabled?: boolean;
   categoryId?: string | null;
   categoryName?: string | null;
 }, options?: RequestApiOptions): Promise<
@@ -536,6 +537,7 @@ export interface AiDigestConfigDto {
   prompt: string;
   intervalMinutes: number;
   selectedFeedIds: string[];
+  privateFmEnabled: boolean;
 }
 
 export async function getAiDigestConfig(feedId: string): Promise<AiDigestConfigDto> {
@@ -549,6 +551,7 @@ export async function patchAiDigest(
     prompt: string;
     intervalMinutes: number;
     selectedFeedIds: string[];
+    privateFmEnabled?: boolean;
     categoryId?: string | null;
     categoryName?: string | null;
   },
@@ -582,14 +585,34 @@ export async function generateAiDigest(
   );
 }
 
-export async function getAiDigestRunStatus(runId: string): Promise<{
+export interface AiDigestRunStatusDto {
   id: string;
   status: 'queued' | 'running' | 'succeeded' | 'failed' | 'skipped_no_updates';
+  candidateTotal: number;
+  selectedCount: number;
+  articleId: string | null;
+  privateFmEnabled: boolean;
+  privateFmEpisode: {
+    id: string;
+    status: PrivateFmEpisodeStatus;
+    hasScript: boolean;
+    errorCode: string | null;
+    errorMessage: string | null;
+    updatedAt: string;
+  } | null;
   errorCode: string | null;
   errorMessage: string | null;
   updatedAt: string;
-}> {
+}
+
+export async function getAiDigestRunStatus(runId: string): Promise<AiDigestRunStatusDto> {
   return requestApi(`/api/ai-digests/runs/${encodeURIComponent(runId)}`);
+}
+
+export async function getActiveAiDigestRunStatus(
+  feedId: string,
+): Promise<{ run: AiDigestRunStatusDto | null }> {
+  return requestApi(`/api/ai-digests/${encodeURIComponent(feedId)}/runs/active`);
 }
 
 export async function getFeedRefreshRunStatus(runId: string): Promise<{
@@ -958,6 +981,39 @@ export async function enqueueArticleAiTranslate(
   });
 }
 
+export type PrivateFmEpisodeStatus = 'queued' | 'running' | 'script_ready' | 'succeeded' | 'failed';
+
+export interface PrivateFmEpisodeDto {
+  id: string;
+  status: PrivateFmEpisodeStatus;
+  scriptText: string | null;
+  audioUrl: string | null;
+  audioParts: Array<{ index: number; url: string }>;
+  errorCode: string | null;
+  errorMessage: string | null;
+  updatedAt: string;
+}
+
+export async function getArticlePrivateFm(
+  articleId: string,
+): Promise<{ episode: PrivateFmEpisodeDto | null }> {
+  return requestApi(`/api/articles/${encodeURIComponent(articleId)}/private-fm`);
+}
+
+export async function enqueueArticlePrivateFm(
+  articleId: string,
+  input?: { mode?: 'retry' | 'regenerate' },
+): Promise<{ enqueued: boolean; jobId?: string; reason?: string; episodeId: string }> {
+  return requestApi(
+    `/api/articles/${encodeURIComponent(articleId)}/private-fm`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ mode: input?.mode ?? 'retry' }),
+    },
+  );
+}
+
 export type TranslationSessionStatus = 'running' | 'succeeded' | 'partial_failed' | 'failed';
 export type TranslationSegmentStatus = 'pending' | 'running' | 'succeeded' | 'failed';
 export type AiSummarySessionStatus = 'queued' | 'running' | 'succeeded' | 'failed';
@@ -1151,6 +1207,39 @@ export async function deleteTranslationApiKey(
 ): Promise<{ hasApiKey: boolean }> {
   return requestApi(
     '/api/settings/translation/api-key',
+    {
+      method: 'DELETE',
+    },
+    options,
+  );
+}
+
+export async function putPrivateFmApiKey(
+  input: { apiKey: string },
+  options?: RequestApiOptions,
+): Promise<{ hasApiKey: boolean }> {
+  return requestApi(
+    '/api/settings/private-fm/api-key',
+    {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+    options,
+  );
+}
+
+export async function getPrivateFmApiKeyStatus(
+  options?: RequestApiOptions,
+): Promise<{ hasApiKey: boolean }> {
+  return requestApi('/api/settings/private-fm/api-key', undefined, options);
+}
+
+export async function deletePrivateFmApiKey(
+  options?: RequestApiOptions,
+): Promise<{ hasApiKey: boolean }> {
+  return requestApi(
+    '/api/settings/private-fm/api-key',
     {
       method: 'DELETE',
     },

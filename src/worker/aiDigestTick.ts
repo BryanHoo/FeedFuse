@@ -1,7 +1,9 @@
 import { resolveAiConfigFingerprints } from '../server/ai/configFingerprints';
+import { resolveAiDigestRunWindow } from '../server/aiDigestWindow';
 import { getAiApiKey, getUiSettings } from '../server/repositories/settingsRepo';
 import {
   createAiDigestRun,
+  getActiveAiDigestRunByFeedId,
   getAiDigestConfigByFeedId,
   getAiDigestRunByFeedIdAndWindowStartAt,
   listDueAiDigestConfigFeedIds,
@@ -44,8 +46,13 @@ export async function runAiDigestTick(deps: {
     const config = await getAiDigestConfigByFeedId(deps.pool as never, feedId);
     if (!config) continue;
 
-    const windowStartAt = config.lastWindowEndAt;
-    const windowEndAt = now.toISOString();
+    const active = await getActiveAiDigestRunByFeedId(deps.pool as never, feedId);
+    if (active) continue;
+
+    const { windowStartAt, windowEndAt } = resolveAiDigestRunWindow({
+      now,
+      intervalMinutes: config.intervalMinutes,
+    });
 
     const existing = await getAiDigestRunByFeedIdAndWindowStartAt(deps.pool as never, {
       feedId,

@@ -692,6 +692,40 @@ it('GETs /api/ai-digests/runs/:runId', async () => {
   expect(getFetchCallMethod(fetchMock.mock.calls[0])).toBe('GET');
 });
 
+it('GETs /api/ai-digests/:feedId/runs/active', async () => {
+  const fetchMock = vi.fn(async () => {
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        data: {
+          run: {
+            id: 'run-1',
+            status: 'running',
+            candidateTotal: 3,
+            selectedCount: 0,
+            articleId: null,
+            privateFmEnabled: false,
+            privateFmEpisode: null,
+            errorCode: null,
+            errorMessage: null,
+            updatedAt: '2026-03-25T00:00:00.000Z',
+          },
+        },
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+  });
+  vi.stubGlobal('fetch', fetchMock);
+
+  const { getActiveAiDigestRunStatus } = await import('./apiClient');
+  await getActiveAiDigestRunStatus('digest-1');
+
+  expect(getFetchCallUrl(fetchMock.mock.calls[0]?.[0])).toContain(
+    '/api/ai-digests/digest-1/runs/active',
+  );
+  expect(getFetchCallMethod(fetchMock.mock.calls[0])).toBe('GET');
+});
+
 it('GETs /api/feed-refresh-runs/:runId', async () => {
   const fetchMock = vi.fn(async () => {
     return new Response(
@@ -871,6 +905,34 @@ it('retryArticleAiTranslateSegment POSTs /api/articles/:id/ai-translate/segments
     '/api/articles/00000000-0000-0000-0000-000000000000/ai-translate/segments/3/retry',
   );
   expect(getFetchCallMethod(firstCall)).toBe('POST');
+});
+
+it('enqueueArticlePrivateFm sends retry or regenerate mode in request body', async () => {
+  let capturedBody: string | undefined;
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (typeof Request !== 'undefined' && input instanceof Request) {
+      capturedBody = await input.clone().text();
+    } else if (typeof init?.body === 'string') {
+      capturedBody = init.body;
+    }
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        data: { enqueued: true, jobId: 'job-1', episodeId: 'episode-1' },
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+  });
+  vi.stubGlobal('fetch', fetchMock);
+
+  const { enqueueArticlePrivateFm } = await import('./apiClient');
+  await enqueueArticlePrivateFm('article-1', { mode: 'regenerate' });
+
+  const firstCall = fetchMock.mock.calls[0] ?? [];
+  expect(getFetchCallUrl(firstCall[0])).toContain('/api/articles/article-1/private-fm');
+  expect(getFetchCallMethod(firstCall)).toBe('POST');
+  expect(getFetchCallHeader(firstCall, 'content-type')).toBe('application/json');
+  expect(capturedBody).toBe(JSON.stringify({ mode: 'regenerate' }));
 });
 
 it('createArticleAiTranslateEventSource uses stream endpoint', async () => {

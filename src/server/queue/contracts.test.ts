@@ -37,4 +37,10 @@ describe('queue contracts', () => {
       expect.objectContaining({ localConcurrency: 3, batchSize: 1 }),
     );
   });
+
+  it('does not singleton private FM generation so failed audio can be retried immediately', () => {
+    expect(getQueueSendOptions('private_fm.generate', { episodeId: 'episode-1' })).not.toHaveProperty(
+      'singletonKey',
+    );
+  });
 });

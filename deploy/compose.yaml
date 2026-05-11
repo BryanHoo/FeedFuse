@@ -30,16 +30,19 @@ services:
       # 首次未在设置页修改密码前，登录会使用该初始密码校验
       AUTH_INITIAL_PASSWORD: ${AUTH_INITIAL_PASSWORD}
       IMAGE_PROXY_SECRET: ${IMAGE_PROXY_SECRET}
+      FEEDFUSE_MEDIA_DIR: /data/feedfuse/media
       PORT: '9559'
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     ports:
       - '${WEB_PORT:-9559}:9559'
+    volumes:
+      - feedfuse_media:/data/feedfuse/media
     depends_on:
       db:
         condition: service_healthy
     healthcheck:
-      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:9559/ >/dev/null || exit 1']
+      test: ['CMD-SHELL', 'wget -qO- "http://$(hostname):9559/api/health" >/dev/null || exit 1']
       interval: 30s
       timeout: 5s
       retries: 3
@@ -56,12 +59,16 @@ services:
       ]
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      FEEDFUSE_MEDIA_DIR: /data/feedfuse/media
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     depends_on:
       db:
         condition: service_healthy
+    volumes:
+      - feedfuse_media:/data/feedfuse/media
     restart: unless-stopped
 
 volumes:
   feedfuse_pg:
+  feedfuse_media:

@@ -19,6 +19,7 @@ type SendContext = {
   articleId?: string;
   feedId?: string;
   runId?: string;
+  episodeId?: string;
   force?: boolean;
 };
 
@@ -107,6 +108,19 @@ export const QUEUE_CONTRACTS: Record<string, QueueContract> = {
     },
     worker: { localConcurrency: 1, batchSize: 1 },
     send: (ctx) => (ctx.runId ? { singletonKey: ctx.runId, singletonSeconds: 3600 } : {}),
+  },
+  'private_fm.generate': {
+    queue: {
+      retryLimit: 2,
+      retryDelay: 30,
+      retryBackoff: true,
+      retryDelayMax: 600,
+      heartbeatSeconds: 60,
+      expireInSeconds: 2400,
+      warningQueueSize: 50,
+    },
+    worker: { localConcurrency: 1, batchSize: 1 },
+    send: () => ({}),
   },
   'feed.refresh_all': {
     queue: { warningQueueSize: 50 },

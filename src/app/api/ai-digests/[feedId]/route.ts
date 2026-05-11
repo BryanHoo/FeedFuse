@@ -31,6 +31,7 @@ const patchBodySchema = z
     prompt: z.string().trim().min(1),
     intervalMinutes: z.number().int(),
     selectedFeedIds: z.array(numericIdSchema).min(1),
+    privateFmEnabled: z.boolean().optional(),
     ...categoryInputShape,
   })
   .refine((value) => !(value.categoryId && value.categoryName), {
@@ -104,6 +105,7 @@ export async function GET(
       prompt: config.prompt,
       intervalMinutes: config.intervalMinutes,
       selectedFeedIds: config.selectedFeedIds,
+      privateFmEnabled: config.privateFmEnabled,
     });
   } catch (err) {
     return fail(err);

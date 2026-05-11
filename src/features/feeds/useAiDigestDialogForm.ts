@@ -138,6 +138,7 @@ export function useAiDigestDialogForm(input: UseAiDigestDialogFormInput) {
   const [prompt, setPrompt] = useState("");
   const [intervalMinutes, setIntervalMinutes] =
     useState<AiDigestIntervalMinutes>(60);
+  const [privateFmEnabled, setPrivateFmEnabled] = useState(false);
   const [categoryInput, setCategoryInput] = useState(() =>
     resolveInitialCategoryInput(categoryOptions, input.initialCategoryId),
   );
@@ -180,6 +181,7 @@ export function useAiDigestDialogForm(input: UseAiDigestDialogFormInput) {
         // 编辑模式只保留当前仍可选的 RSS 来源，避免历史脏数据干扰表单。
         setPrompt(config.prompt);
         setIntervalMinutes(nextIntervalMinutes);
+        setPrivateFmEnabled(Boolean(config.privateFmEnabled));
         setSelectedFeedIds(
           normalizeSelectedFeedIds(config.selectedFeedIds, sourceFeedOptions),
         );
@@ -250,6 +252,7 @@ export function useAiDigestDialogForm(input: UseAiDigestDialogFormInput) {
               prompt: trimmedPrompt,
               intervalMinutes,
               selectedFeedIds,
+              privateFmEnabled,
               ...categoryPayload,
             }),
         });
@@ -262,6 +265,7 @@ export function useAiDigestDialogForm(input: UseAiDigestDialogFormInput) {
               prompt: trimmedPrompt,
               intervalMinutes,
               selectedFeedIds,
+              privateFmEnabled,
               ...categoryPayload,
             }),
         });
@@ -300,6 +304,8 @@ export function useAiDigestDialogForm(input: UseAiDigestDialogFormInput) {
         setIntervalMinutes(nextValue as AiDigestIntervalMinutes);
       }
     },
+    privateFmEnabled,
+    setPrivateFmEnabled,
     categoryInput,
     setCategoryInput,
     categoryOptions,

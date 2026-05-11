@@ -32,6 +32,11 @@ function normalizeCategoryName(name: string | null | undefined): string | null {
   return normalized;
 }
 
+function resolveInitialWindowEndAt(intervalMinutes: number): string {
+  const lookbackMs = Math.max(1, intervalMinutes) * 60 * 1000;
+  return new Date(Date.now() - lookbackMs).toISOString();
+}
+
 async function resolveCategoryId(
   client: { query: Pool['query'] },
   input: CategoryResolutionInput,
@@ -70,6 +75,7 @@ export async function createAiDigestWithCategoryResolution(
     prompt: string;
     intervalMinutes: number;
     selectedFeedIds: string[];
+    privateFmEnabled?: boolean;
     categoryId?: string | null;
     categoryName?: string | null;
   },
@@ -99,7 +105,8 @@ export async function createAiDigestWithCategoryResolution(
       // 兼容保留 top_n 字段，但实际策略改为“纳入所有判定为相关的候选”。
       topN: LEGACY_AI_DIGEST_RELEVANT_CAP,
       selectedFeedIds: input.selectedFeedIds,
-      lastWindowEndAt: new Date().toISOString(),
+      lastWindowEndAt: resolveInitialWindowEndAt(input.intervalMinutes),
+      privateFmEnabled: Boolean(input.privateFmEnabled),
     });
 
     await client.query('commit');
@@ -120,6 +127,7 @@ export async function updateAiDigestWithCategoryResolution(
     prompt: string;
     intervalMinutes: number;
     selectedFeedIds: string[];
+    privateFmEnabled?: boolean;
     categoryId?: string | null;
     categoryName?: string | null;
   },
@@ -155,6 +163,7 @@ export async function updateAiDigestWithCategoryResolution(
       intervalMinutes: input.intervalMinutes,
       topN: LEGACY_AI_DIGEST_RELEVANT_CAP,
       selectedFeedIds: input.selectedFeedIds,
+      privateFmEnabled: Boolean(input.privateFmEnabled),
     });
     if (!updatedConfig) {
       await client.query('rollback');

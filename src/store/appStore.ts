@@ -147,6 +147,7 @@ interface AppState {
     prompt: string;
     intervalMinutes: number;
     selectedFeedIds: string[];
+    privateFmEnabled?: boolean;
     categoryId?: string | null;
     categoryName?: string | null;
   }) => Promise<void>;
@@ -155,6 +156,7 @@ interface AppState {
     prompt: string;
     intervalMinutes: number;
     selectedFeedIds: string[];
+    privateFmEnabled: boolean;
   }>;
   updateAiDigest: (
     feedId: string,
@@ -163,6 +165,7 @@ interface AppState {
       prompt: string;
       intervalMinutes: number;
       selectedFeedIds: string[];
+      privateFmEnabled?: boolean;
       categoryId?: string | null;
       categoryName?: string | null;
     },

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getQueueSendOptions } from '../../../server/queue/contracts';
 import { JOB_AI_DIGEST_GENERATE } from '../../../server/queue/jobs';
 
@@ -10,8 +10,10 @@ const getAiApiKeyMock = vi.fn();
 const getUiSettingsMock = vi.fn();
 const getAiDigestConfigByFeedIdMock = vi.fn();
 const createAiDigestRunMock = vi.fn();
+const getActiveAiDigestRunByFeedIdMock = vi.fn();
 const getAiDigestRunByFeedIdAndWindowStartAtMock = vi.fn();
 const updateAiDigestRunMock = vi.fn();
+const getPrivateFmEpisodeByRunIdMock = vi.fn();
 const enqueueWithResultMock = vi.fn();
 const writeUserOperationStartedLogMock = vi.fn();
 const writeUserOperationSucceededLogMock = vi.fn();
@@ -49,6 +51,7 @@ vi.mock('../../../../../server/repositories/settingsRepo', () => ({
 
 vi.mock('../../../server/repositories/aiDigestRepo', () => ({
   getAiDigestConfigByFeedId: (...args: unknown[]) => getAiDigestConfigByFeedIdMock(...args),
+  getActiveAiDigestRunByFeedId: (...args: unknown[]) => getActiveAiDigestRunByFeedIdMock(...args),
   createAiDigestRun: (...args: unknown[]) => createAiDigestRunMock(...args),
   getAiDigestRunByFeedIdAndWindowStartAt: (...args: unknown[]) =>
     getAiDigestRunByFeedIdAndWindowStartAtMock(...args),
@@ -56,6 +59,7 @@ vi.mock('../../../server/repositories/aiDigestRepo', () => ({
 }));
 vi.mock('../../../../server/repositories/aiDigestRepo', () => ({
   getAiDigestConfigByFeedId: (...args: unknown[]) => getAiDigestConfigByFeedIdMock(...args),
+  getActiveAiDigestRunByFeedId: (...args: unknown[]) => getActiveAiDigestRunByFeedIdMock(...args),
   createAiDigestRun: (...args: unknown[]) => createAiDigestRunMock(...args),
   getAiDigestRunByFeedIdAndWindowStartAt: (...args: unknown[]) =>
     getAiDigestRunByFeedIdAndWindowStartAtMock(...args),
@@ -63,10 +67,21 @@ vi.mock('../../../../server/repositories/aiDigestRepo', () => ({
 }));
 vi.mock('../../../../../server/repositories/aiDigestRepo', () => ({
   getAiDigestConfigByFeedId: (...args: unknown[]) => getAiDigestConfigByFeedIdMock(...args),
+  getActiveAiDigestRunByFeedId: (...args: unknown[]) => getActiveAiDigestRunByFeedIdMock(...args),
   createAiDigestRun: (...args: unknown[]) => createAiDigestRunMock(...args),
   getAiDigestRunByFeedIdAndWindowStartAt: (...args: unknown[]) =>
     getAiDigestRunByFeedIdAndWindowStartAtMock(...args),
   updateAiDigestRun: (...args: unknown[]) => updateAiDigestRunMock(...args),
+}));
+
+vi.mock('../../../server/repositories/privateFmRepo', () => ({
+  getPrivateFmEpisodeByRunId: (...args: unknown[]) => getPrivateFmEpisodeByRunIdMock(...args),
+}));
+vi.mock('../../../../server/repositories/privateFmRepo', () => ({
+  getPrivateFmEpisodeByRunId: (...args: unknown[]) => getPrivateFmEpisodeByRunIdMock(...args),
+}));
+vi.mock('../../../../../server/repositories/privateFmRepo', () => ({
+  getPrivateFmEpisodeByRunId: (...args: unknown[]) => getPrivateFmEpisodeByRunIdMock(...args),
 }));
 
 vi.mock('../../../server/queue/queue', () => ({
@@ -226,12 +241,17 @@ describe('/api/ai-digests', () => {
 });
 
 describe('/api/ai-digests/:feedId/generate', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   beforeEach(() => {
     getAiApiKeyMock.mockReset();
     getUiSettingsMock.mockReset();
     getUiSettingsMock.mockResolvedValue({});
     getAiDigestConfigByFeedIdMock.mockReset();
     createAiDigestRunMock.mockReset();
+    getActiveAiDigestRunByFeedIdMock.mockReset();
     getAiDigestRunByFeedIdAndWindowStartAtMock.mockReset();
     updateAiDigestRunMock.mockReset();
     enqueueWithResultMock.mockReset();
@@ -256,11 +276,15 @@ describe('/api/ai-digests/:feedId/generate', () => {
   });
 
   it('enqueues ai.digest_generate when config exists and not already running', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-15T08:30:00.000Z'));
     getAiApiKeyMock.mockResolvedValue('sk-test');
     getAiDigestConfigByFeedIdMock.mockResolvedValue({
       feedId: '1001',
       lastWindowEndAt: '2026-03-14T00:00:00.000Z',
+      intervalMinutes: 60,
     });
+    getActiveAiDigestRunByFeedIdMock.mockResolvedValue(null);
     getAiDigestRunByFeedIdAndWindowStartAtMock.mockResolvedValue(null);
     createAiDigestRunMock.mockResolvedValue({
       id: '5001',
@@ -277,6 +301,13 @@ describe('/api/ai-digests/:feedId/generate', () => {
     expect(json.ok).toBe(true);
     expect(json.data.enqueued).toBe(true);
     expect(json.data.runId).toBe('5001');
+    expect(createAiDigestRunMock).toHaveBeenCalledWith(
+      pool,
+      expect.objectContaining({
+        windowStartAt: '2026-03-15T07:30:00.000Z',
+        windowEndAt: '2026-03-15T08:30:00.000Z',
+      }),
+    );
     expect(enqueueWithResultMock).toHaveBeenCalledWith(
       JOB_AI_DIGEST_GENERATE,
       expect.objectContaining({ runId: '5001', sharedConfigFingerprint: expect.any(String) }),
@@ -286,6 +317,36 @@ describe('/api/ai-digests/:feedId/generate', () => {
       pool,
       expect.objectContaining({ actionKey: 'aiDigest.generate' }),
     );
+    vi.useRealTimers();
+  });
+
+  it('reuses an active digest run for the feed instead of creating a duplicate manual run', async () => {
+    getAiApiKeyMock.mockResolvedValue('sk-test');
+    getAiDigestConfigByFeedIdMock.mockResolvedValue({
+      feedId: '1001',
+      lastWindowEndAt: '2026-03-14T00:00:00.000Z',
+      intervalMinutes: 60,
+    });
+    getActiveAiDigestRunByFeedIdMock.mockResolvedValue({
+      id: 'active-run-1',
+      status: 'running',
+    });
+
+    const mod = await import('./[feedId]/generate/route');
+    const res = await mod.POST(
+      new Request('http://localhost/api/ai-digests/1001/generate', { method: 'POST' }),
+      { params: Promise.resolve({ feedId: '1001' }) },
+    );
+    const json = await res.json();
+
+    expect(json.ok).toBe(true);
+    expect(json.data).toMatchObject({
+      enqueued: false,
+      reason: 'already_running',
+      runId: 'active-run-1',
+    });
+    expect(createAiDigestRunMock).not.toHaveBeenCalled();
+    expect(enqueueWithResultMock).not.toHaveBeenCalled();
   });
 
   it('returns validation_error for non-numeric feedId', async () => {
@@ -301,5 +362,75 @@ describe('/api/ai-digests/:feedId/generate', () => {
     expect(res.status).toBe(400);
     expect(json.ok).toBe(false);
     expect(json.error.code).toBe('validation_error');
+  });
+});
+
+describe('/api/ai-digests/:feedId/runs/active', () => {
+  beforeEach(() => {
+    getActiveAiDigestRunByFeedIdMock.mockReset();
+    getPrivateFmEpisodeByRunIdMock.mockReset();
+  });
+
+  it('returns the active run status for a digest feed', async () => {
+    getActiveAiDigestRunByFeedIdMock.mockResolvedValue({
+      id: 'run-1',
+      feedId: '1001',
+      windowStartAt: '2026-03-25T09:00:00.000Z',
+      windowEndAt: '2026-03-25T10:00:00.000Z',
+      status: 'running',
+      candidateTotal: 4,
+      selectedCount: 0,
+      articleId: null,
+      privateFmEnabled: true,
+      model: null,
+      errorCode: null,
+      errorMessage: null,
+      jobId: 'job-1',
+      createdAt: '2026-03-25T10:00:00.000Z',
+      updatedAt: '2026-03-25T10:00:01.000Z',
+    });
+    getPrivateFmEpisodeByRunIdMock.mockResolvedValue({
+      id: 'episode-1',
+      status: 'queued',
+      scriptText: null,
+      errorCode: null,
+      errorMessage: null,
+      updatedAt: '2026-03-25T10:00:01.000Z',
+    });
+
+    const mod = await import('./[feedId]/runs/active/route');
+    const res = await mod.GET(
+      new Request('http://localhost/api/ai-digests/1001/runs/active'),
+      { params: Promise.resolve({ feedId: '1001' }) },
+    );
+    const json = await res.json();
+
+    expect(json.ok).toBe(true);
+    expect(json.data.run).toMatchObject({
+      id: 'run-1',
+      status: 'running',
+      candidateTotal: 4,
+      privateFmEnabled: true,
+      privateFmEpisode: {
+        id: 'episode-1',
+        status: 'queued',
+        hasScript: false,
+      },
+    });
+    expect(getActiveAiDigestRunByFeedIdMock).toHaveBeenCalledWith(pool, '1001');
+  });
+
+  it('returns null when no active digest run exists', async () => {
+    getActiveAiDigestRunByFeedIdMock.mockResolvedValue(null);
+
+    const mod = await import('./[feedId]/runs/active/route');
+    const res = await mod.GET(
+      new Request('http://localhost/api/ai-digests/1001/runs/active'),
+      { params: Promise.resolve({ feedId: '1001' }) },
+    );
+    const json = await res.json();
+
+    expect(json.ok).toBe(true);
+    expect(json.data.run).toBeNull();
   });
 });

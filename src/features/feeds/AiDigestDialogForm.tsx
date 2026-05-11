@@ -32,6 +32,8 @@ interface AiDigestDialogFormProps {
   onPromptChange: (value: string) => void;
   intervalMinutes: number;
   onIntervalMinutesChange: (value: number) => void;
+  privateFmEnabled: boolean;
+  onPrivateFmEnabledChange: (value: boolean) => void;
   categoryInput: string;
   categoryOptions: Category[];
   onCategoryInputChange: (value: string) => void;
@@ -66,6 +68,8 @@ export default function AiDigestDialogForm({
   onPromptChange,
   intervalMinutes,
   onIntervalMinutesChange,
+  privateFmEnabled,
+  onPrivateFmEnabledChange,
   categoryInput,
   categoryOptions,
   onCategoryInputChange,
@@ -81,6 +85,7 @@ export default function AiDigestDialogForm({
   const titleInputId = `${fieldIdPrefix}-title`;
   const promptInputId = `${fieldIdPrefix}-prompt`;
   const intervalInputId = `${fieldIdPrefix}-interval`;
+  const privateFmInputId = `${fieldIdPrefix}-private-fm`;
   const categoryInputId = `${fieldIdPrefix}-category`;
   const submitErrorId = `${fieldIdPrefix}-submit-error`;
 
@@ -192,6 +197,27 @@ export default function AiDigestDialogForm({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-muted/30 px-3 py-2">
+            <div className="min-w-0">
+              <Label htmlFor={privateFmInputId} className="text-xs">
+                同时生成私人 FM
+              </Label>
+              <p className="mt-1 text-xs text-muted-foreground">
+                使用同一批原始新闻生成口播稿和 StepFun TTS 音频。
+              </p>
+            </div>
+            <input
+              id={privateFmInputId}
+              type="checkbox"
+              className="h-5 w-5 shrink-0 accent-primary"
+              checked={privateFmEnabled}
+              onChange={(event) =>
+                onPrivateFmEnabledChange(event.currentTarget.checked)
+              }
+              disabled={isBusy}
+            />
           </div>
 
           <div className="grid gap-1.5">

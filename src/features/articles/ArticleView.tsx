@@ -12,6 +12,7 @@ import {
 import {
   Download,
   FileText,
+  Headphones,
   Languages,
   Search,
   Settings as SettingsIcon,
@@ -23,7 +24,10 @@ import { useSettingsStore } from "../../store/settingsStore";
 import type { ArticleAiDigestSource } from "../../types";
 import {
   enqueueArticleFulltext,
+  enqueueArticlePrivateFm,
+  getArticlePrivateFm,
   getArticleTasks,
+  type PrivateFmEpisodeDto,
   type ArticleTasksDto,
 } from "../../lib/apiClient";
 import { pollWithBackoff } from "../../lib/polling";
@@ -52,6 +56,7 @@ import { toast } from "../toast/toast";
 const FLOATING_TITLE_SCROLL_THRESHOLD_PX = 96;
 const AI_DIGEST_SOURCES_VISIBLE_LIMIT = 3;
 const AI_DIGEST_SOURCES_SCROLL_MAX_HEIGHT_CLASS = "max-h-[13.5rem]";
+const PRIVATE_FM_PENDING_STALE_MS = 10 * 60 * 1000;
 const ARTICLE_STATUS_CARD_CLASS_NAME =
   "mb-4 rounded-2xl border border-border/65 bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-muted)_78%,white_22%),color-mix(in_oklab,var(--color-background)_86%,white_14%))] px-4 py-3 dark:border-white/[0.06] dark:bg-[linear-gradient(180deg,rgba(15,15,19,0.96),rgba(10,10,13,0.92))]";
 const ARTICLE_SUMMARY_CARD_CLASS_NAME =
@@ -104,6 +109,10 @@ export default function ArticleView({
     (state) => state.persistedSettings.general.autoMarkReadDelayMs,
   );
   const [tasks, setTasks] = useState<ArticleTasksDto | null>(null);
+  const [privateFmEpisode, setPrivateFmEpisode] =
+    useState<PrivateFmEpisodeDto | null>(null);
+  const [privateFmLoading, setPrivateFmLoading] = useState(false);
+  const [privateFmPartIndex, setPrivateFmPartIndex] = useState(0);
   const [aiSummaryExpandedArticleId, setAiSummaryExpandedArticleId] = useState<
     string | null
   >(null);
@@ -111,6 +120,7 @@ export default function ArticleView({
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const articleContentRef = useRef<HTMLDivElement | null>(null);
   const imagePreviewSequenceRef = useRef(0);
+  const privateFmAudioRef = useRef<HTMLAudioElement | null>(null);
   const scrollStateFrameRef = useRef<number | null>(null);
   const pendingScrollElementRef = useRef<HTMLDivElement | null>(null);
   const [scrollAssistArticleId, setScrollAssistArticleId] = useState<
@@ -427,6 +437,34 @@ export default function ArticleView({
 
   useEffect(() => {
     const articleId = article?.id ?? null;
+    if (!articleId || !isAiDigestArticle) {
+      setPrivateFmEpisode(null);
+      setPrivateFmPartIndex(0);
+      return;
+    }
+
+    let cancelled = false;
+    setPrivateFmLoading(true);
+    void (async () => {
+      try {
+        const snapshot = await getArticlePrivateFm(articleId);
+        if (cancelled) return;
+        setPrivateFmEpisode(snapshot.episode);
+        setPrivateFmPartIndex(0);
+      } catch {
+        if (!cancelled) setPrivateFmEpisode(null);
+      } finally {
+        if (!cancelled) setPrivateFmLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [article?.id, isAiDigestArticle]);
+
+  useEffect(() => {
+    const articleId = article?.id ?? null;
     if (!articleId) return;
     if (!feedAiSummaryOnOpenEnabled) return;
     // Keep the last summary/session outcome visible after refresh instead of auto-enqueueing again.
@@ -522,6 +560,33 @@ export default function ArticleView({
     });
   }
 
+  async function onPrivateFmGenerateClick() {
+    if (!article?.id) return;
+    setPrivateFmLoading(true);
+    try {
+      await enqueueArticlePrivateFm(article.id, {
+        mode: privateFmEpisode?.status === "succeeded" ? "regenerate" : "retry",
+      });
+      const snapshot = await getArticlePrivateFm(article.id);
+      setPrivateFmEpisode(snapshot.episode);
+      setPrivateFmPartIndex(0);
+    } catch {
+      toast.error("暂时无法启动私人 FM 生成，请稍后重试");
+    } finally {
+      setPrivateFmLoading(false);
+    }
+  }
+
+  function onPrivateFmPartEnded() {
+    if (!privateFmEpisode) return;
+    const nextIndex = privateFmPartIndex + 1;
+    if (nextIndex >= privateFmEpisode.audioParts.length) return;
+    setPrivateFmPartIndex(nextIndex);
+    queueMicrotask(() => {
+      void privateFmAudioRef.current?.play().catch(() => undefined);
+    });
+  }
+
   async function onAiDigestSourceClick(source: ArticleAiDigestSource) {
     // Preserve the current digest article URL entry so browser back can return to it.
     await openArticleInReader({
@@ -614,6 +679,121 @@ export default function ArticleView({
           />
         </div>
       </div>
+    );
+  }
+
+  function renderPrivateFmSection() {
+    if (!isAiDigestArticle) {
+      return null;
+    }
+
+    const isRawPrivateFmPending =
+      privateFmEpisode?.status === "queued" ||
+      privateFmEpisode?.status === "running" ||
+      privateFmEpisode?.status === "script_ready";
+    const privateFmUpdatedAtMs = privateFmEpisode
+      ? new Date(privateFmEpisode.updatedAt).getTime()
+      : Number.NaN;
+    const isPrivateFmStale =
+      isRawPrivateFmPending &&
+      Number.isFinite(privateFmUpdatedAtMs) &&
+      Date.now() - privateFmUpdatedAtMs > PRIVATE_FM_PENDING_STALE_MS;
+    const isPrivateFmPending = isRawPrivateFmPending && !isPrivateFmStale;
+    const hasPrivateFmScript = Boolean(privateFmEpisode?.scriptText?.trim());
+    const privateFmAudioSrc =
+      privateFmEpisode?.audioUrl ??
+      privateFmEpisode?.audioParts[privateFmPartIndex]?.url ??
+      null;
+    const hasMergedPrivateFmAudio = Boolean(privateFmEpisode?.audioUrl);
+    const canMergeLegacyPrivateFmAudio =
+      privateFmEpisode?.status === "succeeded" &&
+      !hasMergedPrivateFmAudio &&
+      privateFmEpisode.audioParts.length > 0;
+    const privateFmStatusText =
+      isPrivateFmStale
+        ? "生成超时，请重试"
+        : privateFmEpisode?.status === "succeeded"
+        ? hasMergedPrivateFmAudio
+          ? "已生成完整音频"
+          : `共 ${privateFmEpisode.audioParts.length} 段音频`
+        : privateFmEpisode?.status === "failed"
+          ? privateFmEpisode.errorMessage ?? "生成失败"
+          : privateFmEpisode?.status === "script_ready" || hasPrivateFmScript
+            ? "口播稿已生成，正在生成音频"
+            : privateFmEpisode?.status === "queued" ||
+                privateFmEpisode?.status === "running"
+              ? "正在生成口播稿"
+              : "还没有生成音频";
+
+    return (
+      <section
+        data-testid="private-fm-section"
+        className="mt-4 rounded-2xl border border-border/65 bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-primary)_7%,var(--color-background)_93%),color-mix(in_oklab,var(--color-muted)_55%,var(--color-background)_45%))] px-4 py-3 dark:border-white/[0.06] dark:bg-[linear-gradient(180deg,rgba(94,106,210,0.12),rgba(255,255,255,0.025))]"
+        aria-label="私人 FM"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-background/80 ring-1 ring-border/70">
+              <Headphones className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold">私人 FM</h2>
+              <p className="text-xs text-muted-foreground">
+                {privateFmStatusText}
+              </p>
+            </div>
+          </div>
+
+          {isPrivateFmPending ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span
+                className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-muted-foreground/20 border-t-muted-foreground/70"
+                aria-hidden="true"
+              />
+              <span>生成中</span>
+            </div>
+          ) : (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={privateFmLoading}
+              onClick={onPrivateFmGenerateClick}
+            >
+              <Headphones />
+              <span>
+                {privateFmEpisode?.status === "failed"
+                  ? "重试"
+                  : isPrivateFmStale
+                    ? "重试"
+                  : canMergeLegacyPrivateFmAudio
+                    ? "合并音频"
+                  : privateFmEpisode?.status === "succeeded"
+                    ? "重新生成"
+                    : "生成"}
+              </span>
+            </Button>
+          )}
+        </div>
+
+        {privateFmEpisode?.status === "succeeded" && privateFmAudioSrc ? (
+          <div className="mt-3 space-y-2">
+            <audio
+              ref={privateFmAudioRef}
+              controls
+              className="w-full"
+              src={privateFmAudioSrc}
+              onEnded={hasMergedPrivateFmAudio ? undefined : onPrivateFmPartEnded}
+            />
+            {!hasMergedPrivateFmAudio && privateFmEpisode.audioParts.length > 1 ? (
+              <div className="text-xs text-muted-foreground">
+                正在播放第 {privateFmPartIndex + 1} /{" "}
+                {privateFmEpisode.audioParts.length} 段
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
     );
   }
 
@@ -1006,6 +1186,8 @@ export default function ArticleView({
                   </Button>
                 </div>
               ) : null}
+
+              {renderPrivateFmSection()}
             </div>
 
             {fulltextLoading ? (

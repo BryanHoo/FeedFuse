@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const connectMock = vi.fn();
 const queryMock = vi.fn();
@@ -42,6 +42,10 @@ describe('aiDigestLifecycleService', () => {
       query: queryMock,
       release: releaseMock,
     });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('reuses an existing category when categoryName matches', async () => {
@@ -116,6 +120,30 @@ describe('aiDigestLifecycleService', () => {
     expect(createAiDigestFeedMock).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ categoryId: 'cat-new' }),
+    );
+  });
+
+  it('initializes the first digest window to look back one interval', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-09T06:09:34.000Z'));
+    createAiDigestFeedMock.mockResolvedValue({ id: 'feed-1', iconUrl: '/ai-digest-icon.svg' });
+    createAiDigestConfigMock.mockResolvedValue({ feedId: 'feed-1' });
+
+    const pool = { connect: connectMock };
+    const { createAiDigestWithCategoryResolution } = await import('./aiDigestLifecycleService');
+
+    await createAiDigestWithCategoryResolution(pool as never, {
+      title: '每日新闻报告',
+      prompt: '总结新闻',
+      intervalMinutes: 240,
+      selectedFeedIds: ['source-1'],
+    });
+
+    expect(createAiDigestConfigMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        lastWindowEndAt: '2026-05-09T02:09:34.000Z',
+      }),
     );
   });
 });

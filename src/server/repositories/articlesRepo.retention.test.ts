@@ -1,9 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Pool } from 'pg';
 
+const deletePrivateFmAudioPaths = vi.fn();
+
+vi.mock('../private-fm/mediaStorage', () => ({
+  deletePrivateFmAudioPaths,
+}));
+
 describe('articlesRepo (retention)', () => {
   it('pruneFeedArticlesToLimit deletes oldest unstarred rows in a feed', async () => {
-    const query = vi.fn().mockResolvedValue({ rowCount: 2 });
+    const query = vi.fn().mockResolvedValue({ rows: [{ deletedCount: 2, audioPaths: [] }] });
     const pool = { query } as unknown as Pool;
     const mod = (await import('./articlesRepo')) as Record<string, unknown>;
 
@@ -28,7 +34,7 @@ describe('articlesRepo (retention)', () => {
   });
 
   it('pruneAllFeedsArticlesToLimit partitions deletions by feed and preserves starred rows', async () => {
-    const query = vi.fn().mockResolvedValue({ rowCount: 4 });
+    const query = vi.fn().mockResolvedValue({ rows: [{ deletedCount: 4, audioPaths: [] }] });
     const pool = { query } as unknown as Pool;
     const mod = (await import('./articlesRepo')) as Record<string, unknown>;
 
@@ -49,5 +55,19 @@ describe('articlesRepo (retention)', () => {
     expect(sql).toContain('delete_rank <= o.overflow_count');
     expect(sql).toContain('is_starred = false');
     expect(query.mock.calls[0]?.[1]).toEqual([1000]);
+  });
+
+  it('cleans private FM audio paths returned by the retention query', async () => {
+    deletePrivateFmAudioPaths.mockClear();
+    const query = vi.fn().mockResolvedValue({
+      rows: [{ deletedCount: 1, audioPaths: ['private-fm/episode-1/000.mp3'] }],
+    });
+    const pool = { query } as unknown as Pool;
+    const mod = (await import('./articlesRepo')) as typeof import('./articlesRepo');
+
+    const result = await mod.pruneFeedArticlesToLimit(pool, 'feed-1', 10);
+
+    expect(result.deletedCount).toBe(1);
+    expect(deletePrivateFmAudioPaths).toHaveBeenCalledWith(['private-fm/episode-1/000.mp3']);
   });
 });

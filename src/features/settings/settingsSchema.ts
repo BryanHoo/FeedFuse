@@ -3,6 +3,7 @@ import type {
   Category,
   GeneralSettings,
   LoggingSettings,
+  PrivateFmAudioFormat,
   PersistedSettings,
   RssSettings,
   RssSourceSetting,
@@ -40,6 +41,14 @@ const defaultAISettings: AIPersistedSettings = {
     useSharedAi: true,
     model: '',
     apiBaseUrl: '',
+  },
+  privateFm: {
+    apiBaseUrl: 'https://api.stepfun.com/v1',
+    model: 'stepaudio-2.5-tts',
+    voice: 'elegantgentle-female',
+    responseFormat: 'mp3',
+    speed: 1,
+    volume: 1,
   },
 };
 
@@ -93,6 +102,14 @@ function readNumberEnum<T extends number>(value: unknown, allowed: readonly T[],
   return typeof value === 'number' && allowed.includes(value as T) ? (value as T) : fallback;
 }
 
+function readBoundedNumber(value: unknown, fallback: number, min: number, max: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return Math.min(max, Math.max(min, value));
+}
+
 function normalizeGeneralSettings(input: Record<string, unknown>): GeneralSettings {
   const generalInput = isRecord(input.general) ? input.general : isRecord(input.appearance) ? input.appearance : input;
 
@@ -131,6 +148,7 @@ function normalizeGeneralSettings(input: Record<string, unknown>): GeneralSettin
 function normalizeAISettings(input: Record<string, unknown>): AIPersistedSettings {
   const aiInput = isRecord(input.ai) ? input.ai : {};
   const translationInput = isRecord(aiInput.translation) ? aiInput.translation : {};
+  const privateFmInput = isRecord(aiInput.privateFm) ? aiInput.privateFm : {};
 
   return {
     summaryEnabled: readBoolean(aiInput.summaryEnabled, defaultAISettings.summaryEnabled),
@@ -148,6 +166,18 @@ function normalizeAISettings(input: Record<string, unknown>): AIPersistedSetting
         translationInput.apiBaseUrl,
         defaultAISettings.translation.apiBaseUrl,
       ),
+    },
+    privateFm: {
+      apiBaseUrl: readString(privateFmInput.apiBaseUrl, defaultAISettings.privateFm.apiBaseUrl),
+      model: readString(privateFmInput.model, defaultAISettings.privateFm.model),
+      voice: readString(privateFmInput.voice, defaultAISettings.privateFm.voice),
+      responseFormat: readEnum(
+        privateFmInput.responseFormat,
+        ['mp3', 'wav', 'flac', 'opus', 'pcm'] as const,
+        defaultAISettings.privateFm.responseFormat as PrivateFmAudioFormat,
+      ),
+      speed: readBoundedNumber(privateFmInput.speed, defaultAISettings.privateFm.speed, 0.5, 2),
+      volume: readBoundedNumber(privateFmInput.volume, defaultAISettings.privateFm.volume, 0.1, 2),
     },
   };
 }

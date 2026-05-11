@@ -2,12 +2,14 @@ import { requireApiSession } from '@/server/auth/session';
 import { z } from 'zod';
 import { resolveAiConfigFingerprints } from '../../../../../server/ai/configFingerprints';
 import { getPool } from '../../../../../server/db/pool';
+import { resolveAiDigestRunWindow } from '../../../../../server/aiDigestWindow';
 import { ok, fail } from '../../../../../server/http/apiResponse';
 import { NotFoundError, ValidationError } from '../../../../../server/http/errors';
 import { numericIdSchema } from '../../../../../server/http/idSchemas';
 import { getAiApiKey, getUiSettings } from '../../../../../server/repositories/settingsRepo';
 import {
   createAiDigestRun,
+  getActiveAiDigestRunByFeedId,
   getAiDigestConfigByFeedId,
   getAiDigestRunByFeedIdAndWindowStartAt,
   updateAiDigestRun,
@@ -67,8 +69,20 @@ export async function POST(
     const config = await getAiDigestConfigByFeedId(pool, feedId);
     if (!config) return fail(new NotFoundError('AI digest config not found'));
 
-    const windowStartAt = config.lastWindowEndAt;
-    const windowEndAt = new Date().toISOString();
+    const active = await getActiveAiDigestRunByFeedId(pool, feedId);
+    if (active) {
+      await writeUserOperationStartedLog(pool, {
+        actionKey: 'aiDigest.generate',
+        source: 'app/api/ai-digests/[feedId]/generate',
+        context: { feedId, runId: active.id },
+      });
+      return ok({ enqueued: false, reason: 'already_running', runId: active.id });
+    }
+
+    const { windowStartAt, windowEndAt } = resolveAiDigestRunWindow({
+      now: new Date(),
+      intervalMinutes: config.intervalMinutes,
+    });
 
     const existing = await getAiDigestRunByFeedIdAndWindowStartAt(pool, { feedId, windowStartAt });
     if (existing && (existing.status === 'queued' || existing.status === 'running')) {

@@ -26,12 +26,16 @@ import {
   type AiDigestRunRow,
 } from '../server/repositories/aiDigestRepo';
 import { listFeeds } from '../server/repositories/feedsRepo';
+import { createPrivateFmEpisode } from '../server/repositories/privateFmRepo';
 import {
   writeUserOperationFailedLog,
   writeUserOperationStartedLog,
   writeUserOperationSucceededLog,
 } from '../server/logging/userOperationLogger';
 import { getAiApiKey, getUiSettings } from '../server/repositories/settingsRepo';
+import { getQueueSendOptions } from '../server/queue/contracts';
+import { JOB_PRIVATE_FM_GENERATE } from '../server/queue/jobs';
+import { enqueueWithResult } from '../server/queue/queue';
 import { sanitizeContent } from '../server/rss/sanitizeContent';
 
 const DEFAULT_DIGEST_MODEL = 'gpt-4o-mini';
@@ -56,6 +60,8 @@ type AiDigestGenerateDeps = {
   pruneFeedArticlesToLimit: typeof pruneFeedArticlesToLimit;
   queryArticleIdByDedupeKey: (pool: Pool, input: { feedId: string; dedupeKey: string }) => Promise<string | null>;
   replaceAiDigestRunSources: typeof replaceAiDigestRunSources;
+  createPrivateFmEpisode: typeof createPrivateFmEpisode;
+  enqueuePrivateFmGenerate: (episodeId: string) => Promise<{ jobId: string | null }>;
 };
 
 const defaultDeps: AiDigestGenerateDeps = {
@@ -73,6 +79,15 @@ const defaultDeps: AiDigestGenerateDeps = {
   insertArticleIgnoreDuplicate,
   pruneFeedArticlesToLimit,
   replaceAiDigestRunSources,
+  createPrivateFmEpisode,
+  enqueuePrivateFmGenerate: async (episodeId) => {
+    const result = await enqueueWithResult(
+      JOB_PRIVATE_FM_GENERATE,
+      { episodeId },
+      getQueueSendOptions(JOB_PRIVATE_FM_GENERATE, { episodeId }),
+    );
+    return { jobId: result.status === 'enqueued' ? result.jobId : null };
+  },
   queryArticleIdByDedupeKey: async (pool, input) => {
     const { rows } = await pool.query<{ id: string }>(
       `
@@ -591,6 +606,23 @@ async function executeAiDigestRun(input: {
     errorCode: null,
     errorMessage: null,
   });
+
+  if (config.privateFmEnabled) {
+    const episode = await input.deps.createPrivateFmEpisode(input.pool, {
+      articleId,
+      runId: input.run.id,
+      status: 'queued',
+    });
+    const enqueueResult = await input.deps.enqueuePrivateFmGenerate(episode.id);
+    if (enqueueResult.jobId) {
+      await input.deps.createPrivateFmEpisode(input.pool, {
+        articleId,
+        runId: input.run.id,
+        status: 'queued',
+        jobId: enqueueResult.jobId,
+      });
+    }
+  }
 
   await input.deps.updateAiDigestConfigLastWindowEndAt(input.pool, input.run.feedId, input.run.windowEndAt);
   return 'succeeded';

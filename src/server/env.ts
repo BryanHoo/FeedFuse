@@ -12,6 +12,11 @@ const envSchema = z.object({
       typeof value === 'string' && value.trim().length === 0 ? undefined : value,
     z.string().min(1).optional(),
   ),
+  FEEDFUSE_MEDIA_DIR: z.preprocess(
+    (value) =>
+      typeof value === 'string' && value.trim().length === 0 ? undefined : value,
+    z.string().min(1).optional(),
+  ),
 });
 
 export type ServerEnv = z.infer<typeof envSchema>;

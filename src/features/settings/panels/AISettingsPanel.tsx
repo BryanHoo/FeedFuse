@@ -36,15 +36,25 @@ export default function AISettingsPanel({
   const hasTranslationApiKey = draft.session.ai.hasTranslationApiKey ?? false;
   const clearTranslationApiKey =
     draft.session.ai.clearTranslationApiKey ?? false;
+  const privateFm = ai.privateFm;
+  const privateFmApiKey = draft.session.ai.privateFmApiKey ?? "";
+  const hasPrivateFmApiKey = draft.session.ai.hasPrivateFmApiKey ?? false;
+  const clearPrivateFmApiKey = draft.session.ai.clearPrivateFmApiKey ?? false;
 
   const apiKeyInputRef = useRef<HTMLInputElement>(null);
   const translationApiKeyInputRef = useRef<HTMLInputElement>(null);
+  const privateFmApiKeyInputRef = useRef<HTMLInputElement>(null);
 
   const apiKeyStatus = resolveApiKeyStatus(apiKey, hasApiKey, clearApiKey);
   const translationApiKeyStatus = resolveApiKeyStatus(
     translationApiKey,
     hasTranslationApiKey,
     clearTranslationApiKey,
+  );
+  const privateFmApiKeyStatus = resolveApiKeyStatus(
+    privateFmApiKey,
+    hasPrivateFmApiKey,
+    clearPrivateFmApiKey,
   );
 
   return (
@@ -345,6 +355,212 @@ export default function AISettingsPanel({
               </div>
             </>
           ) : null}
+
+          <div className="px-4 py-3.5">
+            <div>
+              <p className="text-sm font-medium text-foreground">
+                私人 FM / StepFun TTS
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                智能报告源开启私人 FM 后，会使用这里的 StepFun 配置生成音频。
+              </p>
+            </div>
+          </div>
+
+          <div className="px-4 py-3.5">
+            <Label htmlFor="private-fm-api-base-url" className="mb-2 block">
+              StepFun API 地址
+            </Label>
+            <Input
+              id="private-fm-api-base-url"
+              name="private-fm-api-base-url"
+              type="url"
+              inputMode="url"
+              autoComplete="off"
+              spellCheck={false}
+              value={privateFm.apiBaseUrl}
+              onChange={(event) =>
+                onChange((nextDraft) => {
+                  nextDraft.persisted.ai.privateFm.apiBaseUrl =
+                    event.target.value;
+                })
+              }
+              placeholder="例如：https://api.stepfun.com/v1"
+            />
+            {errors["ai.privateFm.apiBaseUrl"] ? (
+              <p className="mt-1.5 text-xs text-destructive">
+                {errors["ai.privateFm.apiBaseUrl"]}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="grid gap-0 border-t border-border sm:grid-cols-2 sm:divide-x sm:divide-border">
+            <div className="px-4 py-3.5">
+              <Label htmlFor="private-fm-model" className="mb-2 block">
+                TTS 模型
+              </Label>
+              <Input
+                id="private-fm-model"
+                name="private-fm-model"
+                autoComplete="off"
+                spellCheck={false}
+                value={privateFm.model}
+                onChange={(event) =>
+                  onChange((nextDraft) => {
+                    nextDraft.persisted.ai.privateFm.model = event.target.value;
+                  })
+                }
+                placeholder="例如：stepaudio-2.5-tts"
+              />
+            </div>
+
+            <div className="px-4 py-3.5">
+              <Label htmlFor="private-fm-voice" className="mb-2 block">
+                音色
+              </Label>
+              <Input
+                id="private-fm-voice"
+                name="private-fm-voice"
+                autoComplete="off"
+                spellCheck={false}
+                value={privateFm.voice}
+                onChange={(event) =>
+                  onChange((nextDraft) => {
+                    nextDraft.persisted.ai.privateFm.voice = event.target.value;
+                  })
+                }
+                placeholder="例如：elegantgentle-female"
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-0 border-t border-border sm:grid-cols-3 sm:divide-x sm:divide-border">
+            <div className="px-4 py-3.5">
+              <Label htmlFor="private-fm-format" className="mb-2 block">
+                音频格式
+              </Label>
+              <Input
+                id="private-fm-format"
+                name="private-fm-format"
+                autoComplete="off"
+                spellCheck={false}
+                value={privateFm.responseFormat}
+                onChange={(event) =>
+                  onChange((nextDraft) => {
+                    const value = event.target.value;
+                    if (["mp3", "wav", "flac", "opus", "pcm"].includes(value)) {
+                      nextDraft.persisted.ai.privateFm.responseFormat =
+                        value as typeof privateFm.responseFormat;
+                    }
+                  })
+                }
+                placeholder="mp3"
+              />
+            </div>
+
+            <div className="px-4 py-3.5">
+              <Label htmlFor="private-fm-speed" className="mb-2 block">
+                语速
+              </Label>
+              <Input
+                id="private-fm-speed"
+                name="private-fm-speed"
+                type="number"
+                min="0.5"
+                max="2"
+                step="0.1"
+                value={privateFm.speed}
+                onChange={(event) =>
+                  onChange((nextDraft) => {
+                    nextDraft.persisted.ai.privateFm.speed = Number(event.target.value);
+                  })
+                }
+              />
+            </div>
+
+            <div className="px-4 py-3.5">
+              <Label htmlFor="private-fm-volume" className="mb-2 block">
+                音量
+              </Label>
+              <Input
+                id="private-fm-volume"
+                name="private-fm-volume"
+                type="number"
+                min="0.1"
+                max="2"
+                step="0.1"
+                value={privateFm.volume}
+                onChange={(event) =>
+                  onChange((nextDraft) => {
+                    nextDraft.persisted.ai.privateFm.volume = Number(event.target.value);
+                  })
+                }
+              />
+            </div>
+          </div>
+
+          <div className="px-4 py-3.5">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <Label htmlFor="private-fm-api-key">StepFun API 密钥</Label>
+              <Badge variant={privateFmApiKeyStatus.variant}>
+                {privateFmApiKeyStatus.label}
+              </Badge>
+            </div>
+            <Input
+              id="private-fm-api-key"
+              name="private-fm-api-key"
+              type="password"
+              autoComplete="off"
+              spellCheck={false}
+              ref={privateFmApiKeyInputRef}
+              defaultValue={privateFmApiKey}
+              onBlur={(event) => {
+                if (
+                  !privateFmApiKey.trim() &&
+                  hasPrivateFmApiKey &&
+                  !clearPrivateFmApiKey
+                ) {
+                  event.currentTarget.value = "";
+                }
+              }}
+              onChange={(event) =>
+                onChange((nextDraft) => {
+                  nextDraft.session.ai.privateFmApiKey = event.target.value;
+                  nextDraft.session.ai.clearPrivateFmApiKey = false;
+                })
+              }
+              placeholder="例如：sk-…"
+            />
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-muted-foreground">
+                {hasPrivateFmApiKey
+                  ? "保留当前密钥可留空；如需删除，请点击“删除已保存的密钥”。"
+                  : "未配置时，私人 FM 会生成失败并提示补充 StepFun 密钥。"}
+              </p>
+              {hasPrivateFmApiKey ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={clearPrivateFmApiKey ? "outline" : "destructive"}
+                  className="h-8"
+                  onClick={() =>
+                    onChange((nextDraft) => {
+                      if (privateFmApiKeyInputRef.current) {
+                        privateFmApiKeyInputRef.current.value = "";
+                      }
+                      nextDraft.session.ai.privateFmApiKey = "";
+                      nextDraft.session.ai.clearPrivateFmApiKey =
+                        !clearPrivateFmApiKey;
+                    })
+                  }
+                >
+                  {clearPrivateFmApiKey
+                    ? "保留已保存的密钥"
+                    : "删除已保存的密钥"}
+                </Button>
+              ) : null}
+            </div>
+          </div>
         </div>
       </div>
     </section>

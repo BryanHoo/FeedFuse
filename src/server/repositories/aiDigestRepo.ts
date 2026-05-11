@@ -17,6 +17,7 @@ export interface AiDigestConfigRow {
   selectedFeedIds: string[];
   selectedCategoryIds: string[];
   lastWindowEndAt: string;
+  privateFmEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -30,6 +31,7 @@ export interface AiDigestRunRow {
   candidateTotal: number;
   selectedCount: number;
   articleId: string | null;
+  privateFmEnabled: boolean;
   model: string | null;
   errorCode: string | null;
   errorMessage: string | null;
@@ -64,6 +66,7 @@ export async function createAiDigestConfig(
     topN?: number;
     selectedFeedIds: string[];
     lastWindowEndAt: string;
+    privateFmEnabled?: boolean;
   },
 ): Promise<AiDigestConfigRow> {
   const { rows } = await db.query<AiDigestConfigRow>(
@@ -75,9 +78,10 @@ export async function createAiDigestConfig(
         top_n,
         selected_feed_ids,
         selected_category_ids,
-        last_window_end_at
+        last_window_end_at,
+        private_fm_enabled
       )
-      values ($1, $2, $3, $4, $5::bigint[], '{}'::bigint[], $6::timestamptz)
+      values ($1, $2, $3, $4, $5::bigint[], '{}'::bigint[], $6::timestamptz, $7)
       returning
         feed_id as "feedId",
         prompt,
@@ -86,6 +90,7 @@ export async function createAiDigestConfig(
         selected_feed_ids as "selectedFeedIds",
         selected_category_ids as "selectedCategoryIds",
         last_window_end_at as "lastWindowEndAt",
+        private_fm_enabled as "privateFmEnabled",
         created_at as "createdAt",
         updated_at as "updatedAt"
     `,
@@ -96,6 +101,7 @@ export async function createAiDigestConfig(
       input.topN ?? 500,
       input.selectedFeedIds,
       input.lastWindowEndAt,
+      input.privateFmEnabled ?? false,
     ],
   );
   return rows[0];
@@ -115,6 +121,7 @@ export async function getAiDigestConfigByFeedId(
         selected_feed_ids as "selectedFeedIds",
         selected_category_ids as "selectedCategoryIds",
         last_window_end_at as "lastWindowEndAt",
+        private_fm_enabled as "privateFmEnabled",
         created_at as "createdAt",
         updated_at as "updatedAt"
       from ai_digest_configs
@@ -135,10 +142,11 @@ export async function updateAiDigestConfig(
     topN: number;
     selectedFeedIds: string[];
     lastWindowEndAt: string;
+    privateFmEnabled: boolean;
   }>,
 ): Promise<AiDigestConfigRow | null> {
   const fields: string[] = [];
-  const values: Array<string | number | string[]> = [];
+  const values: Array<string | number | string[] | boolean> = [];
   let paramIndex = 1;
 
   if (typeof patch.prompt !== 'undefined') {
@@ -161,6 +169,10 @@ export async function updateAiDigestConfig(
     fields.push(`last_window_end_at = $${paramIndex++}::timestamptz`);
     values.push(patch.lastWindowEndAt);
   }
+  if (typeof patch.privateFmEnabled !== 'undefined') {
+    fields.push(`private_fm_enabled = $${paramIndex++}`);
+    values.push(patch.privateFmEnabled);
+  }
   if (fields.length === 0) {
     return getAiDigestConfigByFeedId(db, feedId);
   }
@@ -181,6 +193,7 @@ export async function updateAiDigestConfig(
         selected_feed_ids as "selectedFeedIds",
         selected_category_ids as "selectedCategoryIds",
         last_window_end_at as "lastWindowEndAt",
+        private_fm_enabled as "privateFmEnabled",
         created_at as "createdAt",
         updated_at as "updatedAt"
     `,
@@ -241,6 +254,7 @@ export async function getAiDigestRunByFeedIdAndWindowStartAt(
         candidate_total as "candidateTotal",
         selected_count as "selectedCount",
         article_id as "articleId",
+        false as "privateFmEnabled",
         model,
         error_code as "errorCode",
         error_message as "errorMessage",
@@ -256,6 +270,39 @@ export async function getAiDigestRunByFeedIdAndWindowStartAt(
   return rows[0] ?? null;
 }
 
+export async function getActiveAiDigestRunByFeedId(
+  db: DbClient,
+  feedId: string,
+): Promise<AiDigestRunRow | null> {
+  const { rows } = await db.query<AiDigestRunRow>(
+    `
+      select
+        ai_digest_runs.id,
+        ai_digest_runs.feed_id as "feedId",
+        ai_digest_runs.window_start_at as "windowStartAt",
+        ai_digest_runs.window_end_at as "windowEndAt",
+        ai_digest_runs.status,
+        ai_digest_runs.candidate_total as "candidateTotal",
+        ai_digest_runs.selected_count as "selectedCount",
+        ai_digest_runs.article_id as "articleId",
+        coalesce(c.private_fm_enabled, false) as "privateFmEnabled",
+        ai_digest_runs.model,
+        ai_digest_runs.error_code as "errorCode",
+        ai_digest_runs.error_message as "errorMessage",
+        ai_digest_runs.job_id as "jobId",
+        ai_digest_runs.created_at as "createdAt",
+        ai_digest_runs.updated_at as "updatedAt"
+      from ai_digest_runs
+      left join ai_digest_configs c on c.feed_id = ai_digest_runs.feed_id
+      where ai_digest_runs.feed_id = $1 and ai_digest_runs.status in ('queued', 'running')
+      order by ai_digest_runs.created_at desc, ai_digest_runs.id desc
+      limit 1
+    `,
+    [feedId],
+  );
+  return rows[0] ?? null;
+}
+
 export async function getAiDigestRunById(
   db: DbClient,
   runId: string,
@@ -263,22 +310,24 @@ export async function getAiDigestRunById(
   const { rows } = await db.query<AiDigestRunRow>(
     `
       select
-        id,
-        feed_id as "feedId",
-        window_start_at as "windowStartAt",
-        window_end_at as "windowEndAt",
-        status,
-        candidate_total as "candidateTotal",
-        selected_count as "selectedCount",
-        article_id as "articleId",
-        model,
-        error_code as "errorCode",
-        error_message as "errorMessage",
-        job_id as "jobId",
-        created_at as "createdAt",
-        updated_at as "updatedAt"
+        ai_digest_runs.id,
+        ai_digest_runs.feed_id as "feedId",
+        ai_digest_runs.window_start_at as "windowStartAt",
+        ai_digest_runs.window_end_at as "windowEndAt",
+        ai_digest_runs.status,
+        ai_digest_runs.candidate_total as "candidateTotal",
+        ai_digest_runs.selected_count as "selectedCount",
+        ai_digest_runs.article_id as "articleId",
+        coalesce(c.private_fm_enabled, false) as "privateFmEnabled",
+        ai_digest_runs.model,
+        ai_digest_runs.error_code as "errorCode",
+        ai_digest_runs.error_message as "errorMessage",
+        ai_digest_runs.job_id as "jobId",
+        ai_digest_runs.created_at as "createdAt",
+        ai_digest_runs.updated_at as "updatedAt"
       from ai_digest_runs
-      where id = $1
+      left join ai_digest_configs c on c.feed_id = ai_digest_runs.feed_id
+      where ai_digest_runs.id = $1
       limit 1
     `,
     [runId],
@@ -309,6 +358,7 @@ export async function createAiDigestRun(
         candidate_total as "candidateTotal",
         selected_count as "selectedCount",
         article_id as "articleId",
+        false as "privateFmEnabled",
         model,
         error_code as "errorCode",
         error_message as "errorMessage",
