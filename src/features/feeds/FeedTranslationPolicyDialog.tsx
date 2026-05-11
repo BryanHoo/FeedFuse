@@ -102,7 +102,7 @@ export default function FeedTranslationPolicyDialog({
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2.5">
             <div className="space-y-1">
-              <Label htmlFor="translation-title">收到新文章时自动翻译标题</Label>
+              <Label>收到新文章时自动翻译标题</Label>
               <p className="text-xs text-muted-foreground">新文章入库后自动翻译标题。</p>
             </div>
             <Switch
@@ -115,7 +115,7 @@ export default function FeedTranslationPolicyDialog({
 
           <div className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2.5">
             <div className="space-y-1">
-              <Label htmlFor="translation-body-fetch">收到新文章时自动翻译正文</Label>
+              <Label>收到新文章时自动翻译正文</Label>
               <p className="text-xs text-muted-foreground">新文章入库后会自动加入正文翻译队列。</p>
             </div>
             <Switch
@@ -130,7 +130,7 @@ export default function FeedTranslationPolicyDialog({
 
           <div className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2.5">
             <div className="space-y-1">
-              <Label htmlFor="translation-body-open">打开文章时自动翻译正文</Label>
+              <Label>打开文章时自动翻译正文</Label>
               <p className="text-xs text-muted-foreground">打开文章后会自动加入正文翻译队列。</p>
             </div>
             <Switch

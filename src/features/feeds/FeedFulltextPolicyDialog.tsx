@@ -91,7 +91,7 @@ export default function FeedFulltextPolicyDialog({
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2.5">
             <div className="space-y-1">
-              <Label htmlFor="fulltext-on-open">打开文章时自动抓取全文</Label>
+              <Label>打开文章时自动抓取全文</Label>
               <p className="text-xs text-muted-foreground">打开文章后会自动尝试补齐全文内容。</p>
             </div>
             <Switch
@@ -106,7 +106,7 @@ export default function FeedFulltextPolicyDialog({
 
           <div className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2.5">
             <div className="space-y-1">
-              <Label htmlFor="fulltext-on-fetch">入库时自动抓取全文</Label>
+              <Label>入库时自动抓取全文</Label>
               <p className="text-xs text-muted-foreground">新文章进入过滤链路时会优先尝试抓取全文，再决定是否展示。</p>
             </div>
             <Switch

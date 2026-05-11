@@ -33,6 +33,7 @@ export default function RenameCategoryDialog({
   onOpenChange,
   onSubmit,
 }: RenameCategoryDialogProps) {
+  const categoryNameLabelId = 'rename-category-name-label';
   const [name, setName] = useState(category?.name ?? '');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -79,11 +80,12 @@ export default function RenameCategoryDialog({
         </DialogHeader>
 
         <div className="grid gap-1.5">
-          <Label htmlFor="rename-category-name" className="text-xs">
+          <Label id={categoryNameLabelId} className="text-xs">
             分类名称
           </Label>
           <Input
             id="rename-category-name"
+            aria-labelledby={categoryNameLabelId}
             value={name}
             onChange={(event) => {
               setName(event.target.value);

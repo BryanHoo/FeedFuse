@@ -810,7 +810,12 @@ export default function FeedList({
               setEditFeedId(null);
             }
           }}
-          onSubmit={(payload) => updateFeed(activeEditFeed.id, payload)}
+          onSubmit={(payload) =>
+            updateFeed(activeEditFeed.id, payload, {
+              syncInBackground: true,
+              refreshAfterSave: true,
+            })
+          }
         />
       ) : null}
 

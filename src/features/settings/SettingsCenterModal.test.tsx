@@ -290,6 +290,7 @@ describe('SettingsCenterModal', () => {
     expect(screen.getByTestId('settings-section-tab-general')).toBeInTheDocument();
     expect(screen.queryByTestId('settings-section-tab-categories')).not.toBeInTheDocument();
     expect(screen.getByTestId('settings-section-tab-rss')).toBeInTheDocument();
+    expect(screen.getByText('账号与安全')).toBeInTheDocument();
     expect(screen.getByText('主题')).toBeInTheDocument();
   });
 
@@ -323,7 +324,20 @@ describe('SettingsCenterModal', () => {
 
     expect(await screen.findByLabelText('当前密码')).toBeInTheDocument();
     expect(screen.getByLabelText('新密码')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '退出登录' })).toBeInTheDocument();
+    expect(screen.getByText('退出登录', { selector: 'p' })).toBeInTheDocument();
+    const logoutButton = screen.getByRole('button', { name: '退出登录' });
+    expect(logoutButton).toBeInTheDocument();
+
+    const countLogoutCalls = () =>
+      (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.filter(([input, init]) => {
+        const url = getFetchCallUrl(input as RequestInfo | URL);
+        const method = getFetchCallMethod(input as RequestInfo | URL, init as RequestInit | undefined);
+        return url.includes('/api/auth/logout') && method === 'POST';
+      }).length;
+
+    fireEvent.click(logoutButton);
+    expect(screen.getByText('确认退出登录')).toBeInTheDocument();
+    expect(countLogoutCalls()).toBe(0);
   });
 
   it('does not show removed sidebar-collapsed and rss-fulltext settings items', async () => {

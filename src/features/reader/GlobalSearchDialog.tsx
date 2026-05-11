@@ -61,6 +61,7 @@ export default function GlobalSearchDialog({
   onOpenChange,
   onSelectResult,
 }: GlobalSearchDialogProps) {
+  const searchInputLabelId = 'global-search-input-label';
   const inputRef = useRef<HTMLInputElement | null>(null);
   const requestSequenceRef = useRef(0);
   const searchTimerRef = useRef<number | null>(null);
@@ -155,14 +156,15 @@ export default function GlobalSearchDialog({
         </DialogHeader>
 
         <div className="border-b border-border/60 px-5 py-4">
-          <label htmlFor="global-search-input" className="sr-only">
+          <span id={searchInputLabelId} className="sr-only">
             搜索文章
-          </label>
+          </span>
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               ref={inputRef}
               id="global-search-input"
+              aria-labelledby={searchInputLabelId}
               value={query}
               onChange={(event) => {
                 const nextQuery = event.target.value;

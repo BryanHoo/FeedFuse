@@ -92,11 +92,7 @@ export default function OpmlTransferSection({
             <p>已跳过 {lastImportResult.invalidCount} 个无效条目</p>
             <p>已创建 {lastImportResult.createdCategoryCount} 个分类</p>
           </div>
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            还没有导入记录。选择 OPML 文件后，这里会展示最近一次导入摘要。
-          </p>
-        )}
+        ) : null}
       </div>
     </section>
   );

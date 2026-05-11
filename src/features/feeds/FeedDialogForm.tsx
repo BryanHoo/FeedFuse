@@ -70,7 +70,9 @@ export default function FeedDialogForm({
   validationMessage,
 }: FeedDialogFormProps) {
   const urlInputId = `${fieldIdPrefix}-url`;
+  const urlLabelId = `${fieldIdPrefix}-url-label`;
   const titleInputId = `${fieldIdPrefix}-title`;
+  const titleLabelId = `${fieldIdPrefix}-title-label`;
   const categoryInputId = `${fieldIdPrefix}-category`;
   const categoryLabelId = `${fieldIdPrefix}-category-label`;
   const urlMessageId = `${fieldIdPrefix}-url-message`;
@@ -92,7 +94,7 @@ export default function FeedDialogForm({
 
         <div className="grid gap-4">
           <div className="grid gap-1.5">
-            <Label htmlFor={urlInputId} className="text-xs">
+            <Label id={urlLabelId} className="text-xs">
               URL
             </Label>
             <Input
@@ -107,6 +109,7 @@ export default function FeedDialogForm({
               onChange={(event) => onUrlChange(event.target.value)}
               onBlur={(event) => onUrlBlur(event.currentTarget.value)}
               placeholder="例如：https://example.com/feed.xml…"
+              aria-labelledby={urlLabelId}
               aria-invalid={urlFieldError ? 'true' : 'false'}
               aria-describedby={urlMessageId}
               aria-errormessage={urlFieldError ? urlMessageId : undefined}
@@ -129,7 +132,7 @@ export default function FeedDialogForm({
           </div>
 
           <div className="grid gap-1.5">
-            <Label htmlFor={titleInputId} className="text-xs">
+            <Label id={titleLabelId} className="text-xs">
               名称
             </Label>
             <Input
@@ -142,6 +145,7 @@ export default function FeedDialogForm({
               onChange={(event) => onTitleChange(event.target.value)}
               onBlur={onTitleBlur}
               placeholder="例如：The Verge…"
+              aria-labelledby={titleLabelId}
               aria-invalid={titleFieldError ? 'true' : 'false'}
               aria-describedby={titleFieldError ? titleMessageId : undefined}
               aria-errormessage={titleFieldError ? titleMessageId : undefined}

@@ -2,7 +2,6 @@ import type { FormEvent, RefObject } from "react";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -83,11 +82,16 @@ export default function AiDigestDialogForm({
 }: AiDigestDialogFormProps) {
   const isBusy = loadingInitialValues || submitting;
   const titleInputId = `${fieldIdPrefix}-title`;
+  const titleLabelId = `${fieldIdPrefix}-title-label`;
   const promptInputId = `${fieldIdPrefix}-prompt`;
+  const promptLabelId = `${fieldIdPrefix}-prompt-label`;
   const intervalInputId = `${fieldIdPrefix}-interval`;
   const privateFmInputId = `${fieldIdPrefix}-private-fm`;
+  const intervalLabelId = `${fieldIdPrefix}-interval-label`;
   const categoryInputId = `${fieldIdPrefix}-category`;
+  const categoryLabelId = `${fieldIdPrefix}-category-label`;
   const submitErrorId = `${fieldIdPrefix}-submit-error`;
+  // 使用 aria-labelledby 保留可访问名称，同时避免点击 label 触发控件聚焦。
 
   return (
     <form
@@ -99,9 +103,9 @@ export default function AiDigestDialogForm({
       <div className="space-y-4 border-b border-border pb-4">
         <div className="grid gap-4">
           <div className="grid gap-1.5">
-            <Label htmlFor={titleInputId} className="text-xs">
+            <p id={titleLabelId} className="text-xs font-medium leading-none">
               标题
-            </Label>
+            </p>
             <Input
               ref={titleInputRef}
               id={titleInputId}
@@ -112,6 +116,7 @@ export default function AiDigestDialogForm({
               onChange={(event) => onTitleChange(event.target.value)}
               placeholder="例如：每日科技智能报告"
               disabled={isBusy}
+              aria-labelledby={titleLabelId}
               aria-invalid={titleFieldError ? "true" : "false"}
               aria-errormessage={
                 titleFieldError ? `${titleInputId}-error` : undefined
@@ -129,9 +134,9 @@ export default function AiDigestDialogForm({
           </div>
 
           <div className="grid gap-1.5">
-            <Label htmlFor={promptInputId} className="text-xs">
+            <p id={promptLabelId} className="text-xs font-medium leading-none">
               AI 提示词
-            </Label>
+            </p>
             <Textarea
               id={promptInputId}
               name="prompt"
@@ -140,6 +145,7 @@ export default function AiDigestDialogForm({
               placeholder="例如：请围绕 AI 行业进展整理主题脉络、关键信号、分歧点与后续建议。"
               className="min-h-24"
               disabled={isBusy}
+              aria-labelledby={promptLabelId}
               aria-invalid={promptFieldError ? "true" : "false"}
               aria-errormessage={
                 promptFieldError ? `${promptInputId}-error` : undefined
@@ -161,7 +167,7 @@ export default function AiDigestDialogForm({
           </div>
 
           <div className="grid gap-1.5">
-            <Label className="text-xs">来源</Label>
+            <p className="text-xs font-medium leading-none">来源</p>
             <AiDigestSourceTreeSelect
               categories={sourceCategoryOptions}
               feeds={sourceFeedOptions}
@@ -178,15 +184,19 @@ export default function AiDigestDialogForm({
           </div>
 
           <div className="grid gap-1.5">
-            <Label htmlFor={intervalInputId} className="text-xs">
+            <p id={intervalLabelId} className="text-xs font-medium leading-none">
               重复时间
-            </Label>
+            </p>
             <Select
               value={String(intervalMinutes)}
               onValueChange={(value) => onIntervalMinutesChange(Number(value))}
               disabled={isBusy}
             >
-              <SelectTrigger id={intervalInputId} className="w-full">
+              <SelectTrigger
+                id={intervalInputId}
+                className="w-full"
+                aria-labelledby={intervalLabelId}
+              >
                 <SelectValue placeholder="选择重复时间" />
               </SelectTrigger>
               <SelectContent>
@@ -221,11 +231,12 @@ export default function AiDigestDialogForm({
           </div>
 
           <div className="grid gap-1.5">
-            <Label htmlFor={categoryInputId} className="text-xs">
+            <p id={categoryLabelId} className="text-xs font-medium leading-none">
               分类
-            </Label>
+            </p>
             <CreatableCategoryField
               inputId={categoryInputId}
+              labelledBy={categoryLabelId}
               value={categoryInput}
               options={categoryOptions}
               onChange={onCategoryInputChange}

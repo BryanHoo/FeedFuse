@@ -94,7 +94,7 @@ export default function FeedSummaryPolicyDialog({
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2.5">
             <div className="space-y-1">
-              <Label htmlFor="summary-on-fetch">收到新文章时自动生成摘要</Label>
+              <Label>收到新文章时自动生成摘要</Label>
               <p className="text-xs text-muted-foreground">新文章入库后会自动加入摘要队列。</p>
             </div>
             <Switch
@@ -109,7 +109,7 @@ export default function FeedSummaryPolicyDialog({
 
           <div className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2.5">
             <div className="space-y-1">
-              <Label htmlFor="summary-on-open">打开文章时自动生成摘要</Label>
+              <Label>打开文章时自动生成摘要</Label>
               <p className="text-xs text-muted-foreground">打开文章后会自动加入摘要队列。</p>
             </div>
             <Switch

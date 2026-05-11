@@ -26,6 +26,10 @@ import {
 const READER_SELECTION_VIEW_PARAM = 'view';
 const READER_SELECTION_ARTICLE_PARAM = 'article';
 type ReaderSelectionHistoryMode = 'replace' | 'push' | 'none';
+type FeedUpdateOptions = {
+  syncInBackground?: boolean;
+  refreshAfterSave?: boolean;
+};
 
 const DEFAULT_READER_SELECTION: { selectedView: ViewType; selectedArticleId: string | null } = {
   selectedView: 'all',
@@ -188,6 +192,7 @@ interface AppState {
       titleTranslateEnabled?: boolean;
       articleListDisplayMode?: 'card' | 'list';
     },
+    options?: FeedUpdateOptions,
   ) => Promise<void>;
   removeFeed: (feedId: string) => Promise<void>;
   toggleStar: (articleId: string) => void;
@@ -391,6 +396,67 @@ function queueReaderSelectionHistoryMode(mode: ReaderSelectionHistoryMode): void
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function runSilently(task: () => Promise<void>): Promise<boolean> {
+  try {
+    await task();
+    return true;
+  } catch (err) {
+    console.error(err);
+    return false;
+  }
+}
+
+async function pollFeedSnapshotUntilArticlesAppear(
+  get: () => AppState,
+  feedId: string,
+): Promise<void> {
+  for (let attempt = 0; attempt < ADD_FEED_SNAPSHOT_POLL_MAX_ATTEMPTS; attempt += 1) {
+    if (get().selectedView !== feedId) return;
+
+    if (attempt > 0) {
+      await sleep(ADD_FEED_SNAPSHOT_POLL_INTERVAL_MS);
+      if (get().selectedView !== feedId) return;
+    }
+
+    await get().loadSnapshot({ view: feedId });
+
+    if (get().selectedView !== feedId) return;
+
+    const hasFeedArticles = get().articles.some((article) => article.feedId === feedId);
+    if (hasFeedArticles) return;
+  }
+}
+
+async function loadCurrentSnapshotSilently(get: () => AppState): Promise<void> {
+  await runSilently(async () => {
+    await get().loadSnapshot({ view: get().selectedView });
+  });
+}
+
+async function syncFeedInBackground(
+  get: () => AppState,
+  feedId: string,
+  options: {
+    reloadCurrentViewWhenUnselected: boolean;
+  },
+): Promise<void> {
+  const didRefreshStart = await runSilently(async () => {
+    await refreshFeed(feedId, { notifyOnError: false });
+  });
+  if (!didRefreshStart) return;
+
+  if (get().selectedView === feedId) {
+    await runSilently(async () => {
+      await pollFeedSnapshotUntilArticlesAppear(get, feedId);
+    });
+    return;
+  }
+
+  if (options.reloadCurrentViewWhenUnselected) {
+    await loadCurrentSnapshotSilently(get);
+  }
 }
 
 function buildSnapshotRequestInput(
@@ -845,27 +911,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       ...INITIAL_ARTICLE_LIST_SESSION,
     }));
 
-    try {
-      await refreshFeed(created.id, { notifyOnError: false });
-
-      for (let attempt = 0; attempt < ADD_FEED_SNAPSHOT_POLL_MAX_ATTEMPTS; attempt += 1) {
-        if (get().selectedView !== created.id) return;
-
-        if (attempt > 0) {
-          await sleep(ADD_FEED_SNAPSHOT_POLL_INTERVAL_MS);
-          if (get().selectedView !== created.id) return;
-        }
-
-        await get().loadSnapshot({ view: created.id });
-
-        if (get().selectedView !== created.id) return;
-
-        const hasFeedArticles = get().articles.some((article) => article.feedId === created.id);
-        if (hasFeedArticles) return;
-      }
-    } catch (err) {
-      console.error(err);
-    }
+    // 保存成功后先返回给 UI，后续拉取与快照轮询在后台完成，避免弹窗被刷新流程阻塞。
+    void syncFeedInBackground(get, created.id, { reloadCurrentViewWhenUnselected: false });
   },
 
   addAiDigest: async (payload) => {
@@ -931,7 +978,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  updateFeed: async (feedId, patch) => {
+  updateFeed: async (feedId, patch, options) => {
     const updated = await patchFeed(feedId, patch, { notifyOnError: false });
     set((state) => {
       const categoryNameById = new Map(state.categories.map((category) => [category.id, category.name]));
@@ -963,7 +1010,22 @@ export const useAppStore = create<AppState>((set, get) => ({
       };
     });
 
+    if (options?.syncInBackground) {
+      if (options.refreshAfterSave) {
+        // RSS 编辑弹窗在关闭后再后台拉取，避免保存流程等待刷新完成。
+        void syncFeedInBackground(get, feedId, { reloadCurrentViewWhenUnselected: true });
+        return;
+      }
+
+      void loadCurrentSnapshotSilently(get);
+      return;
+    }
+
     try {
+      if (options?.refreshAfterSave) {
+        await refreshFeed(feedId, { notifyOnError: false });
+      }
+
       await get().loadSnapshot({ view: get().selectedView });
     } catch (err) {
       console.error(err);

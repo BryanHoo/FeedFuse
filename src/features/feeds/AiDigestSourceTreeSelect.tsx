@@ -329,12 +329,10 @@ export default function AiDigestSourceTreeSelect({
                       }}
                     />
 
-                    <label
-                      htmlFor={categoryCheckboxId}
-                      className="min-w-0 flex-1 cursor-pointer truncate text-sm font-medium"
-                    >
+                    {/* 保持文字为纯展示，避免点击 label 文本触发 checkbox 聚焦或勾选。 */}
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">
                       {category.title}
-                    </label>
+                    </span>
 
                     <span className="shrink-0 text-[11px] text-muted-foreground">
                       {category.children.length}
@@ -348,14 +346,11 @@ export default function AiDigestSourceTreeSelect({
                         const feedChecked = selectedFeedIdSet.has(feed.id);
 
                         return (
-                          <label
+                          <div
                             key={feed.id}
-                            htmlFor={feedCheckboxId}
                             className={cn(
-                              'flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
-                              feedChecked
-                                ? 'bg-accent text-accent-foreground'
-                                : 'hover:bg-accent/60 hover:text-accent-foreground',
+                              'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm',
+                              feedChecked ? 'bg-accent text-accent-foreground' : undefined,
                             )}
                           >
                             <input
@@ -375,7 +370,7 @@ export default function AiDigestSourceTreeSelect({
                               className="h-4 w-4 rounded border-input text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                             />
                             <span className="truncate">{feed.title}</span>
-                          </label>
+                          </div>
                         );
                       })}
                     </div>

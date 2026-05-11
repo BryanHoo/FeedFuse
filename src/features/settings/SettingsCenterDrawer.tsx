@@ -50,7 +50,7 @@ const sectionItems: SettingsSectionItem[] = [
   { key: 'general', label: '通用', hint: '外观与阅读', icon: Palette },
   { key: 'rss', label: 'RSS', hint: '抓取与过滤', icon: Rss },
   { key: 'ai', label: 'AI', hint: '模型与接口', icon: Bot },
-  { key: 'security', label: '账号安全', hint: '登录与密码', icon: KeyRound },
+  { key: 'security', label: '账号与安全', hint: '登录与密码', icon: KeyRound },
   { key: 'logging', label: '日志', hint: '开关与查看', icon: ScrollText },
 ];
 

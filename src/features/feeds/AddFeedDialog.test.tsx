@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, vi } from 'vitest';
 import ReaderLayout from '../reader/ReaderLayout';
 import { ToastHost } from '../toast/ToastHost';
@@ -8,6 +8,17 @@ import { validateRssUrl } from './services/rssValidationService';
 const { runImmediateOperationMock } = vi.hoisted(() => ({
   runImmediateOperationMock: vi.fn(),
 }));
+
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+
+  return { promise, resolve, reject };
+}
 
 function jsonResponse(payload: unknown) {
   return new Response(JSON.stringify(payload), {
@@ -215,7 +226,11 @@ describe('AddFeedDialog', () => {
     );
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await act(async () => {
+      useAppStore.setState({ selectedView: 'all' });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
     vi.unstubAllGlobals();
   });
 
@@ -339,6 +354,98 @@ describe('AddFeedDialog', () => {
     expect(lastCreateFeedBody).not.toHaveProperty('bodyTranslateOnOpenEnabled');
     expect(lastCreateFeedBody).not.toHaveProperty('titleTranslateEnabled');
     expect(lastCreateFeedBody).not.toHaveProperty('bodyTranslateEnabled');
+  });
+
+  it('closes add dialog before background refresh completes', async () => {
+    const refreshDeferred = createDeferred<Response>();
+    let refreshStarted = false;
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = getFetchCallUrl(input);
+        const method = getFetchCallMethod(input, init);
+
+        if (url.includes('/api/feeds/') && url.endsWith('/refresh') && method === 'POST') {
+          refreshStarted = true;
+          return refreshDeferred.promise;
+        }
+
+        if (url.includes('/api/feeds') && method === 'POST') {
+          const body = await getFetchCallJsonBody(input, init);
+          lastCreateFeedBody = body;
+          const id = `feed-${nextFeedId++}`;
+          createdFeedById.set(id, {
+            title: String(body.title ?? ''),
+            url: String(body.url ?? ''),
+            categoryId: (body.categoryId as string | null | undefined) ?? null,
+            fullTextOnOpenEnabled: Boolean(body.fullTextOnOpenEnabled ?? false),
+            aiSummaryOnOpenEnabled: Boolean(body.aiSummaryOnOpenEnabled ?? false),
+            aiSummaryOnFetchEnabled: Boolean(body.aiSummaryOnFetchEnabled ?? false),
+            bodyTranslateOnFetchEnabled: Boolean(body.bodyTranslateOnFetchEnabled ?? false),
+            bodyTranslateOnOpenEnabled: Boolean(body.bodyTranslateOnOpenEnabled ?? false),
+          });
+          return jsonResponse({
+            ok: true,
+            data: {
+              id,
+              title: String(body.title ?? ''),
+              url: String(body.url ?? ''),
+              siteUrl: null,
+              iconUrl: null,
+              enabled: true,
+              fullTextOnOpenEnabled: Boolean(body.fullTextOnOpenEnabled ?? false),
+              aiSummaryOnOpenEnabled: Boolean(body.aiSummaryOnOpenEnabled ?? false),
+              aiSummaryOnFetchEnabled: Boolean(body.aiSummaryOnFetchEnabled ?? false),
+              bodyTranslateOnFetchEnabled: Boolean(body.bodyTranslateOnFetchEnabled ?? false),
+              bodyTranslateOnOpenEnabled: Boolean(body.bodyTranslateOnOpenEnabled ?? false),
+              categoryId: body.categoryId ?? null,
+              fetchIntervalMinutes: 30,
+              unreadCount: 0,
+            },
+          });
+        }
+
+        if (url.includes('/api/reader/snapshot') && method === 'GET') {
+          return jsonResponse({
+            ok: true,
+            data: {
+              categories: [],
+              feeds: [],
+              articles: {
+                items: [],
+                nextCursor: null,
+              },
+            },
+          });
+        }
+
+        throw new Error(`Unexpected fetch: ${method} ${url}`);
+      }),
+    );
+
+    renderWithNotifications();
+    await openAddFeedDialog();
+
+    fireEvent.change(screen.getByLabelText('名称'), { target: { value: 'My Feed' } });
+    const urlInput = screen.getByLabelText('URL');
+    fireEvent.change(urlInput, {
+      target: { value: 'https://example.com/success.xml' },
+    });
+    fireEvent.blur(urlInput);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '添加订阅源' })).toBeEnabled();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '添加订阅源' }));
+
+    await waitFor(() => {
+      expect(refreshStarted).toBe(true);
+      expect(screen.queryByRole('dialog', { name: '添加 RSS 源' })).not.toBeInTheDocument();
+    });
+
+    refreshDeferred.resolve(jsonResponse({ ok: true, data: { enqueued: true, jobId: 'job-1' } }));
   });
 
   it('submits validated siteUrl in create payload', async () => {

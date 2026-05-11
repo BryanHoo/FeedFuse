@@ -44,6 +44,12 @@ export default function AISettingsPanel({
   const apiKeyInputRef = useRef<HTMLInputElement>(null);
   const translationApiKeyInputRef = useRef<HTMLInputElement>(null);
   const privateFmApiKeyInputRef = useRef<HTMLInputElement>(null);
+  const aiModelLabelId = 'ai-model-label';
+  const aiApiBaseUrlLabelId = 'ai-api-base-url-label';
+  const aiApiKeyLabelId = 'ai-api-key-label';
+  const aiTranslationModelLabelId = 'ai-translation-model-label';
+  const aiTranslationApiBaseUrlLabelId = 'ai-translation-api-base-url-label';
+  const aiTranslationApiKeyLabelId = 'ai-translation-api-key-label';
 
   const apiKeyStatus = resolveApiKeyStatus(apiKey, hasApiKey, clearApiKey);
   const translationApiKeyStatus = resolveApiKeyStatus(
@@ -87,12 +93,13 @@ export default function AISettingsPanel({
           </div>
 
           <div className="px-4 py-3.5">
-            <Label htmlFor="ai-model" className="mb-2 block">
+            <Label id={aiModelLabelId} className="mb-2 block">
               AI 模型
             </Label>
             <Input
               id="ai-model"
               name="ai-model"
+              aria-labelledby={aiModelLabelId}
               autoComplete="off"
               spellCheck={false}
               value={ai.model}
@@ -106,12 +113,13 @@ export default function AISettingsPanel({
           </div>
 
           <div className="px-4 py-3.5">
-            <Label htmlFor="ai-api-base-url" className="mb-2 block">
+            <Label id={aiApiBaseUrlLabelId} className="mb-2 block">
               API 地址
             </Label>
             <Input
               id="ai-api-base-url"
               name="ai-api-base-url"
+              aria-labelledby={aiApiBaseUrlLabelId}
               type="url"
               inputMode="url"
               autoComplete="off"
@@ -133,12 +141,13 @@ export default function AISettingsPanel({
 
           <div className="px-4 py-3.5">
             <div className="mb-2 flex items-center justify-between gap-3">
-              <Label htmlFor="ai-api-key">API 密钥</Label>
+              <Label id={aiApiKeyLabelId}>API 密钥</Label>
               <Badge variant={apiKeyStatus.variant}>{apiKeyStatus.label}</Badge>
             </div>
             <Input
               id="ai-api-key"
               name="ai-api-key"
+              aria-labelledby={aiApiKeyLabelId}
               type="password"
               autoComplete="off"
               spellCheck={false}
@@ -229,22 +238,18 @@ export default function AISettingsPanel({
                 </Button>
               </div>
             </div>
-            <p className="text-xs text-muted-foreground">
-              {translation.useSharedAi
-                ? "当前：翻译复用上方主 AI 配置。"
-                : "当前：翻译使用下方单独配置。"}
-            </p>
           </div>
 
           {!translation.useSharedAi ? (
             <>
               <div className="px-4 py-3.5">
-                <Label htmlFor="ai-translation-model" className="mb-2 block">
+                <Label id={aiTranslationModelLabelId} className="mb-2 block">
                   翻译模型
                 </Label>
                 <Input
                   id="ai-translation-model"
                   name="ai-translation-model"
+                  aria-labelledby={aiTranslationModelLabelId}
                   autoComplete="off"
                   spellCheck={false}
                   value={translation.model}
@@ -259,15 +264,13 @@ export default function AISettingsPanel({
               </div>
 
               <div className="px-4 py-3.5">
-                <Label
-                  htmlFor="ai-translation-api-base-url"
-                  className="mb-2 block"
-                >
+                <Label id={aiTranslationApiBaseUrlLabelId} className="mb-2 block">
                   翻译 API 地址
                 </Label>
                 <Input
                   id="ai-translation-api-base-url"
                   name="ai-translation-api-base-url"
+                  aria-labelledby={aiTranslationApiBaseUrlLabelId}
                   type="url"
                   inputMode="url"
                   autoComplete="off"
@@ -290,7 +293,7 @@ export default function AISettingsPanel({
 
               <div className="px-4 py-3.5">
                 <div className="mb-2 flex items-center justify-between gap-3">
-                  <Label htmlFor="ai-translation-api-key">翻译 API 密钥</Label>
+                  <Label id={aiTranslationApiKeyLabelId}>翻译 API 密钥</Label>
                   <Badge variant={translationApiKeyStatus.variant}>
                     {translationApiKeyStatus.label}
                   </Badge>
@@ -298,6 +301,7 @@ export default function AISettingsPanel({
                 <Input
                   id="ai-translation-api-key"
                   name="ai-translation-api-key"
+                  aria-labelledby={aiTranslationApiKeyLabelId}
                   type="password"
                   autoComplete="off"
                   spellCheck={false}

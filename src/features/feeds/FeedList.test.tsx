@@ -6,6 +6,17 @@ const { runImmediateOperationMock } = vi.hoisted(() => ({
   runImmediateOperationMock: vi.fn(),
 }));
 
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+
+  return { promise, resolve, reject };
+}
+
 vi.mock('../articles/ArticleView', () => ({
   default: function MockArticleView({
     onTitleVisibilityChange,
@@ -229,6 +240,10 @@ describe('FeedList manage', () => {
 
         if (url.includes('/api/reader/snapshot') && method === 'GET') {
           return snapshotResponseFromStore();
+        }
+
+        if (url.includes('/api/feeds/feed-1/refresh') && method === 'POST') {
+          return jsonResponse({ ok: true, data: { enqueued: true, jobId: 'job-1' } });
         }
 
         if (url.includes('/api/feeds/feed-1') && method === 'PATCH') {
@@ -504,7 +519,11 @@ describe('FeedList manage', () => {
     );
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await act(async () => {
+      useAppStore.setState({ selectedView: 'all' });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
     vi.unstubAllGlobals();
   });
 
@@ -524,6 +543,96 @@ describe('FeedList manage', () => {
     });
 
     expect(screen.getByText('已更新订阅源')).toBeInTheDocument();
+  });
+
+  it('closes edit dialog before background refresh completes', async () => {
+    const refreshDeferred = createDeferred<Response>();
+    let refreshStarted = false;
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = getFetchCallUrl(input);
+        const method = getFetchCallMethod(input, init);
+
+        if (url.includes('/api/reader/snapshot') && method === 'GET') {
+          return snapshotResponseFromStore();
+        }
+
+        if (url.includes('/api/feeds/feed-1/refresh') && method === 'POST') {
+          refreshStarted = true;
+          return refreshDeferred.promise;
+        }
+
+        if (url.includes('/api/feeds/feed-1') && method === 'PATCH') {
+          const body = await getFetchCallJsonBody(input, init);
+          lastPatchBody = body;
+          return jsonResponse({
+            ok: true,
+            data: {
+              id: 'feed-1',
+              title: String(body.title ?? useAppStore.getState().feeds[0]?.title ?? 'My Feed'),
+              url: String(body.url ?? useAppStore.getState().feeds[0]?.url ?? 'https://example.com/rss.xml'),
+              siteUrl:
+                (body.siteUrl as string | null | undefined) ??
+                useAppStore.getState().feeds[0]?.siteUrl ??
+                null,
+              iconUrl: '/api/feeds/feed-1/favicon',
+              enabled: useAppStore.getState().feeds[0]?.enabled ?? true,
+              fullTextOnOpenEnabled: Boolean(useAppStore.getState().feeds[0]?.fullTextOnOpenEnabled),
+              aiSummaryOnOpenEnabled: Boolean(useAppStore.getState().feeds[0]?.aiSummaryOnOpenEnabled),
+              aiSummaryOnFetchEnabled: Boolean(useAppStore.getState().feeds[0]?.aiSummaryOnFetchEnabled),
+              bodyTranslateOnFetchEnabled: Boolean(useAppStore.getState().feeds[0]?.bodyTranslateOnFetchEnabled),
+              bodyTranslateOnOpenEnabled: Boolean(useAppStore.getState().feeds[0]?.bodyTranslateOnOpenEnabled),
+              titleTranslateEnabled: Boolean(useAppStore.getState().feeds[0]?.titleTranslateEnabled),
+              bodyTranslateEnabled: Boolean(useAppStore.getState().feeds[0]?.bodyTranslateEnabled),
+              articleListDisplayMode: useAppStore.getState().feeds[0]?.articleListDisplayMode ?? 'card',
+              categoryId: useAppStore.getState().feeds[0]?.categoryId ?? null,
+              fetchIntervalMinutes: 30,
+            },
+          });
+        }
+
+        if (url.includes('/api/rss/validate') && method === 'GET') {
+          return jsonResponse({
+            ok: true,
+            data: {
+              valid: true,
+              kind: 'rss',
+              title: 'Validated Feed Title',
+              siteUrl: 'https://changed.example.com/',
+            },
+          });
+        }
+
+        throw new Error(`Unexpected fetch: ${method} ${url}`);
+      }),
+    );
+
+    renderWithNotifications();
+
+    fireEvent.contextMenu(screen.getByRole('button', { name: /My Feed.*2/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: '编辑' }));
+    expect(await screen.findByRole('dialog', { name: '编辑 RSS 源' })).toBeInTheDocument();
+
+    const urlInput = screen.getByLabelText('URL');
+    fireEvent.change(urlInput, {
+      target: { value: 'https://changed.example.com/rss.xml' },
+    });
+    fireEvent.blur(urlInput);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '保存订阅源' })).toBeEnabled();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '保存订阅源' }));
+
+    await waitFor(() => {
+      expect(refreshStarted).toBe(true);
+      expect(screen.queryByRole('dialog', { name: '编辑 RSS 源' })).not.toBeInTheDocument();
+    });
+
+    refreshDeferred.resolve(jsonResponse({ ok: true, data: { enqueued: true, jobId: 'job-1' } }));
   });
 
   it('uses same form fields as add flow and pre-fills existing values in edit flow', async () => {

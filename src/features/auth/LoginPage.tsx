@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { ApiError, login } from '@/lib/apiClient';
 
 export default function LoginPage() {
+  const passwordLabelId = 'login-password-label';
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [isPending, startTransition] = useTransition();
@@ -55,11 +56,12 @@ export default function LoginPage() {
 
             <form className="space-y-5" onSubmit={handleSubmit}>
               <div className="space-y-2">
-                <Label htmlFor="login-password">密码</Label>
+                <Label id={passwordLabelId}>密码</Label>
                 <Input
                   id="login-password"
                   type="password"
                   autoComplete="current-password"
+                  aria-labelledby={passwordLabelId}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   placeholder="输入密码"
