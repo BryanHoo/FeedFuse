@@ -1,0 +1,5 @@
+services:
+  db:
+    # 本地运行 Web/Worker 时显式启用，且只允许宿主机回环访问。
+    ports:
+      - '127.0.0.1:${POSTGRES_PORT:-5432}:5432'

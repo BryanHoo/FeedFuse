@@ -5,8 +5,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    ports:
-      - '${POSTGRES_PORT:-5432}:5432'
+    # 自托管默认不向宿主机发布数据库端口。
     volumes:
       - feedfuse_pg:/var/lib/postgresql/data
     healthcheck:

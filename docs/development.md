@@ -50,13 +50,13 @@ RSS 网络访问默认使用 `RSS_NETWORK_MODE=public`，只允许公网地址�
 
 ## 2. 准备 PostgreSQL
 
-你可以使用自己本地已有的 PostgreSQL 16，也可以直接用仓库根目录的 `docker-compose.yml` 启一个数据库：
+你可以使用自己本地已有的 PostgreSQL 16，也可以显式叠加开发配置，启动一个仅向宿主机回环地址开放端口的数据库：
 
 ```bash
-docker compose up -d db
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db
 ```
 
-如果使用默认配置，数据库连接会匹配 `.env.example` 中的 `DATABASE_URL`。
+默认绑定 `127.0.0.1:5432`，匹配 `.env.example` 中的 `DATABASE_URL`。如需修改端口，在 `.env` 中设置 `POSTGRES_PORT` 并同步调整 `DATABASE_URL`。不叠加 `docker-compose.dev.yml` 时，数据库端口不会发布到宿主机。
 
 ## 3. 安装依赖
 

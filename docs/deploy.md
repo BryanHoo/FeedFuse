@@ -40,7 +40,6 @@ curl -fsSL -o .env https://raw.githubusercontent.com/BryanHoo/FeedFuse/main/depl
 - `POSTGRES_DB`
 - `POSTGRES_USER`
 - `POSTGRES_PASSWORD`
-- `POSTGRES_PORT`
 - `WEB_PORT`
 - `IMAGE_PROXY_SECRET`
 - `AUTH_INITIAL_PASSWORD`
@@ -81,6 +80,8 @@ http://127.0.0.1:9559
 - `db`：PostgreSQL
 - `web`：FeedFuse Web 应用，启动前会自动执行数据库迁移
 - `worker`：后台任务进程，用于抓取全文、生成摘要、翻译和 `AI解读`
+
+数据库端口默认不发布到宿主机，`web` 和 `worker` 通过 Compose 内部网络连接 `db:5432`。需要维护数据库时可使用 `docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'`。
 
 ## 4. 首次使用
 

@@ -5,8 +5,7 @@ services:
       POSTGRES_DB: feedfuse
       POSTGRES_USER: feedfuse
       POSTGRES_PASSWORD: feedfuse
-    ports:
-      - '${POSTGRES_PORT:-5432}:5432'
+    # 数据库仅供 Compose 网络内的 web 和 worker 访问。
     volumes:
       - feedfuse_pg:/var/lib/postgresql/data
     healthcheck:
