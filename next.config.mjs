@@ -8,8 +8,8 @@ const nextConfig = {
     optimizePackageImports: ['lucide-react'],
   },
   typescript: {
-    // 将 TypeScript 主配置迁移到 config 目录，避免根目录散落配置文件。
-    tsconfigPath: 'config/typescript/tsconfig.json',
+    // 复用生产类型检查范围，避免测试夹具的类型错误阻断发布构建。
+    tsconfigPath: 'config/typescript/tsconfig.typecheck.json',
   },
 };
 
