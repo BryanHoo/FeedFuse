@@ -129,8 +129,62 @@ describe('readerSnapshotService (cursor)', () => {
     const snapshot = await mod.getReaderSnapshot(pool, { view: 'all', limit: 1 });
 
     expect(mod.decodeCursor(snapshot.articles.nextCursor)).toEqual({
-      publishedAt: '2026-03-08T00:00:00.000Z',
-      id: 'art-2',
+      publishedAt: '2026-03-09T00:00:00.000Z',
+      id: 'art-1',
+    });
+  });
+
+  describe.each(['distinct', 'equal', 'null'] as const)('consecutive pages with %s dates', (dates) => {
+    it.each([1, 2, 3])('returns every article exactly once with limit %i', async (limit) => {
+      listCategoriesMock.mockResolvedValue([]);
+      listFeedsMock.mockResolvedValue([]);
+
+      const articles = [3, 2, 1].map((id) => {
+        const publishedAt = dates === 'null'
+          ? null
+          : `2026-03-0${dates === 'equal' ? 3 : id}T00:00:00.000Z`;
+        return {
+          id: `art-${id}`,
+          publishedAt,
+          sortPublishedAt: new Date(publishedAt ?? 0),
+          summary: null,
+          previewImage: null,
+          sourceLanguage: 'en',
+          contentHtml: '<p>Article</p>',
+          contentFullHtml: null,
+        };
+      });
+      const query = vi.fn(async (statement: string, params: unknown[]) => {
+        if (statement.includes('left join lateral')) {
+          // 按实际查询参数模拟 PostgreSQL 的严格元组比较，让错误游标确实跳过文章。
+          const cursorTime = params.length > 3 ? new Date(String(params[2])).getTime() : null;
+          const rows = articles.filter((article) => cursorTime === null
+            || article.sortPublishedAt.getTime() < cursorTime
+            || (article.sortPublishedAt.getTime() === cursorTime && article.id < String(params[3])));
+          return { rows: rows.slice(0, Number(params.at(-1))) };
+        }
+        return { rows: statement.includes('"totalCount"') ? [{ totalCount: articles.length }] : [] };
+      });
+      const pool = { query } as unknown as Pool;
+      const { getReaderSnapshot } = await import('@/server/domains/reader/services/readerSnapshotService');
+      const seenIds: string[] = [];
+      let cursor: string | null = null;
+
+      for (let offset = 0; offset < articles.length; offset += limit) {
+        const snapshot = await getReaderSnapshot(pool, { view: 'all', limit, cursor });
+        const ids = snapshot.articles.items.map((article) => article.id);
+        expect(ids).toEqual(articles.slice(offset, offset + limit).map((article) => article.id));
+        expect(snapshot.articles.totalCount).toBe(articles.length);
+        seenIds.push(...ids);
+        cursor = snapshot.articles.nextCursor;
+        if (offset + limit < articles.length) {
+          expect(cursor).not.toBeNull();
+        } else {
+          expect(cursor).toBeNull();
+        }
+      }
+
+      expect(seenIds).toEqual(['art-3', 'art-2', 'art-1']);
     });
   });
 

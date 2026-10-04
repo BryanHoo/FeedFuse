@@ -1,14 +1,12 @@
 import type { Pool } from 'pg';
 import { AI_DIGEST_VIEW_ID, isRssSmartView } from '@/lib/reader/view';
-import { getServerEnv } from '@/server/infra/env';
-import { buildImageProxyUrl, getOptionalImageProxySecret } from '@/server/integrations/media/imageProxyUrl';
+import { normalizeSnapshotSummary, rewriteFeedIcon, rewritePreviewImage } from './readerSnapshotPresentation';
 import { evaluateArticleBodyTranslationEligibility } from '@/server/integrations/ai/articleTranslationEligibility';
 import { listCategories } from '@/server/domains/feeds/repositories/categoriesRepo';
 import { listFeeds } from '@/server/domains/feeds/repositories/feedsRepo';
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
-const SNAPSHOT_SUMMARY_MAX_CODE_POINTS = 280;
 const ACTIVE_FEVER_ARTICLE_SQL = `
   not exists (
     select 1
@@ -205,98 +203,6 @@ export interface ReaderSnapshot {
   };
 }
 
-const HTML_ENTITY_MAP: Record<string, string> = {
-  amp: '&',
-  lt: '<',
-  gt: '>',
-  quot: '"',
-  apos: "'",
-  nbsp: '\u00A0',
-};
-
-function decodeHtmlEntities(value: string): string {
-  return value.replace(/&(?:#(\d+)|#x([\da-f]+)|([a-z]+));/gi, (match, decimal, hex, named) => {
-    if (decimal) {
-      return String.fromCodePoint(Number.parseInt(decimal, 10));
-    }
-
-    if (hex) {
-      return String.fromCodePoint(Number.parseInt(hex, 16));
-    }
-
-    return HTML_ENTITY_MAP[named.toLowerCase()] ?? match;
-  });
-}
-
-function isExpiredSignedImageUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    const expiresAt = url.searchParams.get('x-expires');
-    if (!expiresAt || !/^\d+$/.test(expiresAt)) {
-      return false;
-    }
-
-    return Number.parseInt(expiresAt, 10) * 1000 <= Date.now();
-  } catch {
-    return false;
-  }
-}
-
-function rewriteImageUrl(imageUrl: string | null): string | null {
-  if (!imageUrl) return null;
-
-  const normalizedImageUrl = decodeHtmlEntities(imageUrl).trim();
-  if (!normalizedImageUrl) return null;
-  if (normalizedImageUrl.startsWith('/')) return normalizedImageUrl;
-  if (isExpiredSignedImageUrl(normalizedImageUrl)) return null;
-
-  const secret = getOptionalImageProxySecret(getServerEnv().IMAGE_PROXY_SECRET);
-  if (!secret) return normalizedImageUrl;
-
-  return buildImageProxyUrl({
-    sourceUrl: normalizedImageUrl,
-    secret,
-  });
-}
-
-function rewritePreviewImage(previewImage: string | null): string | null {
-  if (!previewImage) return null;
-
-  const normalizedImageUrl = decodeHtmlEntities(previewImage).trim();
-  if (!normalizedImageUrl) return null;
-  if (normalizedImageUrl.startsWith('/')) return normalizedImageUrl;
-  if (isExpiredSignedImageUrl(normalizedImageUrl)) return null;
-
-  const secret = getOptionalImageProxySecret(getServerEnv().IMAGE_PROXY_SECRET);
-  if (!secret) return normalizedImageUrl;
-
-  // 卡片按 96x82 CSS 像素展示，生成 2x 缩略图兼顾高分屏清晰度与传输体积。
-  return buildImageProxyUrl({
-    sourceUrl: normalizedImageUrl,
-    secret,
-    width: 192,
-    height: 164,
-    quality: 72,
-  });
-}
-
-function rewriteFeedIcon(iconUrl: string | null): string | null {
-  return rewriteImageUrl(iconUrl);
-}
-
-function normalizeSnapshotSummary(summary: string | null): string | null {
-  if (!summary) return null;
-
-  const normalized = summary.replace(/\s+/g, ' ').trim();
-  if (!normalized) return null;
-
-  const codePoints = Array.from(normalized);
-  if (codePoints.length <= SNAPSHOT_SUMMARY_MAX_CODE_POINTS) return normalized;
-
-  // 快照只服务列表预览，保留完整摘要给文章详情与翻译资格判断使用。
-  return `${codePoints.slice(0, SNAPSHOT_SUMMARY_MAX_CODE_POINTS - 1).join('').trimEnd()}…`;
-}
-
 type ArticleQueryRow = ReaderSnapshotArticleItem & {
   sortPublishedAt: unknown;
   sourceLanguage: string | null;
@@ -485,11 +391,12 @@ export async function getReaderSnapshot(
       userId,
     }),
   ]);
+  // 下一页使用严格小于比较，游标必须指向本页末条；额外一条只用于判断是否还有下一页。
   const nextCursor =
     queriedRows.length > limit
       ? encodeCursor({
-          publishedAt: serializeCursorPublishedAt(queriedRows[limit].sortPublishedAt),
-          id: queriedRows[limit].id,
+          publishedAt: serializeCursorPublishedAt(queriedRows[limit - 1].sortPublishedAt),
+          id: queriedRows[limit - 1].id,
         })
       : null;
   const rows = queriedRows.slice(0, limit);

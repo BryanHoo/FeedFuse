@@ -83,6 +83,8 @@
 
 ## 阅读快照契约
 
+- 文章按 `(coalesce(published_at, 'epoch'::timestamptz), articles.id)` 降序分页，下一页使用严格 `<`；`nextCursor` 必须取本页最后一条，额外查询的第 `limit + 1` 条只用于判断是否存在下一页，末页返回 `null`。
+- 分页回归测试必须串联实际返回的游标，验证文章不遗漏、不重复，并覆盖相同发布时间、空发布时间和末页；对应测试位于 `src/test/server/services/readerSnapshotService.cursor.test.ts`。
 - `/api/reader/snapshot` 的文章 `summary` 只服务列表预览；返回前必须把连续空白规范化为单个空格，并限制为最多 `280` 个 Unicode 码点，截断时以 `…` 结尾。
 - 摘要截断只能发生在快照 DTO 映射阶段；文章详情、正文翻译资格判断和其他需要完整语义的服务必须继续使用完整摘要。
 - 调整快照摘要规则时，至少覆盖 `src/test/server/services/readerSnapshotService.previewImage.test.ts` 和 `src/test/app/api/reader/snapshot/route.test.ts` 的相关用例。
