@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "packageManager": "pnpm",
   "packages": [
     {

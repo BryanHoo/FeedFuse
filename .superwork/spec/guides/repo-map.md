@@ -10,7 +10,7 @@
 
 ## 关键目录
 
-- `src/app/(reader)`：主阅读器页面与页面级测试
+- `src/app/(reader)`：主阅读器页面
 - `src/app/login`：登录页面
 - `src/app/api`：Next.js Route Handlers，HTTP 入口
 - `src/features`：按业务拆分的前端功能模块
@@ -24,28 +24,30 @@
 - `src/data/provider`、`src/data/mock`、`src/mock`：阅读数据 provider 与 mock 样本
 - `src/server/domains/*/services`：业务服务编排
 - `src/server/domains/*/repositories`：数据库读写
-- `src/server/infra/db/migrations`：SQL 迁移与迁移测试
+- `src/server/infra/db/migrations`：SQL 迁移
 - `src/server/integrations/ai`：AI 能力封装
 - `src/server/integrations/rss`、`src/server/integrations/fulltext`、`src/server/integrations/media`：抓取与内容处理
 - `src/server/infra/queue`：任务队列契约与启动逻辑
 - `src/worker`：后台任务调度与执行
 - `scripts/db/migrate.mjs`：数据库迁移执行入口
+- `src/test`：集中测试目录；页面、API、迁移与 Worker 测试均放在这里
 
 ## 常用命令
 
-- 安装依赖：`pnpm install`
+- 安装依赖：`pnpm install --frozen-lockfile`
 - 启动 Web：`pnpm dev`
-- 启动 Worker：`pnpm worker:dev`
+- 启动 Worker（加载本地配置）：`pnpm exec tsx --env-file=.env --tsconfig config/typescript/tsconfig.json src/worker/index.ts`
 - 静态检查：`pnpm lint`
 - 类型检查：`pnpm type-check`
 - 单元测试：`pnpm test:unit`
 - 生产构建：`pnpm build`
-- 执行迁移：`node scripts/db/migrate.mjs`
+- 执行迁移（加载本地配置）：`node --env-file=.env scripts/db/migrate.mjs`
 
 ## 运行前提
 
 - Node 版本要求见 `package.json` 与 `docs/development.md`
-- 包管理器固定为 `pnpm@10`
+- 包管理器固定为 `package.json` 声明的 `pnpm@10.30.3`
 - 本地开发依赖 PostgreSQL 16，示例环境变量见 `.env.example`
-- 全新数据库首次登录依赖 `AUTH_INITIAL_PASSWORD`，默认管理员用户名固定为 `admin`
+- 全新数据库首次登录依赖 `AUTH_INITIAL_PASSWORD`，初始用户名为 `admin`，登录后可以改名
 - 涉及数据库验证时，需要 `DATABASE_URL`
+- Web 自动加载 `.env`；迁移和 Worker 需要显式加载文件或提前导出环境变量

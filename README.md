@@ -72,6 +72,16 @@ FeedFuse 不替你决定看什么。订阅源由你决定，阅读节奏由你�
 
 完整的账号、RSS、Fever 和 AI 使用流程见 [使用指南](./docs/user-guide.md)。
 
+## 文档导航
+
+| 目标 | 文档 |
+| --- | --- |
+| 部署实例、升级和排查运行问题 | [部署指南](./docs/deploy.md) |
+| 管理账号、订阅、Fever 和 AI 配置 | [使用指南](./docs/user-guide.md) |
+| 运行源码、启动 Worker 和执行测试 | [开发指南](./docs/development.md) |
+| 查看版本变更 | [更新日志](./CHANGELOG.md) |
+| 查看依赖安全复核记录及适用范围 | [生产依赖安全复核](./docs/dependency-security.md) |
+
 ## 预览
 
 ![FeedFuse 首页 / 三栏阅读视图](./.github/assets/readme/home.png)

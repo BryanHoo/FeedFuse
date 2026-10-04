@@ -16,7 +16,7 @@
 
 ## 单测命令约定
 
-- 跑单个或少量测试文件时，优先使用 `pnpm test:unit -- <path>`
+- 跑单个或少量测试文件时，优先使用 `pnpm test:unit <path>`，例如 `pnpm test:unit src/test/server/db/pool.test.ts`
 - 改动范围不清、跨多个层或跨多个消费方时，再退回整套 `pnpm test:unit`
 
 ## 按改动范围追加
