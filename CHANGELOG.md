@@ -6,6 +6,26 @@
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-10-08
+
+这一版修复源站返回安全检测页面时订阅源被误判为格式错误的问题，改善添加订阅与后台刷新的访问受阻提示。
+
+### 修复
+
+- 结合 HTML 根节点和安全检测特征识别验证页面，避免将正常 RSS 正文中的相关内容误判为检测页。
+- 仅在收到安全检测页后尝试一次 `www` / 裸域变体，并确认备用地址返回可解析的 RSS/Atom；恢复请求继续执行网络安全、响应大小和超时限制。
+- 恢复失败时，订阅校验返回 `access_blocked`，后台刷新记录 `fetch_access_blocked`，明确提示源站安全验证阻止访问，避免误报订阅格式错误。
+
+### 更改
+
+- 拆分 HTTP 文本抓取与 RSS 访问恢复模块，并补充恢复流程、错误映射和安全边界回归测试。
+- 更新使用和部署指南中的安全检测页排查方法及固定版本镜像说明。
+
+### 升级说明
+
+- Web 与 Worker 镜像应同时升级到 `0.4.4`，升级前备份数据库并保留现有配置。
+- 如仍提示源站安全验证阻止访问，请稍后重试或使用源站提供的其他订阅地址。升级步骤见 [部署指南](https://github.com/BryanHoo/FeedFuse/blob/v0.4.4/docs/deploy.md#7-升级)。
+
 ## [0.4.3] - 2026-10-08
 
 这一版修复阅读列表分页漏项和订阅源错误提示交互，完善 RSS 地址安全判定，并更新依赖与部署文档。
@@ -208,7 +228,8 @@
 - 修复图片代理、全文抓取、AI 任务状态、OPML 图标回填、阅读器选中态与多处可访问性和构建问题。
 - 增强 RSS 拉取异常提示、错误映射与配置校验，降低边界场景下的失败率。
 
-[Unreleased]: https://github.com/BryanHoo/FeedFuse/compare/v0.4.3...HEAD
+[Unreleased]: https://github.com/BryanHoo/FeedFuse/compare/v0.4.4...HEAD
+[0.4.4]: https://github.com/BryanHoo/FeedFuse/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/BryanHoo/FeedFuse/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/BryanHoo/FeedFuse/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/BryanHoo/FeedFuse/compare/v0.4.0...v0.4.1

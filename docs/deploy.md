@@ -4,7 +4,7 @@
 
 如果你是要本地改代码或调试实现，请改看 [开发指南](./development.md)。
 
-当前版本为 [`v0.4.3`](https://github.com/BryanHoo/FeedFuse/releases/tag/v0.4.3)，支持 `linux/amd64` 与 `linux/arm64`。Release 提供 `compose.yaml`、`.env.example` 和 `feedfuse-deploy-0.4.3.tar.gz` 部署附件。
+当前版本为 [`v0.4.4`](https://github.com/BryanHoo/FeedFuse/releases/tag/v0.4.4)，支持 `linux/amd64` 与 `linux/arm64`。Release 提供 `compose.yaml`、`.env.example` 和 `feedfuse-deploy-0.4.4.tar.gz` 部署附件。
 
 ## 推荐方式
 
@@ -144,16 +144,16 @@ docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB"' 
 
 确认命令成功退出、备份文件非空后，先更新部署配置。
 
-从 `0.4.2` 或更早版本升级到 `0.4.3` 时，先检查本地 `compose.yaml`：新版默认不发布 PostgreSQL 端口，应移除 `db` 服务的 `ports` 配置。`docker compose pull` 只更新镜像，不会修改这个文件；如有自定义配置，按新版 [compose.yaml](../deploy/compose.yaml) 合并修改，并保留现有 `.env` 和数据库卷。
+从 `0.4.2` 或更早版本升级时，先检查本地 `compose.yaml`：自 `0.4.3` 起默认不发布 PostgreSQL 端口，应移除 `db` 服务的 `ports` 配置。`docker compose pull` 只更新镜像，不会修改这个文件；如有自定义配置，按新版 [compose.yaml](../deploy/compose.yaml) 合并修改，并保留现有 `.env` 和数据库卷。
 
 如需从宿主机连接数据库，应另行配置仅绑定 `127.0.0.1` 的端口；本地源码开发可使用 [开发指南](./development.md#2-准备-postgresql) 中的覆盖文件。
 
 如果需要固定版本，把 `compose.yaml` 中两个镜像同时改为同一个已发布版本：
 
-- `ghcr.io/bryanhoo/feedfuse-web:0.4.3`
-- `ghcr.io/bryanhoo/feedfuse-worker:0.4.3`
+- `ghcr.io/bryanhoo/feedfuse-web:0.4.4`
+- `ghcr.io/bryanhoo/feedfuse-worker:0.4.4`
 
-默认的 `latest` 通道会跟随正式版本更新；固定版本时两个镜像都使用不带 `v` 的 `0.4.3` 标签。升级会自动应用数据库迁移；仅换回旧镜像不会撤销迁移，回退时需要同时评估数据库备份恢复。
+默认的 `latest` 通道会跟随正式版本更新；固定版本时两个镜像都使用不带 `v` 的 `0.4.4` 标签。升级会自动应用数据库迁移；仅换回旧镜像不会撤销迁移，回退时需要同时评估数据库备份恢复。
 
 完成配置修改后，拉取镜像并重建服务：
 
@@ -176,6 +176,7 @@ docker compose up -d
 | 修改数据库密码后连接失败 | 已初始化的数据卷不会随 `POSTGRES_PASSWORD` 自动改密，需要同步修改数据库中的实际密码 |
 | RSS 或 AI 任务一直等待 | 检查 Worker 日志、网络连通性以及当前用户的 AI 配置 |
 | fake-ip 或内网 RSS 抓取失败 | 检查前述 `RSS_NETWORK_MODE` 与 `RSS_ALLOWED_CIDRS`，并确认容器能访问目标地址 |
+| 提示源站返回安全验证页面 | 系统已尝试符合条件的 `www` / 裸域变体；仍受阻时稍后重试或使用源站提供的其他订阅地址，调整 `RSS_NETWORK_MODE` 无法解除源站验证 |
 
 `docker compose stop` 可停止服务；`docker compose down` 会移除容器和网络，但保留数据库卷。`docker compose down -v` 会删除数据库卷及其中的数据，不要用于普通升级。
 
