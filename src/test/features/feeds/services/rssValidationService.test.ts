@@ -186,6 +186,16 @@ describe('validateRssUrl', () => {
     });
   });
 
+  it('preserves the access_blocked reason and upstream challenge message', async () => {
+    const message = '源站返回了安全验证页面，暂时无法获取订阅内容';
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      ok: true, data: { valid: false, reason: 'access_blocked', message },
+    }), { status: 200, headers: { 'content-type': 'application/json' } }));
+    await expect(validateRssUrl('https://example.com/feed')).resolves.toEqual({
+      ok: false, errorCode: 'access_blocked', message,
+    });
+  });
+
   it('rejects invalid protocol', async () => {
     const result = await validateRssUrl('ftp://example.com/feed.xml');
     expect(result).toMatchObject({ ok: false, errorCode: 'invalid_url' });

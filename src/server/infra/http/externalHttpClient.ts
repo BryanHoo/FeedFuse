@@ -1,4 +1,7 @@
-import got from 'got';
+import { externalHttpTransport as client } from './externalHttpTransport';
+import { fetchTextWithValidatedRedirects, isTerminalFetchError, type SafeUrlChecker } from './fetchExternalText';
+import { fetchRssTextWithRecovery } from '@/server/integrations/rss/feedAccessRecovery';
+import { isFeedAccessBlockedError } from '@/server/integrations/rss/feedAccessError';
 import { Readable } from 'node:stream';
 import { getPool } from '@/server/infra/db/pool';
 import { writeSystemLog } from '@/server/infra/logging/systemLogger';
@@ -6,14 +9,9 @@ import { getFetchUrlCandidates } from '@/server/integrations/rss/fetchUrlCandida
 import { isSafeMediaUrl } from '@/server/integrations/media/mediaProxyGuard';
 import { isSafeExternalUrl } from '@/server/integrations/rss/ssrfGuard';
 
-const client = got.extend({
-  retry: { limit: 0 },
-  throwHttpErrors: false,
-});
 const DEFAULT_MAX_RSS_BYTES = 5 * 1024 * 1024;
 const DEFAULT_MAX_REDIRECTS = 5;
 const LOG_DETAILS_MAX_CHARS = 4096;
-const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
 export interface FetchRssXmlResult {
   status: number;
@@ -36,19 +34,6 @@ interface ExternalRequestLogging {
   requestLabel: string;
   context?: Record<string, unknown>;
 }
-
-type SafeUrlChecker = (url: string) => boolean | Promise<boolean>;
-
-type FetchTextOkResult = {
-  kind: 'ok';
-  status: number;
-  finalUrl: string;
-  contentType: string | null;
-  headers: Record<string, string | string[] | undefined>;
-  body: string;
-};
-
-type FetchTextHopResult = { kind: 'redirect'; nextUrl: string } | FetchTextOkResult;
 
 function getHeaderValue(value: string | string[] | undefined): string | null {
   return typeof value === 'string' ? value : value?.[0] ?? null;
@@ -76,26 +61,6 @@ function truncateLogDetails(details: string | null): string | null {
   }
 
   return `${details.slice(0, LOG_DETAILS_MAX_CHARS)}\n...[truncated]`;
-}
-
-function isRedirectStatus(status: number): boolean {
-  return REDIRECT_STATUSES.has(status);
-}
-
-async function assertSafeUrl(url: string, isSafeUrl: SafeUrlChecker): Promise<void> {
-  if (!(await isSafeUrl(url))) {
-    throw new Error('Unsafe URL');
-  }
-}
-
-function isTerminalFetchError(err: unknown): boolean {
-  if (!(err instanceof Error)) {
-    return false;
-  }
-
-  return ['Unsafe URL', 'Response too large', 'Too many redirects'].includes(
-    err.message,
-  );
 }
 
 async function writeExternalRequestLog(input: {
@@ -131,135 +96,6 @@ async function writeExternalRequestLog(input: {
   });
 }
 
-async function fetchTextHop(
-  url: string,
-  options: {
-    timeoutMs: number;
-    headers: Record<string, string>;
-    maxBytes: number;
-  },
-): Promise<FetchTextHopResult> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), options.timeoutMs);
-
-  try {
-    const req = client.stream(url, {
-      method: 'GET',
-      followRedirect: false,
-      headers: options.headers,
-      signal: controller.signal,
-    });
-
-    return await new Promise<FetchTextHopResult>((resolve, reject) => {
-      let settled = false;
-      let status = 0;
-      let finalUrl = url;
-      let contentType: string | null = null;
-      let responseHeaders: Record<string, string | string[] | undefined> = {};
-      const chunks: Buffer[] = [];
-      let received = 0;
-
-      const cleanup = () => clearTimeout(timeout);
-      const safeResolve = (value: FetchTextHopResult) => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        resolve(value);
-      };
-      const safeReject = (err: unknown) => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        reject(err);
-      };
-
-      req.on('close', cleanup);
-      req.on('error', safeReject);
-
-      req.on('response', (res) => {
-        status = res.statusCode;
-        finalUrl = res.url || finalUrl;
-        responseHeaders = res.headers;
-        contentType = getHeaderValue(res.headers['content-type']);
-
-        if (!isRedirectStatus(status)) {
-          return;
-        }
-
-        const location = getHeaderValue(res.headers.location);
-        if (!location) {
-          safeReject(new Error('Missing redirect location'));
-          req.destroy();
-          return;
-        }
-
-        try {
-          // 手动处理重定向，确保下一跳请求发出前能先做 SSRF 校验。
-          safeResolve({ kind: 'redirect', nextUrl: new URL(location, url).toString() });
-        } catch (err) {
-          safeReject(err);
-        }
-        req.destroy();
-      });
-
-      req.on('data', (chunk) => {
-        if (settled) return;
-        const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-        received += buf.byteLength;
-        if (received > options.maxBytes) {
-          req.destroy(new Error('Response too large'));
-          return;
-        }
-
-        chunks.push(buf);
-      });
-
-      req.on('end', () => {
-        safeResolve({
-          kind: 'ok',
-          status,
-          finalUrl,
-          contentType,
-          headers: responseHeaders,
-          body: Buffer.concat(chunks).toString('utf8'),
-        });
-      });
-    });
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function fetchTextWithValidatedRedirects(
-  url: string,
-  options: {
-    timeoutMs: number;
-    headers: Record<string, string>;
-    maxBytes: number;
-    maxRedirects: number;
-    isSafeUrl: SafeUrlChecker;
-  },
-): Promise<FetchTextOkResult> {
-  let currentUrl = url;
-  let redirects = 0;
-
-  while (true) {
-    await assertSafeUrl(currentUrl, options.isSafeUrl);
-    const hop = await fetchTextHop(currentUrl, options);
-
-    if (hop.kind === 'ok') {
-      return hop;
-    }
-
-    if (redirects >= options.maxRedirects) {
-      throw new Error('Too many redirects');
-    }
-
-    redirects += 1;
-    currentUrl = hop.nextUrl;
-  }
-}
-
 export async function fetchRssXml(
   url: string,
   options: {
@@ -293,7 +129,7 @@ export async function fetchRssXml(
 
     for (const candidate of candidates) {
       try {
-        const hop = await fetchTextWithValidatedRedirects(candidate, {
+        const hop = await fetchRssTextWithRecovery(candidate, {
           timeoutMs: options.timeoutMs,
           headers,
           maxBytes,
@@ -330,9 +166,8 @@ export async function fetchRssXml(
         });
         return { status, xml: hop.body, etag, lastModified, finalUrl };
       } catch (err) {
-        if (err instanceof Error && err.name === 'AbortError') throw err;
         // 只有网络失败才尝试 Docker fallback，安全和响应限制错误必须保留原始结论。
-        if (isTerminalFetchError(err)) throw err;
+        if (isTerminalFetchError(err) || isFeedAccessBlockedError(err)) throw err;
         lastError = err;
       }
     }

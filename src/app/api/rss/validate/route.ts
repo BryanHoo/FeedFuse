@@ -2,6 +2,7 @@ import { requireApiSession } from '@/server/domains/auth/services/session';
 import Parser from 'rss-parser';
 import { ok } from '@/server/infra/http/apiResponse';
 import { fetchRssXml } from '@/server/infra/http/externalHttpClient';
+import { isFeedAccessBlockedError } from '@/server/integrations/rss/feedAccessError';
 import {
   formatExternalUrlSafetyMessage,
   getExternalUrlSafety,
@@ -15,6 +16,7 @@ type RssValidationErrorCode =
   | 'invalid_url'
   | 'unsafe_url'
   | 'unauthorized'
+  | 'access_blocked'
   | 'timeout'
   | 'not_feed'
   | 'dns_error'
@@ -187,6 +189,9 @@ export async function GET(request: Request) {
       });
     }
   } catch (err) {
+    if (isFeedAccessBlockedError(err)) {
+      return toJson({ valid: false, reason: 'access_blocked', message: err.message });
+    }
     if (err instanceof Error && err.name === 'AbortError') {
       return toJson({
         valid: false,

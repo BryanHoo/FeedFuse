@@ -410,6 +410,7 @@ export type RssValidationErrorCode =
   | 'invalid_url'
   | 'unsafe_url'
   | 'unauthorized'
+  | 'access_blocked'
   | 'timeout'
   | 'not_feed'
   | 'dns_error'

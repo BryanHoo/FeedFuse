@@ -47,6 +47,20 @@ describe('/api/rss/validate', () => {
     getExternalUrlSafetyMock.mockResolvedValue({ safe: true });
   });
 
+  it('reports an upstream challenge as access_blocked rather than not_feed', async () => {
+    const error = new Error('源站返回了安全验证页面，暂时无法获取订阅内容');
+    error.name = 'FeedAccessBlockedError';
+    fetchRssXmlMock.mockRejectedValue(error);
+    const { GET } = await import('../../../../../app/api/rss/validate/route');
+    const response = await GET(new Request('http://localhost/api/rss/validate?url=https%3A%2F%2Fexample.com%2Ffeed'));
+    expect((await response.json()).data).toEqual({
+      valid: false,
+      reason: 'access_blocked',
+      message: error.message,
+    });
+    expect(parseStringMock).not.toHaveBeenCalled();
+  });
+
   it('returns siteUrl from parsed feed.link when validation succeeds', async () => {
     parseStringMock.mockResolvedValue({ title: 'Feed', link: 'https://example.com/' });
     fetchRssXmlMock.mockResolvedValue({

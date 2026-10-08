@@ -63,6 +63,9 @@
 
 ## RSS 网络访问契约
 
+- RSS 抓取必须先访问用户提供的地址；收到 HTML 安全检测页时才允许尝试一次 `www` / 裸域变体，不能添加特定站点映射或无条件改写域名。本机、IP、带凭据及非默认端口地址不参与域名变体恢复。
+- 安全检测页需结合 HTML 根节点与检测特征识别，不能把 RSS 正文中的相关内容误判为检测页。备用请求及重定向必须复用 SSRF、响应大小和超时限制，换主机时去掉原主机的条件缓存请求头，且只有可解析的 RSS/Atom 响应才能视为恢复成功。
+- 安全检测恢复失败时，校验接口返回 `access_blocked`，后台更新记录 `fetch_access_blocked`，明确提示源站安全验证阻止访问；备用主机的网络或解析错误不能覆盖该诊断，安全阻断和资源限制错误仍按原有规则上报。回归测试覆盖 `src/test/server/http/externalHttpClient.feedAccess.test.ts`、RSS 校验接口和后台错误映射。
 - `src/server/integrations/rss/ssrfGuard.ts` 是 RSS 外链安全判定的统一入口；`route.ts`、worker 和抓取流程不要各自散落一套网络地址规则。
 - RSS 链接在发起抓取前要校验原始 URL，抓取完成后如果拿到了重定向后的 `finalUrl`，还必须再次按相同策略校验，避免通过公网入口跳转到内网或 fake-ip 地址绕过限制。
 - RSS 和 fulltext 这类外部 HTTP 抓取不能依赖客户端自动跟随重定向；必须在每一跳 `Location` 发起请求前先按同一安全策略校验目标 URL。

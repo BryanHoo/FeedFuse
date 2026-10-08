@@ -1,4 +1,5 @@
 import { toRawErrorMessage } from '@/server/domains/settings/tasks/rawErrorMessage';
+import { isFeedAccessBlockedError } from '@/server/integrations/rss/feedAccessError';
 
 function toSafeMessage(value: string): string {
   return value.replace(/\s+/g, ' ').trim().slice(0, 200);
@@ -20,6 +21,10 @@ export function mapFeedFetchError(
     errorMessage,
     rawErrorMessage,
   });
+
+  if (isFeedAccessBlockedError(err)) {
+    return result('fetch_access_blocked', `更新失败：${safe}`);
+  }
 
   if (safe === 'Unsafe URL') {
     return result('ssrf_blocked', '更新失败：订阅地址不安全');
