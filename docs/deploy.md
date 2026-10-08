@@ -4,6 +4,8 @@
 
 如果你是要本地改代码或调试实现，请改看 [开发指南](./development.md)。
 
+当前版本为 [`v0.4.3`](https://github.com/BryanHoo/FeedFuse/releases/tag/v0.4.3)，支持 `linux/amd64` 与 `linux/arm64`。Release 提供 `compose.yaml`、`.env.example` 和 `feedfuse-deploy-0.4.3.tar.gz` 部署附件。
+
 ## 推荐方式
 
 推荐使用仓库 `deploy/` 目录对应的发布文件：
@@ -140,19 +142,27 @@ AI 为可选功能，由每个用户在 `设置中心 -> AI` 中配置，操作�
 docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB"' > "feedfuse-$(date +%Y%m%d-%H%M%S).sql"
 ```
 
-确认命令成功退出、备份文件非空后，再拉取并重建服务：
+确认命令成功退出、备份文件非空后，先更新部署配置。
+
+从 `0.4.2` 或更早版本升级到 `0.4.3` 时，先检查本地 `compose.yaml`：新版默认不发布 PostgreSQL 端口，应移除 `db` 服务的 `ports` 配置。`docker compose pull` 只更新镜像，不会修改这个文件；如有自定义配置，按新版 [compose.yaml](../deploy/compose.yaml) 合并修改，并保留现有 `.env` 和数据库卷。
+
+如需从宿主机连接数据库，应另行配置仅绑定 `127.0.0.1` 的端口；本地源码开发可使用 [开发指南](./development.md#2-准备-postgresql) 中的覆盖文件。
+
+如果需要固定版本，把 `compose.yaml` 中两个镜像同时改为同一个已发布版本：
+
+- `ghcr.io/bryanhoo/feedfuse-web:0.4.3`
+- `ghcr.io/bryanhoo/feedfuse-worker:0.4.3`
+
+默认的 `latest` 通道会跟随正式版本更新；固定版本时两个镜像都使用不带 `v` 的 `0.4.3` 标签。升级会自动应用数据库迁移；仅换回旧镜像不会撤销迁移，回退时需要同时评估数据库备份恢复。
+
+完成配置修改后，拉取镜像并重建服务：
 
 ```bash
 docker compose pull
 docker compose up -d
 ```
 
-如果需要固定版本，把 `compose.yaml` 中两个镜像同时改为同一个已发布版本：
-
-- `ghcr.io/bryanhoo/feedfuse-web:latest`
-- `ghcr.io/bryanhoo/feedfuse-worker:latest`
-
-版本标签以实际发布结果为准。升级会自动应用数据库迁移；仅换回旧镜像不会撤销迁移，回退时需要同时评估数据库备份恢复。
+升级后执行 `docker compose ps`，检查 `db`、`web`、`worker` 状态和日志，再确认能够登录、刷新订阅并连续加载文章列表。
 
 从旧版本升级到多用户版本后，原有单用户数据会归属到初始用户。升级完成后先使用原 `admin` 登录，再到 `设置中心` -> `账号与安全` 检查账号资料。
 

@@ -2,6 +2,8 @@
 
 复核日期：2026-10-04。范围为当前代码、`pnpm-lock.yaml` 与仓库提供的 Linux / Node.js 24 Docker 部署；不代表已核验线上配置或容器镜像的全部系统库。
 
+这些依赖更新随 `0.4.3` 发布，版本变更见 [更新日志](../CHANGELOG.md#043---2026-10-08)。除末尾的发布前复查外，下述审计与测试数量为复核当天的记录。
+
 ## 更新与审计
 
 `pnpm audit --prod` 更新前为 2 critical、30 high、34 moderate、10 low；更新后四项均为 0。未添加审计忽略项或强制版本覆盖。告警数量反映依赖匹配结果，不等于可利用漏洞数量。
@@ -48,3 +50,16 @@
 - `pnpm build`：通过，生成 standalone 产物。移除对缺失的 `scripts/build/clean-build-artifacts.mjs` 的调用，并让 Next.js 复用 `config/typescript/tsconfig.typecheck.json`，与生产类型检查保持一致；测试夹具仍由 Vitest 执行。`next-env.d.ts` 包含新版 Next.js 自动生成的 `root-params.d.ts` 引用。
 
 复核依据仅覆盖当前锁文件和配置。依赖或部署条件变化后，应重新运行审计并检查相关调用路径；发布时需要重新构建并部署 Web 与 Worker 镜像。
+
+## 0.4.3 发布前复查
+
+2026-10-08 重新执行 `pnpm audit --prod` 时，发现 `jsdom > css-tree > source-map-js@1.2.1` 存在一项 high 告警：[GHSA-68fv-2mgg-jv7q](https://github.com/advisories/GHSA-68fv-2mgg-jv7q)。公告针对恶意索引 source map 的 section offset 导致事件循环阻塞；上游 [1.2.2 发布说明](https://github.com/7rulnik/source-map-js/releases/tag/v1.2.2) 包含修复。
+
+发布锁文件将这条依赖链更新到 `source-map-js@1.2.2`，未添加审计忽略项或强制版本覆盖。应用使用 jsdom 解析 HTML / XML，未发现接受外部 source map 的接口；此判断基于现有调用路径，不将依赖告警直接等同于应用可利用漏洞。
+
+发布前验证：
+
+- `pnpm install --frozen-lockfile --offline`：通过，使用本地已有的修复版本。
+- `pnpm audit --prod`：0 条告警。
+- `pnpm lint`、`pnpm type-check`、`pnpm build`：通过，生成 standalone 产物。
+- `pnpm test:unit`：230 个测试文件通过，1195 项测试通过；未配置独立测试数据库，4 项数据库集成测试跳过。

@@ -6,6 +6,29 @@
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-10-08
+
+这一版修复阅读列表分页漏项和订阅源错误提示交互，完善 RSS 地址安全判定，并更新依赖与部署文档。
+
+### 修复
+
+- 修复阅读快照分页游标指向额外查询记录的问题，改为使用本页末条记录，避免下一页漏掉文章。
+- 修复订阅源错误提示移入浮层后消失的问题，支持悬停查看、选择和复制错误文案。
+- 修复 IPv4-mapped 与 IPv4-translated IPv6 地址的安全判定，先还原真实 IPv4 地址，再应用公网、fake-ip、局域网与自定义 CIDR 规则。
+
+### 更改
+
+- 升级 Next.js、sharp、sanitize-html、tsx 及相关依赖，补充生产依赖安全复核记录与适用范围。
+- 更新 `source-map-js` 间接依赖到 `1.2.2`，消除发布前审计发现的索引 source map 拒绝服务告警。
+- 默认部署配置不再向宿主机发布 PostgreSQL 端口；本地开发通过 `docker-compose.dev.yml` 显式开放回环地址端口。
+- 移除已删除的构建清理脚本调用，统一构建与生产类型检查配置，并拆分阅读快照展示映射逻辑。
+- 完善部署、开发和使用指南，补充版本发布流程、固定版本升级步骤与订阅源错误排查方法。
+
+### 升级说明
+
+- Web 与 Worker 镜像应同时升级到 `0.4.3`，升级前备份数据库并保留现有配置。
+- `docker compose pull` 不会更新本地 `compose.yaml`；已有部署需要移除 `db.ports` 或合并新版配置，才能关闭数据库的宿主机端口。具体步骤见 [部署指南](https://github.com/BryanHoo/FeedFuse/blob/v0.4.3/docs/deploy.md#7-升级)。
+
 ## [0.4.2] - 2026-07-20
 
 这一版优化阅读器首屏加载与图片处理，并修复 Fever/FreshRSS 同步未复用上游完整正文的问题。
@@ -185,7 +208,8 @@
 - 修复图片代理、全文抓取、AI 任务状态、OPML 图标回填、阅读器选中态与多处可访问性和构建问题。
 - 增强 RSS 拉取异常提示、错误映射与配置校验，降低边界场景下的失败率。
 
-[Unreleased]: https://github.com/BryanHoo/FeedFuse/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/BryanHoo/FeedFuse/compare/v0.4.3...HEAD
+[0.4.3]: https://github.com/BryanHoo/FeedFuse/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/BryanHoo/FeedFuse/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/BryanHoo/FeedFuse/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/BryanHoo/FeedFuse/compare/v0.3.0...v0.4.0

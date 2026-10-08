@@ -27,6 +27,8 @@
   ·
   <a href="./docs/development.md">本地开发</a>
   ·
+  <a href="./CHANGELOG.md">更新日志</a>
+  ·
   <a href="./LICENSE">开源协议</a>
 </p>
 
@@ -63,6 +65,8 @@ FeedFuse 不替你决定看什么。订阅源由你决定，阅读节奏由你�
 - `自托管部署`：可直接用预构建镜像启动，也可以从源码运行和调试
 
 ## 快速开始
+
+当前版本：[`v0.4.3`](https://github.com/BryanHoo/FeedFuse/releases/tag/v0.4.3)。本版修复阅读分页漏项、订阅源错误提示与 RSS 地址安全判定，并更新生产依赖。完整变更见 [更新日志](./CHANGELOG.md#043---2026-10-08)。
 
 1. 按 [部署指南](./docs/deploy.md) 启动服务
 2. 使用 `admin` 和 `.env` 里的 `AUTH_INITIAL_PASSWORD` 首次登录

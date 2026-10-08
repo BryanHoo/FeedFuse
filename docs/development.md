@@ -166,6 +166,19 @@ docker compose up --build
 
 根目录 Compose 没有向 Web 传入 `AUTH_COOKIE_SECURE`，生产模式默认使用 Secure Cookie。若要通过 HTTP 验证源码镜像，需要在本地 Compose 覆盖文件的 `web.environment` 中设置 `AUTH_COOKIE_SECURE: 'false'`；正式部署使用 [部署指南](./deploy.md) 中的发布配置。
 
+## 发布版本
+
+正式发布由 [.github/workflows/release-images.yml](../.github/workflows/release-images.yml) 执行，推送 `v*` 标签后触发：
+
+1. 对照上一版本标签之后的提交，更新 `package.json` 版本和 `CHANGELOG.md`，同步 README 与相关指南中的版本说明。
+2. 执行 `pnpm lint`、`pnpm type-check`、`pnpm test:unit`、`pnpm build` 和 `pnpm audit --prod`，确认检查结果及跳过的测试范围。
+3. 提交版本与文档修改，创建和 `package.json` 一致的 `v<version>` 标签，再推送发布提交和标签。
+4. 等待 `Release Images` 工作流成功，核对 GitHub Release 的更新说明、部署附件，以及 Web / Worker 两个镜像的版本标签。
+
+工作流从 `CHANGELOG.md` 提取对应版本区块作为 Release 说明，同时构建 `linux/amd64` 与 `linux/arm64` 镜像。正式标签发布会更新完整版本、主次版本和 `latest` 镜像通道；GitHub 标签带 `v`，完整版本镜像标签不带 `v`。
+
+手动触发工作流时必须填写 `manual_tag`，并确认所选代码的 `CHANGELOG.md` 包含对应版本。手动发布不会更新 `latest`；需要更新正式通道时使用版本标签触发。
+
 ## 常见问题
 
 | 现象 | 检查项 |
