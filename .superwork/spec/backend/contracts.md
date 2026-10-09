@@ -34,6 +34,14 @@
 - 需要启动期迁移时，入口保持通过 `scripts/db/migrate.mjs`
 - 改变环境变量契约时，同步检查 `.env.example`、`docs/development.md`、部署文档
 
+## 应用数据库连接池契约
+
+- `src/server/infra/db/pool.ts` 的共享应用连接池必须监听 `error`，避免空闲连接故障触发未捕获异常；故障连接由 `pg` 自动移除，不在监听器中重复释放。
+- 池错误与排队告警写进程日志，不依赖数据库日志表；不得记录 `pg` 附加在错误上的 `client`，避免泄露连接配置和查询上下文。
+- 新建连接与池内排队等待必须有有限超时；同时设置数据库端 `statement_timeout` 和更长的客户端 `query_timeout`，分别取消慢语句和兜底处理无响应。
+- 监控 `waitingCount` 时同时记录 `totalCount` 和 `idleCount`，持续积压告警必须限频。采样定时器不得阻止进程退出，池关闭后必须停止采样。
+- 回归验证使用真实 `pg` 驱动覆盖空闲连接错误、连接建立超时、池耗尽等待超时、查询无响应、告警限频和监控清理；对应 `src/test/server/db/pool.test.ts`，无需真实数据库。
+
 ## 多用户隔离契约
 
 - 单实例多用户默认强隔离；所有用户私有数据必须带 `user_id`，route -> service -> repository -> worker 全链路显式传递当前 `session.userId`。

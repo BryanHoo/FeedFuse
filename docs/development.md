@@ -62,6 +62,10 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db
 
 默认绑定 `127.0.0.1:5432`，匹配 `.env.example` 中的 `DATABASE_URL`。如需修改端口，在 `.env` 中设置 `POSTGRES_PORT` 并同步调整 `DATABASE_URL`。不叠加 `docker-compose.dev.yml` 时，数据库端口不会发布到宿主机。
 
+Web 与 Worker 使用的应用连接池在 `src/server/infra/db/pool.ts` 中设置超时：新建连接和池内排队等待最多 5 秒，数据库语句最多执行 30 秒，客户端查询等待最多 35 秒。语句超时用于取消数据库中的慢语句，客户端超时用于兜底处理网络中断或无响应；这些限制针对单次操作，不是整个请求或事务的总时限，也不应用于迁移脚本和 pg-boss 自建的连接池。
+
+空闲连接错误写入进程标准错误日志，由 `pg` 自动移除故障连接。连接池每秒采样等待量；存在排队请求时输出 `[db.pool]` 告警，包含 `totalCount`、`idleCount`、`waitingCount`，持续积压每 30 秒最多输出一次。排查时查看 Web 或 Worker 的进程日志；这些日志不依赖数据库，也不写入设置中心的数据库日志表。
+
 ## 3. 安装依赖
 
 ```bash
