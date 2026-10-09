@@ -12,6 +12,7 @@ export function createWorkerLifecycle(deps: {
   boss: Pick<PgBoss, 'stop'>;
   pool: Pick<Pool, 'end'>;
   sampleStats: () => Promise<void>;
+  stopHeartbeat?: () => Promise<void>;
 }) {
   const activeTasks = new Set<Promise<void>>();
   let statsSample: Promise<void> | null = null;
@@ -55,6 +56,12 @@ export function createWorkerLifecycle(deps: {
 
     shutdownPromise = (async () => {
       const errors: unknown[] = [];
+      // 退出中的 Worker 不能继续被视为就绪；等待在途心跳并移除本实例记录。
+      try {
+        await deps.stopHeartbeat?.();
+      } catch (error) {
+        errors.push(error);
+      }
       // 先结束队列采样，防止 pg-boss 关闭连接后仍收到采样查询。
       await statsSample;
       try {

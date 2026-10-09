@@ -51,4 +51,6 @@ COPY --from=builder --chown=appuser:appgroup /app/src ./src
 COPY --from=builder --chown=appuser:appgroup /app/scripts ./scripts
 
 USER appuser
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD node node_modules/tsx/dist/cli.mjs --tsconfig config/typescript/tsconfig.json src/worker/healthcheck.ts
 CMD ["node", "node_modules/tsx/dist/cli.mjs", "--tsconfig", "config/typescript/tsconfig.json", "src/worker/index.ts"]

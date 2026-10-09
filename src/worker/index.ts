@@ -59,6 +59,7 @@ import { mapFeedFetchError } from '@/server/domains/feeds/tasks/feedFetchErrorMa
 import { normalizePersistedSettings } from '@/features/settings/settingsSchema';
 import { registerWorkers } from '@/worker/workerRegistry';
 import { createWorkerLifecycle } from '@/worker/lifecycle';
+import { startWorkerHeartbeat } from '@/worker/heartbeat';
 import { buildFeedFetchJobData, selectFeedsForRefreshAll } from '@/worker/refreshAll';
 import { isFeedDue } from '@/worker/rssScheduler';
 import { runArticleTaskWithStatus } from '@/worker/articleTaskStatus';
@@ -923,6 +924,7 @@ async function main() {
     boss,
     pool,
     sampleStats: () => sampleQueueStats(boss, Object.keys(QUEUE_CONTRACTS)),
+    stopHeartbeat: () => heartbeat.stop(),
   });
   const handlers = {
     [JOB_REFRESH_ALL]: refreshAllHandler,
@@ -953,6 +955,9 @@ async function main() {
   await boss.schedule(JOB_SYSTEM_LOG_CLEANUP, '0 * * * *');
   await boss.send(JOB_SYSTEM_LOG_CLEANUP, {});
 
+  // 队列、消费回调和定时任务全部注册完成后，才向健康探测发布就绪状态。
+  const heartbeat = await startWorkerHeartbeat(pool);
+
   const shutdown = () => {
     // 信号回调不能遗留未处理的 Promise 拒绝；清理失败应以非零状态退出。
     void lifecycle.shutdown().catch((error) => {
@@ -970,6 +975,7 @@ const isDirectRun = process.argv[1] && import.meta.url === new URL(process.argv[
 if (isDirectRun) {
   main().catch((err) => {
     console.error(err);
-    process.exitCode = 1;
+    // 启动失败时 pg-boss 可能已持有连接，必须结束进程让部署系统重启。
+    process.exit(1);
   });
 }

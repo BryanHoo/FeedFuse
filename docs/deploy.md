@@ -207,6 +207,12 @@ Worker 启动时及每小时会按用户清理流事件：成功或失败超过 
 
 `docker compose stop` 可停止服务；`docker compose down` 会移除容器和网络，但保留数据库卷。`docker compose down -v` 会删除数据库卷及其中的数据，不要用于普通升级。
 
+`GET /api/health` 会实际查询数据库并检查 Worker 心跳；仅数据库可用且至少一个 Worker 的心跳未过期时返回 HTTP 200，否则返回 503。响应中的 `data.checks.database` 和 `data.checks.worker` 可区分数据库故障、心跳缺失（`missing`）、过期（`stale`）及探测失败（`unavailable`）；数据库无法探测时 Worker 状态为 `unknown`。该接口无需登录，不返回数据库连接信息。
+
+Worker 在队列与定时任务注册完成后发布心跳，空闲时也每 15 秒更新一次；超过 60 秒未更新即判为失活，正常退出会删除本实例心跳。Web 的健康状态反映整体服务就绪情况，Worker 容器的健康检查只检查自己的实例，不会被其他 Worker 的心跳掩盖。`docker compose ps` 中的 `unhealthy` 表示探测失败；Docker 的 `restart: unless-stopped` 只在进程退出时重启，不会仅因 `unhealthy` 自动重启容器。
+
+升级时需应用新增的 `0038_worker_heartbeats.sql` 迁移（Compose 启动命令自动执行），并同步两份 Compose 中的 Worker `healthcheck` 配置。源码开发时需要同时运行 Web 与 Worker，单独启动 Web 会因缺少心跳返回 503。
+
 Worker 收到停止信号后，会停止队列采样，等待在途采样，再由 pg-boss 停止拉取并等待任务结束，最后关闭业务数据库连接池。pg-boss 的任务等待预算为 60 秒，进程总退出上限为 70 秒，两份 Compose 配置均设置 `stop_grace_period: 75s`。超过总预算仍未结束的任务会被强制中断，退出状态为非零；排查时查看 Worker 的 `[worker.shutdown.timeout]` 日志。
 
 更新已有部署时，需将本地 `compose.yaml` 的 Worker 停止宽限期同步为 `75s`；仅拉取新镜像不会更新 Compose 文件。使用 `docker compose stop/down --timeout` 时，也应预留至少 75 秒。[Docker 官方文档](https://docs.docker.com/reference/compose-file/services/#stop_grace_period)说明，未配置停止宽限期时，默认只等待 10 秒便发送 SIGKILL。

@@ -38,6 +38,12 @@
 
 ## 应用数据库连接池契约
 
+- `GET /api/health` 必须实际探测数据库及 Worker 心跳，二者就绪时返回 200，否则返回 503；响应保留 `{ ok, data }` 外壳、各组件状态与最后心跳时间，不暴露底层连接错误，并禁止缓存。
+- 健康探测使用独立的小连接池，连接、排队和查询设置短超时，保持在容器 5 秒探测超时内结束；不得依赖业务连接池的长查询超时。
+- Worker 必须在队列消费与调度注册完成后写入 `worker_heartbeats`，以数据库时钟每 15 秒更新，超过 60 秒未更新即失活；进程使用独立实例标识，正常退出等待在途更新后只删除本实例记录。
+- 整体健康要求至少一个活跃 Worker；容器探测必须读取本容器的实例标识并检查对应数据库心跳，避免其他实例掩盖本容器故障。一个容器只运行一个 Worker，Dockerfile 与两份 Compose 的 Worker 健康检查保持一致。
+- 心跳回归位于 `src/test/app/api/health/route.test.ts`、`src/test/worker/heartbeat.test.ts`、`src/test/worker/lifecycle.test.ts`；迁移与 SQL 回归位于 `src/test/server/db/migrations/workerHeartbeatsMigration.test.ts`，配置 `DATABASE_URL` 后使用真实 PostgreSQL 临时表与事务运行，不修改现有业务数据。
+
 - Worker 的 SIGINT / SIGTERM 退出必须幂等：停止队列采样并等待在途采样，显式调用 pg-boss 优雅停止，等待业务回调，再关闭业务数据库连接池；停止拉取期间已发出的 fetch 仍可能返回最后一批任务，其回调也必须纳入等待，不能因退出而直接拒绝。
 - pg-boss 任务等待预算为 60 秒（包含等待在途采样的时间），进程总退出上限为 70 秒，源码与部署 Compose 的 Worker 均须设置 `stop_grace_period: 75s`；调整预算时同步更新代码、两份 Compose 和部署指南。
 - pg-boss 等待超时不代表业务回调已结束；连接池关闭前必须另行等待回调。清理失败或超过总预算时以非零状态退出，记录进程日志；回归覆盖重复退出、在途采样、任务等待、清理失败及退出超时，位于 `src/test/worker/lifecycle.test.ts`。

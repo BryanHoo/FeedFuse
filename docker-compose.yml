@@ -60,6 +60,13 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      # 检查本容器实例的数据库心跳，不能由其他 Worker 的正常状态代替。
+      test: ['CMD', 'node', 'node_modules/tsx/dist/cli.mjs', '--tsconfig', 'config/typescript/tsconfig.json', 'src/worker/healthcheck.ts']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     restart: unless-stopped
 
 volumes:

@@ -22,6 +22,20 @@ afterEach(() => {
 });
 
 describe('worker lifecycle', () => {
+  it('stops and removes the heartbeat before closing the business pool', async () => {
+    const deps = setup();
+    const heartbeat = deferred();
+    const stopHeartbeat = vi.fn(() => heartbeat.promise);
+    const lifecycle = createWorkerLifecycle({ ...deps, stopHeartbeat });
+    const shutdown = lifecycle.shutdown();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(stopHeartbeat).toHaveBeenCalledTimes(1);
+    expect(deps.pool.end).not.toHaveBeenCalled();
+    heartbeat.resolve();
+    await shutdown;
+    expect(deps.pool.end).toHaveBeenCalledTimes(1);
+  });
+
   it('stops sampling, drains pg-boss and then closes the business pool only once', async () => {
     const deps = setup();
     const drain = deferred();
