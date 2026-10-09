@@ -1,14 +1,16 @@
-import type { PgBoss } from 'pg-boss';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { bootstrapQueues } from '@/server/infra/queue/bootstrap';
+import { QUEUE_CONTRACTS } from '@/server/infra/queue/contracts';
+import { createBossFixture } from './bossFixture';
 
 describe('bootstrapQueues', () => {
   it('creates queues and dead-letter queues from contracts', async () => {
-    const createQueue = vi.fn().mockResolvedValue(undefined);
+    const { createQueue, updateQueue } = createBossFixture();
 
     await bootstrapQueues({
       createQueue,
-    } as unknown as Pick<PgBoss, 'createQueue'>);
+      updateQueue,
+    });
 
     expect(createQueue).toHaveBeenCalledWith('article.filter', expect.any(Object));
     expect(createQueue).toHaveBeenCalledWith('dlq.article.filter', expect.any(Object));
@@ -17,11 +19,12 @@ describe('bootstrapQueues', () => {
   });
 
   it('creates dead-letter queue before queue that references it', async () => {
-    const createQueue = vi.fn().mockResolvedValue(undefined);
+    const { createQueue, updateQueue } = createBossFixture();
 
     await bootstrapQueues({
       createQueue,
-    } as unknown as Pick<PgBoss, 'createQueue'>);
+      updateQueue,
+    });
 
     const callNames = createQueue.mock.calls.map((call) => String(call[0]));
     const articleFilterIndex = callNames.indexOf('article.filter');
@@ -37,5 +40,30 @@ describe('bootstrapQueues', () => {
     expect(articleFilterDlqIndex).toBeLessThan(articleFilterIndex);
     expect(feedDlqIndex).toBeLessThan(feedIndex);
     expect(fulltextDlqIndex).toBeLessThan(fulltextIndex);
+  });
+
+  it('updates existing queues instead of retaining defaults or old configuration', async () => {
+    const boss = createBossFixture(new Map([
+      ['article.filter', {
+        retryLimit: 0,
+        retryDelay: 0,
+        retryBackoff: false,
+        retryDelayMax: 10,
+        heartbeatSeconds: 10,
+        expireInSeconds: 60,
+        deadLetter: 'dlq.old',
+        warningQueueSize: 1,
+      }],
+      ['ai.summarize_article', {}],
+    ]));
+
+    await bootstrapQueues(boss);
+
+    for (const [name, contract] of Object.entries(QUEUE_CONTRACTS)) {
+      expect(boss.queues.get(name)).toEqual(contract.queue);
+    }
+    expect(boss.updateQueue).toHaveBeenCalledWith('article.filter', QUEUE_CONTRACTS['article.filter'].queue);
+    // 死信队列没有契约配置，不能向 updateQueue 传空对象。
+    expect(boss.updateQueue.mock.calls.every(([, options]) => Object.keys(options).length > 0)).toBe(true);
   });
 });

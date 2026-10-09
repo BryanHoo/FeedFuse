@@ -1,28 +1,5 @@
 import { startBoss } from '@/server/infra/queue/boss';
-import type { PgBoss } from 'pg-boss';
-
-const ensuredQueues = new Set<string>();
-const ensureQueuePromises = new Map<string, Promise<void>>();
-
-async function ensureQueue(instance: PgBoss, name: string): Promise<void> {
-  if (ensuredQueues.has(name)) return;
-
-  let promise = ensureQueuePromises.get(name);
-  if (!promise) {
-    promise = instance
-      .createQueue(name)
-      .then(() => {
-        ensuredQueues.add(name);
-      })
-      .catch((err) => {
-        ensureQueuePromises.delete(name);
-        throw err;
-      });
-    ensureQueuePromises.set(name, promise);
-  }
-
-  await promise;
-}
+import { ensureQueue } from '@/server/infra/queue/bootstrap';
 
 export type EnqueueResult =
   | { status: 'enqueued'; jobId: string }
@@ -35,7 +12,7 @@ export async function enqueueWithResult(
 ): Promise<EnqueueResult> {
   const instance = await startBoss();
   await ensureQueue(instance, name);
-  // pg-boss types differ between CJS/ESM builds; keep options loosely typed.
+  // 等待契约配置同步成功后再发送；pg-boss 的 CJS/ESM 类型不同，保留宽松选项类型。
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const jobId = await instance.send(name, data, options as any);
   if (!jobId) return { status: 'throttled_or_duplicate' };

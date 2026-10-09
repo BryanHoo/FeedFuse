@@ -22,6 +22,12 @@
 - DeepSeek 专有 thinking 参数只能根据 provider 协议能力判断，不能只凭 `model` 名称前缀推断；像 OpenRouter 这类第三方 OpenAI-compatible 网关即使承载 `deepseek-*` 模型，也不能强行套用原生 DeepSeek 私有参数。
 - AI 摘要、翻译、智能报告这类用户可见输出在写入 session、事件流、文章内容前，必须去除思考文案、`<think>` 标签和中间推理文本；如果 provider 额外返回 `reasoning_content`，也只能消费最终可见文本，不能把 reasoning-only delta 或中间推理落到 SSE、事件表或文章字段里。
 
+## 队列初始化契约
+
+- Web 首次入队和 Worker 启动必须共用 `src/server/infra/queue/bootstrap.ts` 的初始化入口，使用 `QUEUE_CONTRACTS` 中的队列配置，先创建被引用的死信队列。
+- pg-boss 12.13.0 的 `createQueue` 不更新已有队列；存在契约配置时必须随后调用 `updateQueue`，同步重试、心跳、超时和死信等显式配置字段。无契约配置的队列保留默认创建行为，不能向 `updateQueue` 传空对象。
+- 初始化成功前不能发送任务；并发调用共用初始化结果，缓存必须按 pg-boss 实例隔离，失败后允许重试。回归验证覆盖 `src/test/server/queue/bootstrap.test.ts` 和 `src/test/server/queue/queue.test.ts`。
+
 ## 数据与迁移
 
 - schema 变化必须同步更新 `src/server/infra/db/migrations/**`
