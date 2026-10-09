@@ -100,6 +100,7 @@ export default function SecuritySettingsPanel() {
   const [isUsersError, setIsUsersError] = useState(false);
   const [securityMessage, setSecurityMessage] = useState('');
   const [isSecurityError, setIsSecurityError] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
   const [nextPassword, setNextPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [currentUsername, setCurrentUsername] = useState('');
@@ -161,6 +162,8 @@ export default function SecuritySettingsPanel() {
   }, [currentUser?.id, currentUser?.role]);
 
   const resetSecurityForm = () => {
+    // 保存成功或关闭弹窗后清空全部密码，避免敏感输入留在下一次编辑中。
+    setCurrentPassword('');
     setNextPassword('');
     setConfirmPassword('');
   };
@@ -234,6 +237,12 @@ export default function SecuritySettingsPanel() {
         setSecurityMessage('两次输入的新密码不一致');
         return;
       }
+
+      if (!currentPassword) {
+        setIsSecurityError(true);
+        setSecurityMessage('请输入当前密码');
+        return;
+      }
     }
 
     setSecurityMessage('');
@@ -243,6 +252,8 @@ export default function SecuritySettingsPanel() {
       void updateCurrentUserProfile(
         {
           username: normalizedUsername,
+          // 仅改密时提交当前密码，并保留用户输入的前后空格供后端验证。
+          currentPassword: shouldChangePassword ? currentPassword : undefined,
           nextPassword: shouldChangePassword ? nextPassword : undefined,
         },
         { notifyOnError: false, redirectOnUnauthorized: false },
@@ -530,6 +541,18 @@ export default function SecuritySettingsPanel() {
                 onChange={(event) => setCurrentUsername(event.target.value)}
                 placeholder="输入用户名"
                 autoComplete="username"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="settings-current-password">当前密码</Label>
+              <Input
+                id="settings-current-password"
+                type="password"
+                autoComplete="current-password"
+                value={currentPassword}
+                onChange={(event) => setCurrentPassword(event.target.value)}
+                placeholder="修改密码时必填"
               />
             </div>
 

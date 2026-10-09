@@ -4,18 +4,16 @@ import {
   createSessionCookieHeader,
   requireApiSession,
 } from '@/server/domains/auth/services/session';
-import { changeUserPassword, getUserById } from '@/server/domains/auth/repositories/usersRepo';
-import { hashPassword, verifyPassword } from '@/server/domains/auth/services/password';
+import { changeOwnPassword } from '@/server/domains/auth/services/changeOwnPasswordService';
 import { ok, fail } from '@/server/infra/http/apiResponse';
-import { ForbiddenError, UnauthorizedError, ValidationError } from '@/server/infra/http/errors';
-import { isInitialUser } from '@/server/domains/auth/userType';
+import { ValidationError } from '@/server/infra/http/errors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const changePasswordBodySchema = z.object({
-  currentPassword: z.string().min(1),
-  nextPassword: z.string().min(8),
+  currentPassword: z.string().optional(),
+  nextPassword: z.string(),
 });
 
 export async function POST(request: Request) {
@@ -34,25 +32,11 @@ export async function POST(request: Request) {
       });
     }
 
-    if (parsed.data.currentPassword === parsed.data.nextPassword) {
-      throw new ValidationError('新密码不能与当前密码相同', {
-        nextPassword: '请设置不同的新密码',
-      });
-    }
-
-    const pool = getPool();
-    const user = await getUserById(pool, session.userId);
-    if (!user || !isInitialUser(user)) {
-      throw new ForbiddenError('仅初始用户本人可以修改该密码');
-    }
-    if (!verifyPassword(parsed.data.currentPassword, user.passwordHash)) {
-      throw new UnauthorizedError('当前密码错误，请重试');
-    }
-
-    const nextPasswordHash = hashPassword(parsed.data.nextPassword);
-    const updated = await changeUserPassword(pool, {
-      userId: user.id,
-      passwordHash: nextPasswordHash,
+    // 兼容入口仍只允许初始用户本人操作，密码验证与其他自助入口保持一致。
+    const updated = await changeOwnPassword(getPool(), {
+      userId: session.userId,
+      ...parsed.data,
+      initialUserOnly: true,
     });
 
     return ok(
@@ -60,9 +44,9 @@ export async function POST(request: Request) {
       {
         headers: {
           'set-cookie': await createSessionCookieHeader({
-            userId: user.id,
-            role: user.role,
-            sessionVersion: updated?.sessionVersion ?? session.sessionVersion,
+            userId: updated.id,
+            role: updated.role,
+            sessionVersion: updated.sessionVersion,
           }),
         },
       },

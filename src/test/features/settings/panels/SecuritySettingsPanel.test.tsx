@@ -78,7 +78,7 @@ describe('SecuritySettingsPanel', () => {
 
     const dialog = await screen.findByRole('dialog', { name: '编辑当前账号' });
     expect(within(dialog).getByLabelText('用户名')).toHaveValue('admin');
-    expect(within(dialog).queryByLabelText('当前密码')).not.toBeInTheDocument();
+    expect(within(dialog).getByLabelText('当前密码')).toHaveAttribute('autocomplete', 'current-password');
     expect(within(dialog).getByLabelText('新密码')).toBeInTheDocument();
     expect(within(dialog).getByLabelText('确认新密码')).toBeInTheDocument();
     expect(within(dialog).queryByText('当前账号资料只展示在这里，所有用户都可在此修改自己的密码。')).not.toBeInTheDocument();
@@ -128,6 +128,9 @@ describe('SecuritySettingsPanel', () => {
 
     const dialog = await screen.findByRole('dialog', { name: '编辑当前账号' });
     fireEvent.change(within(dialog).getByLabelText('用户名'), { target: { value: 'renamed-admin' } });
+    fireEvent.change(within(dialog).getByLabelText('当前密码'), {
+      target: { value: '  old-password-123  ' },
+    });
     fireEvent.change(within(dialog).getByLabelText('新密码'), {
       target: { value: 'new-password-123' },
     });
@@ -140,11 +143,25 @@ describe('SecuritySettingsPanel', () => {
       expect(updateCurrentUserProfileMock).toHaveBeenCalledWith(
         {
           username: 'renamed-admin',
+          currentPassword: '  old-password-123  ',
           nextPassword: 'new-password-123',
         },
         { notifyOnError: false, redirectOnUnauthorized: false },
       );
     });
+    expect(within(dialog).getByLabelText('当前密码')).toHaveValue('');
+    expect(within(dialog).getByLabelText('新密码')).toHaveValue('');
+  });
+
+  it('requires current password only when changing the password', async () => {
+    render(<SecuritySettingsPanel />);
+    fireEvent.click(screen.getByTestId('security-current-user-edit-button'));
+    const dialog = await screen.findByRole('dialog', { name: '编辑当前账号' });
+    fireEvent.change(within(dialog).getByLabelText('新密码'), { target: { value: 'new-password-123' } });
+    fireEvent.change(within(dialog).getByLabelText('确认新密码'), { target: { value: 'new-password-123' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: '保存' }));
+    expect(await within(dialog).findByText('请输入当前密码')).toBeInTheDocument();
+    expect(updateCurrentUserProfileMock).not.toHaveBeenCalled();
   });
 
   it('blocks save when password confirmation does not match', async () => {

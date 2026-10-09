@@ -10,7 +10,7 @@ import {
   createSessionCookieHeader,
   requireApiSession,
 } from '@/server/domains/auth/services/session';
-import { hashPassword } from '@/server/domains/auth/services/password';
+import { changeOwnPassword } from '@/server/domains/auth/services/changeOwnPasswordService';
 import { updateUser } from '@/server/domains/auth/repositories/usersRepo';
 
 export const runtime = 'nodejs';
@@ -18,6 +18,7 @@ export const dynamic = 'force-dynamic';
 
 const patchCurrentUserBodySchema = z.object({
   username: z.string().trim().min(1, '请输入用户名'),
+  currentPassword: z.string().optional(),
   nextPassword: z.string().optional().default(''),
 });
 
@@ -55,23 +56,16 @@ export async function PATCH(request: Request) {
     const nextPassword = parsed.data.nextPassword;
     const shouldChangePassword = nextPassword.length > 0;
 
-    let passwordHash: string | undefined;
-    if (shouldChangePassword) {
-      if (nextPassword.length < 8) {
-        throw new ValidationError('密码校验失败', {
-          nextPassword: '新密码至少需要 8 位',
-        });
-      }
-
-      passwordHash = hashPassword(nextPassword);
-    }
-
-    // 当前账号自助入口统一保存用户名与密码，角色和状态仍保持后端只读。
-    const user = await updateUser(getPool(), {
-      userId: session.userId,
-      username: parsed.data.username,
-      passwordHash,
-    });
+    // 涉及改密时必须走共享服务；纯用户名编辑无需当前密码，也不更新会话版本。
+    const pool = getPool();
+    const user = shouldChangePassword
+      ? await changeOwnPassword(pool, {
+          userId: session.userId,
+          username: parsed.data.username,
+          currentPassword: parsed.data.currentPassword,
+          nextPassword,
+        })
+      : await updateUser(pool, { userId: session.userId, username: parsed.data.username });
     if (!user) {
       throw new NotFoundError('用户不存在');
     }
@@ -84,7 +78,7 @@ export async function PATCH(request: Request) {
               'set-cookie': await createSessionCookieHeader({
                 userId: user.id,
                 role: user.role,
-                sessionVersion: user.sessionVersion ?? session.sessionVersion,
+                sessionVersion: user.sessionVersion,
               }),
             },
           }

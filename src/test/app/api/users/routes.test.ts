@@ -245,9 +245,14 @@ describe('/api/users', () => {
       userId: '1',
       username: 'renamed-admin',
     });
+    expect(getUserByIdMock).not.toHaveBeenCalled();
+    expect(hashPasswordMock).not.toHaveBeenCalled();
+    expect(createSessionCookieHeaderMock).not.toHaveBeenCalled();
+    expect(res.headers.get('set-cookie')).toBeNull();
   });
 
   it('PATCH /api/users/me updates username and password together', async () => {
+    getUserByIdMock.mockResolvedValue({ id: '1', passwordHash: 'scrypt$old', role: 'admin' });
     updateUserMock.mockResolvedValue({
       id: '1',
       username: 'renamed-admin',
@@ -264,6 +269,7 @@ describe('/api/users', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           username: 'renamed-admin',
+          currentPassword: 'old-password-123',
           nextPassword: 'new-password-123',
         }),
       }),
@@ -272,6 +278,7 @@ describe('/api/users', () => {
 
     expect(res.status).toBe(200);
     expect(json.ok).toBe(true);
+    expect(verifyPasswordMock).toHaveBeenCalledWith('old-password-123', 'scrypt$old');
     expect(hashPasswordMock).toHaveBeenCalledWith('new-password-123');
     expect(updateUserMock).toHaveBeenCalledWith(pool, {
       userId: '1',
@@ -287,6 +294,7 @@ describe('/api/users', () => {
   });
 
   it('PATCH /api/users/me preserves leading and trailing spaces in nextPassword', async () => {
+    getUserByIdMock.mockResolvedValue({ id: '1', passwordHash: 'scrypt$old', role: 'admin' });
     updateUserMock.mockResolvedValue({
       id: '1',
       username: 'renamed-admin',
@@ -303,12 +311,90 @@ describe('/api/users', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           username: 'renamed-admin',
+          currentPassword: '  old-password-123  ',
           nextPassword: '  new-password-123  ',
         }),
       }),
     );
 
     expect(hashPasswordMock).toHaveBeenCalledWith('  new-password-123  ');
+    expect(verifyPasswordMock).toHaveBeenCalledWith('  old-password-123  ', 'scrypt$old');
+  });
+
+  // 同一组拒绝用例覆盖所有自助改密入口，防止统一保存或兼容接口绕过验证。
+  describe.each([
+    ['/api/users/me', 'PATCH'],
+    ['/api/users/me/password', 'POST'],
+    ['/api/settings/auth/password', 'POST'],
+  ])('%s password verification', (path, method) => {
+    const requestChange = async (payload: Record<string, unknown>) => {
+      const route = path === '/api/users/me'
+        ? await import('../../../../app/api/users/me/route')
+        : path === '/api/users/me/password'
+          ? await import('../../../../app/api/users/me/password/route')
+          : await import('../../../../app/api/settings/auth/password/route');
+      const request = new Request(`http://localhost${path}`, {
+        method,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ username: 'renamed-admin', nextPassword: 'new-password-123', ...payload }),
+      });
+      return 'PATCH' in route ? route.PATCH(request) : route.POST(request);
+    };
+
+    beforeEach(() => {
+      getUserByIdMock.mockResolvedValue({
+        id: '1', passwordHash: 'scrypt$old', role: 'admin', type: 'initial_admin',
+      });
+      updateUserMock.mockResolvedValue({ id: '1', role: 'admin', sessionVersion: 2 });
+    });
+
+    it.each([undefined, ''])('rejects missing current password (%s) without writing', async (currentPassword) => {
+      const res = await requestChange({ currentPassword });
+      expect(res.status).toBe(400);
+      expect((await res.json()).error.fields.currentPassword).toBe('请输入当前密码');
+      expect(hashPasswordMock).not.toHaveBeenCalled();
+      expect(updateUserMock).not.toHaveBeenCalled();
+      expect(changeUserPasswordMock).not.toHaveBeenCalled();
+      expect(createSessionCookieHeaderMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects wrong current password without changing username or password', async () => {
+      verifyPasswordMock.mockReturnValue(false);
+      const res = await requestChange({ currentPassword: 'wrong-password' });
+      expect(res.status).toBe(401);
+      expect(hashPasswordMock).not.toHaveBeenCalled();
+      expect(updateUserMock).not.toHaveBeenCalled();
+      expect(changeUserPasswordMock).not.toHaveBeenCalled();
+      expect(createSessionCookieHeaderMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects unchanged passwords without writing', async () => {
+      const res = await requestChange({ currentPassword: 'new-password-123' });
+      expect(res.status).toBe(400);
+      expect((await res.json()).error.fields.nextPassword).toBe('请设置不同的新密码');
+      expect(updateUserMock).not.toHaveBeenCalled();
+      expect(changeUserPasswordMock).not.toHaveBeenCalled();
+      expect(createSessionCookieHeaderMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects short next passwords before verification or writing', async () => {
+      const res = await requestChange({ currentPassword: 'old-password-123', nextPassword: 'short' });
+      expect(res.status).toBe(400);
+      expect((await res.json()).error.fields.nextPassword).toBe('新密码至少需要 8 位');
+      expect(verifyPasswordMock).not.toHaveBeenCalled();
+      expect(updateUserMock).not.toHaveBeenCalled();
+      expect(changeUserPasswordMock).not.toHaveBeenCalled();
+      expect(createSessionCookieHeaderMock).not.toHaveBeenCalled();
+    });
+
+    it('does not rotate the cookie if the user disappears before writing', async () => {
+      updateUserMock.mockResolvedValue(null);
+      changeUserPasswordMock.mockResolvedValue(null);
+      const res = await requestChange({ currentPassword: 'old-password-123' });
+      expect(res.status).toBe(404);
+      expect(createSessionCookieHeaderMock).not.toHaveBeenCalled();
+      expect(res.headers.get('set-cookie')).toBeNull();
+    });
   });
 
   it('PATCH /api/users/me rejects incomplete password change payload', async () => {

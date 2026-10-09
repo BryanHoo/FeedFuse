@@ -377,7 +377,7 @@ describe('SettingsCenterModal', () => {
     fireEvent.click(screen.getByTestId('security-current-user-edit-button'));
 
     expect(await screen.findByRole('dialog', { name: '编辑当前账号' })).toBeInTheDocument();
-    expect(screen.queryByLabelText('当前密码')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('当前密码')).toHaveAttribute('autocomplete', 'current-password');
     expect(screen.getByLabelText('新密码')).toBeInTheDocument();
 
     const countLogoutCalls = () =>

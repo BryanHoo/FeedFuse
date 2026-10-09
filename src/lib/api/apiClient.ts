@@ -278,6 +278,7 @@ export async function changeOwnPassword(
 export async function updateCurrentUserProfile(
   input: {
     username: string;
+    currentPassword?: string;
     nextPassword?: string;
   },
   options?: RequestApiOptions,

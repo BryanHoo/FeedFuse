@@ -1,17 +1,16 @@
 import { z } from 'zod';
 import { getPool } from '@/server/infra/db/pool';
 import { ok, fail } from '@/server/infra/http/apiResponse';
-import { UnauthorizedError, ValidationError } from '@/server/infra/http/errors';
+import { ValidationError } from '@/server/infra/http/errors';
 import { createSessionCookieHeader, requireApiSession } from '@/server/domains/auth/services/session';
-import { hashPassword, verifyPassword } from '@/server/domains/auth/services/password';
-import { changeUserPassword, getUserById } from '@/server/domains/auth/repositories/usersRepo';
+import { changeOwnPassword } from '@/server/domains/auth/services/changeOwnPasswordService';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const changeOwnPasswordBodySchema = z.object({
-  currentPassword: z.string().min(1),
-  nextPassword: z.string().min(8),
+  currentPassword: z.string().optional(),
+  nextPassword: z.string(),
 });
 
 export async function POST(request: Request) {
@@ -29,30 +28,19 @@ export async function POST(request: Request) {
         nextPassword: '新密码至少需要 8 位',
       });
     }
-    if (parsed.data.currentPassword === parsed.data.nextPassword) {
-      throw new ValidationError('新密码不能与当前密码相同', {
-        nextPassword: '请设置不同的新密码',
-      });
-    }
-
-    const user = await getUserById(getPool(), session.userId);
-    if (!user || !verifyPassword(parsed.data.currentPassword, user.passwordHash)) {
-      throw new UnauthorizedError('当前密码错误，请重试');
-    }
-
-    const updated = await changeUserPassword(getPool(), {
+    const updated = await changeOwnPassword(getPool(), {
       userId: session.userId,
-      passwordHash: hashPassword(parsed.data.nextPassword),
+      ...parsed.data,
     });
 
     const sessionCookie = await createSessionCookieHeader({
-      userId: user.id,
-      role: user.role,
-      sessionVersion: updated?.sessionVersion ?? session.sessionVersion,
+      userId: updated.id,
+      role: updated.role,
+      sessionVersion: updated.sessionVersion,
     });
 
     return ok(
-      { updated: Boolean(updated) },
+      { updated: true },
       {
         headers: {
           'set-cookie': sessionCookie,
