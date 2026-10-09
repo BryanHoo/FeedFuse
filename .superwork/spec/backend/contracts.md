@@ -6,6 +6,13 @@
 - 可复用业务流程进入 `src/server/domains/**/services/**`
 - 响应格式尽量通过 `src/server/infra/http/apiResponse.ts` 等公共工具统一
 
+## 设置写入契约
+
+- `PUT /api/settings` 完整替换当前用户设置，必须提交完整的 `general`、`ai`、`categories`、`rss`、`logging` 及其必填嵌套字段；所有对象拒绝未知字段，不允许将缺失字段补成默认值或强制转换类型。
+- 无效 JSON、非对象请求、缺失必填字段及非法类型、枚举、数值范围或 URL 必须返回 HTTP 400，使用 `validation_error` 和字段错误信息；请求校验必须先于读取旧设置、开启事务、保存设置、更新抓取间隔、裁剪文章及清理 AI 运行态。
+- 兼容旧配置的 `normalizePersistedSettings` 仅用于读取和迁移，包括读取旧设置进行变更比较；不得用于把未经校验的写请求或异常保存结果转换为默认配置。
+- 回归验证位于 `src/test/app/api/settings/routes.test.ts`，必须覆盖无效输入时无配置写入、无文章裁剪、无 AI 清理，以及合法完整请求保留其他配置；同时验证旧配置读取仍兼容。
+
 ## Service 到 Repository
 
 - service 负责业务顺序、幂等规则、跨模块编排

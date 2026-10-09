@@ -130,6 +130,156 @@ describe('/api/settings', () => {
     expect(json.data.logging).toEqual(defaultPersistedSettings.logging);
   });
 
+  it.each([
+    ['malformed JSON', '{'],
+    ['empty body', ''],
+    ['null', 'null'],
+    ['array', '[]'],
+    ['primitive', 'true'],
+    ['empty object', '{}'],
+    ['partial settings', JSON.stringify({ general: { theme: 'dark' } })],
+    ['missing nested fields', JSON.stringify({ ...defaultPersistedSettings, ai: {} })],
+    ['missing retention limit', JSON.stringify({
+      ...defaultPersistedSettings,
+      rss: { ...defaultPersistedSettings.rss, maxStoredArticlesPerFeed: undefined },
+    })],
+    ['missing translation fields', JSON.stringify({
+      ...defaultPersistedSettings,
+      ai: { ...defaultPersistedSettings.ai, translation: {} },
+    })],
+    ['invalid theme', JSON.stringify({
+      ...defaultPersistedSettings,
+      general: { ...defaultPersistedSettings.general, theme: 'invalid' },
+    })],
+    ['invalid fetch interval', JSON.stringify({
+      ...defaultPersistedSettings,
+      rss: { ...defaultPersistedSettings.rss, fetchIntervalMinutes: 999 },
+    })],
+    ['invalid log retention', JSON.stringify({
+      ...defaultPersistedSettings,
+      logging: { ...defaultPersistedSettings.logging, retentionDays: 999 },
+    })],
+    ['invalid log level', JSON.stringify({
+      ...defaultPersistedSettings,
+      logging: { ...defaultPersistedSettings.logging, minLevel: 'debug' },
+    })],
+    ['invalid retention limit', JSON.stringify({
+      ...defaultPersistedSettings,
+      rss: { ...defaultPersistedSettings.rss, maxStoredArticlesPerFeed: 999 },
+    })],
+    ['wrong boolean type', JSON.stringify({
+      ...defaultPersistedSettings,
+      ai: { ...defaultPersistedSettings.ai, summaryEnabled: 'true' },
+    })],
+    ['unknown field', JSON.stringify({ ...defaultPersistedSettings, appearance: {} })],
+    ['unknown nested field', JSON.stringify({
+      ...defaultPersistedSettings,
+      ai: { ...defaultPersistedSettings.ai, apiKey: 'secret' },
+    })],
+    ['invalid pane width', JSON.stringify({
+      ...defaultPersistedSettings,
+      general: { ...defaultPersistedSettings.general, leftPaneWidth: 9999 },
+    })],
+    ['invalid AI URL', JSON.stringify({
+      ...defaultPersistedSettings,
+      ai: { ...defaultPersistedSettings.ai, apiBaseUrl: 'not-a-url' },
+    })],
+    ['invalid RSS source', JSON.stringify({
+      ...defaultPersistedSettings,
+      rss: { ...defaultPersistedSettings.rss, sources: [null] },
+    })],
+    ['invalid RSS URL protocol', JSON.stringify({
+      ...defaultPersistedSettings,
+      rss: {
+        ...defaultPersistedSettings.rss,
+        sources: [{ id: 'source-1', name: 'RSS', url: 'file:///rss.xml', category: null, enabled: true }],
+      },
+    })],
+    ['invalid category', JSON.stringify({
+      ...defaultPersistedSettings,
+      categories: [{ id: 'cat-1', name: '' }],
+    })],
+    ['invalid keyword type', JSON.stringify({
+      ...defaultPersistedSettings,
+      rss: {
+        ...defaultPersistedSettings.rss,
+        articleFilter: {
+          ...defaultPersistedSettings.rss.articleFilter,
+          keyword: { enabled: true, keywords: [123] },
+        },
+      },
+    })],
+  ])('PUT rejects %s before changing settings or runtime state', async (_name, body) => {
+    // 模拟已有较高留存上限和有效 AI 配置，防止无效请求回退默认值后触发破坏性清理。
+    getUiSettingsMock.mockResolvedValue(normalizePersistedSettings({
+      rss: { maxStoredArticlesPerFeed: 2000 },
+      ai: { model: 'configured-model', apiBaseUrl: 'https://ai.example.com/v1' },
+    }));
+    updateUiSettingsMock.mockResolvedValue(defaultPersistedSettings);
+
+    const mod = await import('../../../../app/api/settings/route');
+    const res = await mod.PUT(new Request('http://localhost/api/settings', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body,
+    }));
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json).toMatchObject({ ok: false, error: { code: 'validation_error' } });
+    expect(json.error.fields).toBeDefined();
+    expect(getUiSettingsMock).not.toHaveBeenCalled();
+    expect(getAiApiKeyMock).not.toHaveBeenCalled();
+    expect(getTranslationApiKeyMock).not.toHaveBeenCalled();
+    expect(pool.connect).not.toHaveBeenCalled();
+    expect(updateUiSettingsMock).not.toHaveBeenCalled();
+    expect(updateAllFeedsFetchIntervalMinutesMock).not.toHaveBeenCalled();
+    expect(pruneAllFeedsArticlesToLimitMock).not.toHaveBeenCalled();
+    expect(cleanupAiRuntimeStateMock).not.toHaveBeenCalled();
+    expect(writeUserOperationSucceededLogMock).not.toHaveBeenCalled();
+    expect(writeSystemLogMock).not.toHaveBeenCalled();
+  });
+
+  it('PUT saves complete settings without resetting unrelated configuration', async () => {
+    const payload = structuredClone(defaultPersistedSettings);
+    payload.general.theme = 'dark';
+    payload.ai.model = 'configured-model';
+    payload.ai.apiBaseUrl = 'https://ai.example.com/v1';
+    payload.ai.translation = {
+      useSharedAi: false,
+      model: 'translation-model',
+      apiBaseUrl: 'https://translation.example.com/v1',
+    };
+    payload.categories = [{ id: 'tech', name: '科技' }];
+    payload.rss.sources = [{
+      id: 'source-1', name: '技术资讯', url: 'https://example.com/rss.xml', category: '科技', enabled: true,
+    }];
+    payload.rss.maxStoredArticlesPerFeed = 2000;
+    payload.rss.articleFilter.keyword = { enabled: true, keywords: ['广告', '招聘'] };
+    payload.rss.articleFilter.ai = { enabled: true, prompt: '过滤广告文章' };
+    payload.logging = { enabled: true, retentionDays: 30, minLevel: 'warning' };
+    getUiSettingsMock.mockResolvedValue({
+      ...payload,
+      general: { ...payload.general, theme: 'light' },
+    });
+    // 仓储原样返回实际提交值，避免固定返回值掩盖写入过程中对其他设置的意外修改。
+    updateUiSettingsMock.mockImplementation(async (_client, _userId, settings) => settings);
+
+    const mod = await import('../../../../app/api/settings/route');
+    const res = await mod.PUT(new Request('http://localhost/api/settings', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    }));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, data: payload });
+    expect(updateUiSettingsMock).toHaveBeenCalledWith(client, '1', payload);
+    expect(pruneAllFeedsArticlesToLimitMock).not.toHaveBeenCalled();
+    expect(cleanupAiRuntimeStateMock).not.toHaveBeenCalled();
+    expect(client.query).toHaveBeenCalledWith('commit');
+  });
+
   it('PUT updates all feeds when rss.fetchIntervalMinutes changes', async () => {
     getUiSettingsMock.mockResolvedValue({ rss: { fetchIntervalMinutes: 30 } });
 
@@ -145,7 +295,7 @@ describe('/api/settings', () => {
       new Request('http://localhost/api/settings', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(normalizePersistedSettings(payload)),
       }),
     );
     const json = await res.json();
@@ -175,7 +325,7 @@ describe('/api/settings', () => {
       new Request('http://localhost/api/settings', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(normalizePersistedSettings(payload)),
       }),
     );
     const json = await res.json();
@@ -206,7 +356,7 @@ describe('/api/settings', () => {
       new Request('http://localhost/api/settings', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(normalizePersistedSettings(payload)),
       }),
     );
 
@@ -225,7 +375,7 @@ describe('/api/settings', () => {
       new Request('http://localhost/api/settings', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(normalizePersistedSettings(payload)),
       }),
     );
     const json = await res.json();
@@ -248,7 +398,7 @@ describe('/api/settings', () => {
       new Request('http://localhost/api/settings', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ logging: { enabled: true, retentionDays: 7, minLevel: 'info' } }),
+        body: JSON.stringify(normalizePersistedSettings({ logging: { enabled: true, retentionDays: 7, minLevel: 'info' } })),
       }),
     );
 
@@ -270,7 +420,7 @@ describe('/api/settings', () => {
       new Request('http://localhost/api/settings', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ logging: { enabled: false, retentionDays: 7, minLevel: 'info' } }),
+        body: JSON.stringify(normalizePersistedSettings({ logging: { enabled: false, retentionDays: 7, minLevel: 'info' } })),
       }),
     );
 
@@ -292,7 +442,7 @@ describe('/api/settings', () => {
       new Request('http://localhost/api/settings', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ logging: { enabled: true, retentionDays: 30, minLevel: 'info' } }),
+        body: JSON.stringify(normalizePersistedSettings({ logging: { enabled: true, retentionDays: 30, minLevel: 'info' } })),
       }),
     );
 
@@ -317,7 +467,7 @@ describe('/api/settings', () => {
       new Request('http://localhost/api/settings', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ logging: { enabled: false, retentionDays: 30, minLevel: 'info' } }),
+        body: JSON.stringify(normalizePersistedSettings({ logging: { enabled: false, retentionDays: 30, minLevel: 'info' } })),
       }),
     );
 
@@ -359,7 +509,7 @@ describe('/api/settings', () => {
       new Request('http://localhost/api/settings', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
+        body: JSON.stringify(normalizePersistedSettings({
           ai: {
             model: 'gpt-new',
             apiBaseUrl: 'https://new.example.com/v1',
@@ -369,7 +519,7 @@ describe('/api/settings', () => {
               apiBaseUrl: '',
             },
           },
-        }),
+        })),
       }),
     );
 
@@ -417,7 +567,7 @@ describe('/api/settings', () => {
       new Request('http://localhost/api/settings', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
+        body: JSON.stringify(normalizePersistedSettings({
           ai: {
             model: 'gpt-shared',
             apiBaseUrl: 'https://shared.example.com/v1',
@@ -427,7 +577,7 @@ describe('/api/settings', () => {
               apiBaseUrl: 'https://translation-new.example.com/v1',
             },
           },
-        }),
+        })),
       }),
     );
 
