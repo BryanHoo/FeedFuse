@@ -1,3 +1,5 @@
+import { deleteExpiredAiSummaryEvents } from '@/server/domains/articles/repositories/articleAiSummaryRepo';
+import { deleteExpiredTranslationEvents } from '@/server/domains/articles/repositories/articleTranslationRepo';
 import type { Pool, PoolClient } from 'pg';
 import { defaultPersistedSettings, normalizePersistedSettings } from '@/features/settings/settingsSchema';
 import { listUsers } from '@/server/domains/auth/repositories/usersRepo';
@@ -7,12 +9,16 @@ import { deleteExpiredSystemLogs } from '@/server/domains/settings/repositories/
 type Queryable = Pool | PoolClient;
 
 type SystemLogCleanupDeps = {
+  deleteExpiredAiSummaryEvents: typeof deleteExpiredAiSummaryEvents;
+  deleteExpiredTranslationEvents: typeof deleteExpiredTranslationEvents;
   listUsers: typeof listUsers;
   getUiSettings: typeof getUiSettings;
   deleteExpiredSystemLogs: typeof deleteExpiredSystemLogs;
 };
 
 const defaultDeps: SystemLogCleanupDeps = {
+  deleteExpiredAiSummaryEvents,
+  deleteExpiredTranslationEvents,
   listUsers,
   getUiSettings,
   deleteExpiredSystemLogs,
@@ -40,6 +46,9 @@ export async function runSystemLogCleanup(input: {
       retentionDays: logging.retentionDays,
       userId: user.id,
     });
+    // 复用启动时及每小时的维护任务；流事件保留期独立于用户的日志设置。
+    await deps.deleteExpiredAiSummaryEvents(input.pool, { userId: user.id });
+    await deps.deleteExpiredTranslationEvents(input.pool, { userId: user.id });
   }
 
   return deletedCount;

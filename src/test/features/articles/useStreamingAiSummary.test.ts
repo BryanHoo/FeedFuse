@@ -22,6 +22,8 @@ vi.mock('../../../features/notifications/userOperationNotifier', () => ({
 class FakeEventSource {
   private listeners = new Map<string, Set<(event: Event) => void>>();
 
+  private nextEventId = 0;
+
   close = vi.fn();
 
   addEventListener(type: string, listener: EventListenerOrEventListenerObject) {
@@ -47,10 +49,10 @@ class FakeEventSource {
     }
   }
 
-  emit(eventType: string, payload: Record<string, unknown>) {
+  emit(eventType: string, payload: Record<string, unknown>, eventId = String(++this.nextEventId)) {
     const event = new MessageEvent(eventType, {
       data: JSON.stringify(payload),
-      lastEventId: '1',
+      lastEventId: eventId,
     });
     for (const listener of this.listeners.get(eventType) ?? []) {
       listener(event);
@@ -110,6 +112,13 @@ describe('useStreamingAiSummary', () => {
       fakeEventSource.emit('summary.delta', { deltaText: '\n- 第一条' });
     });
     expect(result.current.session?.draftText).toBe('TL;DR\n- 第一条');
+    await act(async () => {
+      // 同一事件重放以及迟到的更旧事件都不能重复追加或覆盖最新草稿。
+      fakeEventSource.emit('summary.delta', { deltaText: '\n- 第一条' }, '1');
+      fakeEventSource.emit('summary.snapshot', { draftText: '过期草稿' }, '0');
+    });
+    expect(result.current.session?.draftText).toBe('TL;DR\n- 第一条');
+
 
     await act(async () => {
       fakeEventSource.emit('summary.snapshot', { draftText: 'TL;DR\n- 第一条\n- 第二条' });

@@ -118,6 +118,15 @@
 - 开启 `ui_settings.ai.deepThinkingEnabled` 后，AI 摘要 SSE 只能下发最终可见文本增量；不能把 `reasoning_content`、thinking-only delta 或思考流原样写入 `article_ai_summary_sessions`、`article_ai_summary_events` 或文章摘要字段。
 - 流式 AI 摘要如果恢复已有 `article_ai_summary_sessions.draft_text`，完成态 `finalText` 必须基于累计后的可见草稿生成，不能只取本次恢复后新增的 delta，否则重试或恢复运行会截断前半段摘要。
 
+## AI 流事件与持久化契约
+
+- 摘要和翻译 SSE 共用 `src/server/infra/http/eventStream.ts`，同一连接只能有一个未完成的查询；游标只在事件排入输出队列后前进，并跳过旧 ID 或重复 ID；PostgreSQL bigint 游标按整数比较，不能做字符串比较或丢失超出安全整数的精度。
+- 输出必须响应消费者背压，停止消费时不得持续查询或无限排入事件；重放查询按 ID 升序、每批最多 200 条。完成或失败事件送出后关闭连接，abort/cancel 清理计时器和监听器，并丢弃晚到的查询结果。
+- 摘要片段先过滤思考文本再合并，首段即时发送，其余按时间或大小合并；provider 暂停时仍需按期送出已有片段，上游报错前收到的尾部必须进入失败草稿。
+- 完整草稿按时间限频保存，终态保存完整文本；开始时保存重放基准快照，不能为每个增量插入累计全文快照。前端自动重连须按事件 ID 防止重复追加或旧快照覆盖。
+- 流事件清理沿用 Worker 启动时及每小时维护任务，按用户清理完成超过 7 天的中间事件，每类每用户每次最多 5000 条；活跃会话、终态事件及会话结果保留。
+- SSE 返回 `X-Accel-Buffering: no`；Nginx 配置与验证步骤维护在 `docs/deploy.md`。回归覆盖两个流路由、摘要 Hook、摘要 Worker、片段批处理及维护任务。
+
 ## 播客 RSS 契约
 
 - RSS `<enclosure>` 与 Atom `link rel="enclosure"` 中的 `audio/*`、`video/*` 附件属于文章媒体附件，持久化在 `article_media_attachments`，并通过 `Article.mediaAttachments` 返回给前端。

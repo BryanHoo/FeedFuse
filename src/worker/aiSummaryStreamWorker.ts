@@ -1,3 +1,4 @@
+import { batchTextDeltas } from '@/server/integrations/ai/batchTextDeltas';
 import crypto from 'node:crypto';
 import type { Pool } from 'pg';
 import { normalizePersistedSettings } from '@/features/settings/settingsSchema';
@@ -300,6 +301,8 @@ export async function runAiSummaryStreamWorker(
 
         const { model, apiBaseUrl, apiKey, deepThinkingEnabled } = sharedAiConfig;
         const thinkingFilter = createThinkingDeltaFilter();
+        let lastDraftPersistedAt = Date.now();
+        let lastConfigCheckedAt = Date.now();
 
         draftText = session.draftText ?? '';
         await deps.insertAiSummaryEvent(input.pool, {
@@ -312,7 +315,15 @@ export async function runAiSummaryStreamWorker(
           },
         });
 
-        for await (const deltaText of await deps.streamSummarizeText({
+        // 会话开始时仅保存一次基准快照。重连从它重放增量，累计全文不再随每个片段反复插入。
+        await deps.insertAiSummaryEvent(input.pool, {
+          userId: article.userId,
+          sessionId: session.id,
+          eventType: 'summary.snapshot',
+          payload: { draftText },
+        });
+
+        const source = await deps.streamSummarizeText({
           apiBaseUrl,
           apiKey,
           model,
@@ -320,33 +331,37 @@ export async function runAiSummaryStreamWorker(
           // 允许用户在设置中自定义摘要提示词；为空时由 AI 层回退默认模板。
           prompt: normalizedSettings.ai.summaryPrompt,
           deepThinkingEnabled,
-        })) {
-          await ensureSharedConfigCurrent();
-          // DeepSeek 一类 provider 会单独返回思考片段，这里只落最终可见文本。
-          const visibleDeltaText = thinkingFilter.push(deltaText);
-          if (!visibleDeltaText) {
-            continue;
+        });
+        async function* visibleDeltas() {
+          for await (const deltaText of source) {
+            // 只将最终可见文本加入批次，思考内容既不落库也不发送到前端。
+            const visible = thinkingFilter.push(deltaText);
+            if (visible) yield visible;
           }
+        }
 
-          draftText += visibleDeltaText;
-
-          await deps.updateAiSummarySessionDraft(input.pool, {
-            userId: article.userId,
-            sessionId: session.id,
-            draftText,
-          });
+        for await (const deltaText of batchTextDeltas(visibleDeltas())) {
+          // 配置校验按时间限频，保留生成前、周期性和完成前的过期配置保护。
+          if (Date.now() - lastConfigCheckedAt >= 1000) {
+            await ensureSharedConfigCurrent();
+            lastConfigCheckedAt = Date.now();
+          }
+          draftText += deltaText;
           await deps.insertAiSummaryEvent(input.pool, {
             userId: article.userId,
             sessionId: session.id,
             eventType: 'summary.delta',
-            payload: { deltaText: visibleDeltaText },
+            payload: { deltaText },
           });
-          await deps.insertAiSummaryEvent(input.pool, {
-            userId: article.userId,
-            sessionId: session.id,
-            eventType: 'summary.snapshot',
-            payload: { draftText },
-          });
+          // 草稿每秒更新一次；完成时和失败时另外保存完整尾部，避免频繁覆盖累计全文。
+          if (Date.now() - lastDraftPersistedAt >= 1000) {
+            await deps.updateAiSummarySessionDraft(input.pool, {
+              userId: article.userId,
+              sessionId: session.id,
+              draftText,
+            });
+            lastDraftPersistedAt = Date.now();
+          }
         }
 
         // 恢复中的 session 可能已经持久化了前半段草稿，最终结果必须基于累计草稿而不是仅本次增量。
@@ -356,6 +371,11 @@ export async function runAiSummaryStreamWorker(
         }
 
         await ensureSharedConfigCurrent();
+        await deps.updateAiSummarySessionDraft(input.pool, {
+          userId: article.userId,
+          sessionId: session.id,
+          draftText,
+        });
         await deps.completeAiSummarySession(input.pool, {
           userId: article.userId,
           sessionId: session.id,

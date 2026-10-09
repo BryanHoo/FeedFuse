@@ -1,5 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const deleteExpiredAiSummaryEventsMock = vi.fn().mockResolvedValue(0);
+const deleteExpiredTranslationEventsMock = vi.fn().mockResolvedValue(0);
+
+vi.mock('@/server/domains/articles/repositories/articleAiSummaryRepo', () => ({
+  deleteExpiredAiSummaryEvents: (...args: unknown[]) => deleteExpiredAiSummaryEventsMock(...args),
+}));
+vi.mock('@/server/domains/articles/repositories/articleTranslationRepo', () => ({
+  deleteExpiredTranslationEvents: (...args: unknown[]) => deleteExpiredTranslationEventsMock(...args),
+}));
+
 const listUsersMock = vi.fn();
 const getUiSettingsMock = vi.fn();
 const deleteExpiredSystemLogsMock = vi.fn();
@@ -18,6 +28,8 @@ vi.mock('@/server/domains/settings/repositories/systemLogsRepo', () => ({
 
 describe('systemLogCleanup', () => {
   beforeEach(() => {
+    deleteExpiredAiSummaryEventsMock.mockClear();
+    deleteExpiredTranslationEventsMock.mockClear();
     listUsersMock.mockReset();
     getUiSettingsMock.mockReset();
     deleteExpiredSystemLogsMock.mockReset();
@@ -42,6 +54,11 @@ describe('systemLogCleanup', () => {
       [expect.anything(), { retentionDays: 14, userId: '3' }],
     ]);
     expect(deletedCount).toBe(6);
+    expect(deleteExpiredAiSummaryEventsMock.mock.calls).toEqual([
+      [expect.anything(), { userId: '2' }],
+      [expect.anything(), { userId: '3' }],
+    ]);
+    expect(deleteExpiredTranslationEventsMock.mock.calls).toEqual(deleteExpiredAiSummaryEventsMock.mock.calls);
   });
 
   it('reads cleanup settings from each user instead of default admin fallback', async () => {

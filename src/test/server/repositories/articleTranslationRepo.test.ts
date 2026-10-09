@@ -51,4 +51,21 @@ describe('articleTranslationRepo', () => {
       '429 rate limit',
     ]);
   });
+  it('limits replay batches and removes only expired intermediate events of the current user', async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [], rowCount: 12 });
+    const mod = await import('@/server/domains/articles/repositories/articleTranslationRepo');
+    await mod.listTranslationEventsAfter({ query } as never, { userId: '2', sessionId: 'session-1', afterEventId: 9 });
+    expect(String(query.mock.calls[0][0])).toMatch(/limit 200/i);
+    expect(await mod.deleteExpiredTranslationEvents({ query } as never, { userId: '2' })).toBe(12);
+    const [sql, params] = query.mock.calls[1];
+    // 活跃会话与终态事件必须保留，过期清理仍严格按当前用户限定范围。
+    expect(sql).toContain("status in ('succeeded', 'failed')");
+    expect(sql).toContain("event_type not in ('session.completed', 'session.failed')");
+    expect(sql).toContain('finished_at < now()');
+    expect(sql).toContain('e.user_id = $1');
+    expect(sql).toContain('s.user_id = e.user_id');
+    expect(sql).toContain('limit 5000');
+    expect(params).toEqual(['2']);
+  });
+
 });

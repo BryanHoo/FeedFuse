@@ -38,7 +38,7 @@ export interface TranslationSegmentRow {
 }
 
 export interface TranslationEventRow {
-  eventId: number;
+  eventId: number | string;
   userId: string;
   sessionId: string;
   segmentIndex: number | null;
@@ -361,7 +361,7 @@ export async function insertTranslationEvent(
 
 export async function listTranslationEventsAfter(
   pool: Pool,
-  input: { userId?: string | null; sessionId: string; afterEventId: number },
+  input: { userId?: string | null; sessionId: string; afterEventId: number | string },
 ): Promise<TranslationEventRow[]> {
   const scopedUserId = normalizeUserId(input.userId);
   const { rows } = await pool.query<TranslationEventRow>(
@@ -377,8 +377,34 @@ export async function listTranslationEventsAfter(
       from article_translation_events
       where session_id = $1 and user_id = $2 and event_id > $3
       order by event_id asc
+      limit 200
     `,
     [input.sessionId, scopedUserId, input.afterEventId],
   );
   return rows;
+}
+
+// 事件只用于短期断线重放：完成七天后分批清理中间事件，保留终态用于旧客户端重连收尾。
+export async function deleteExpiredTranslationEvents(
+  pool: Pick<Pool, 'query'>,
+  input: { userId: string },
+): Promise<number> {
+  const result = await pool.query(
+    `
+      delete from article_translation_events
+      where user_id = $1 and event_id in (
+        select e.event_id
+        from article_translation_events e
+        join article_translation_sessions s on s.id = e.session_id and s.user_id = e.user_id
+        where e.user_id = $1
+          and s.status in ('succeeded', 'failed')
+          and s.finished_at < now() - interval '7 days'
+          and e.event_type not in ('session.completed', 'session.failed')
+        order by e.event_id
+        limit 5000
+      )
+    `,
+    [normalizeUserId(input.userId)],
+  );
+  return result.rowCount ?? 0;
 }

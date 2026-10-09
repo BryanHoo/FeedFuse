@@ -1,3 +1,4 @@
+import { createEventStream, EVENT_STREAM_HEADERS, parseLastEventId } from '@/server/infra/http/eventStream';
 import { requireApiSession } from '@/server/domains/auth/services/session';
 import { z } from 'zod';
 import { getPool } from '@/server/infra/db/pool';
@@ -8,7 +9,6 @@ import { getArticleById } from '@/server/domains/articles/repositories/articlesR
 import {
   getTranslationSessionByArticleId,
   listTranslationEventsAfter,
-  type TranslationEventRow,
 } from '@/server/domains/articles/repositories/articleTranslationRepo';
 
 export const runtime = 'nodejs';
@@ -25,17 +25,6 @@ function zodIssuesToFields(error: z.ZodError): Record<string, string> {
     if (!fields[key]) fields[key] = issue.message;
   }
   return fields;
-}
-
-function parseLastEventId(headerValue: string | null): number {
-  if (!headerValue) return 0;
-  const parsed = Number.parseInt(headerValue, 10);
-  if (!Number.isFinite(parsed) || parsed < 0) return 0;
-  return parsed;
-}
-
-function formatSseEvent(event: TranslationEventRow): string {
-  return `id: ${event.eventId}\nevent: ${event.eventType}\ndata: ${JSON.stringify(event.payload)}\n\n`;
 }
 
 export async function GET(
@@ -66,78 +55,25 @@ export async function GET(
     if (!translationSession) return fail(new NotFoundError('Translation session not found'));
 
     const initialAfterEventId = parseLastEventId(request.headers.get('last-event-id'));
-    let lastEventId = initialAfterEventId;
     const initialEvents = await listTranslationEventsAfter(pool, {
       sessionId: translationSession.id,
       userId: translationSession.userId,
-      afterEventId: lastEventId,
+      afterEventId: initialAfterEventId,
     });
-    if (initialEvents.length > 0) {
-      lastEventId = initialEvents[initialEvents.length - 1].eventId;
-    }
-
-    const encoder = new TextEncoder();
-    let cleanup = () => {};
-
-    const stream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        const pushEvents = (events: TranslationEventRow[]) => {
-          for (const event of events) {
-            lastEventId = event.eventId;
-            controller.enqueue(encoder.encode(formatSseEvent(event)));
-          }
-        };
-
-        pushEvents(initialEvents);
-
-        const replayTimer = setInterval(() => {
-          void listTranslationEventsAfter(pool, {
-            sessionId: translationSession.id,
-            userId: translationSession.userId,
-            afterEventId: lastEventId,
-          })
-            .then((events) => {
-              pushEvents(events);
-            })
-            .catch(() => {
-              // Keep stream alive for transient poll errors.
-            });
-        }, 1000);
-
-        const heartbeatTimer = setInterval(() => {
-          controller.enqueue(encoder.encode(': ping\n\n'));
-        }, 15000);
-
-        const onAbort = () => {
-          clearInterval(replayTimer);
-          clearInterval(heartbeatTimer);
-          try {
-            controller.close();
-          } catch {
-            // no-op
-          }
-        };
-
-        cleanup = onAbort;
-
-        if (request.signal.aborted) {
-          onAbort();
-          return;
-        }
-        request.signal.addEventListener('abort', onAbort, { once: true });
-      },
-      cancel() {
-        cleanup();
-      },
+    const stream = createEventStream({
+      signal: request.signal,
+      afterEventId: initialAfterEventId,
+      initialEvents,
+      pollIntervalMs: 1000,
+      sessionFinished: translationSession.status === 'succeeded' || translationSession.status === 'failed',
+      listEvents: (afterEventId) => listTranslationEventsAfter(pool, {
+        sessionId: translationSession.id,
+        userId: translationSession.userId,
+        afterEventId,
+      }),
     });
 
-    return new Response(stream, {
-      headers: {
-        'content-type': 'text/event-stream; charset=utf-8',
-        'cache-control': 'no-cache, no-transform',
-        connection: 'keep-alive',
-      },
-    });
+    return new Response(stream, { headers: EVENT_STREAM_HEADERS });
   } catch (err) {
     return fail(err);
   }

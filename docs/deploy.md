@@ -170,6 +170,29 @@ docker compose up -d
 
 从旧版本升级到多用户版本后，原有单用户数据会归属到初始用户。升级完成后先使用原 `admin` 登录，再到 `设置中心` -> `账号与安全` 检查账号资料。
 
+## Nginx 反向代理与流式输出
+
+摘要和翻译通过 SSE 持续发送事件。使用 Nginx 时，在现有 `server` 中为这两个接口添加以下配置；`proxy_pass` 地址按实际 Web 服务位置调整，容器内代理应使用对应服务名和端口。
+
+```nginx
+location ~ ^/api/articles/[0-9]+/ai-(summary|translate)/stream$ {
+    proxy_pass http://127.0.0.1:9559;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header Connection "";
+    # 每个增量立即转发，避免摘要或翻译积累到响应结束后才显示。
+    proxy_buffering off;
+    proxy_cache off;
+    gzip off;
+    # 等待上游数据的超时需大于流的 15 秒心跳间隔。
+    proxy_read_timeout 60s;
+}
+```
+
+接口同时返回 `X-Accel-Buffering: no`。不要通过 `proxy_ignore_headers` 忽略该响应头；缓冲行为与响应头的关系见 [Nginx 官方说明](https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_buffering)。修改配置后先执行 `nginx -t`，再重载 Nginx。
+
+Worker 启动时及每小时会按用户清理流事件：成功或失败超过 7 天的会话，每次最多删除 5000 条摘要中间事件和 5000 条翻译中间事件。终态事件、会话结果和翻译段落保留，因此历史结果仍可读取，旧连接重连时仍能收到完成或失败状态。
+
 ## 常见问题与维护
 
 | 现象 | 检查项 |

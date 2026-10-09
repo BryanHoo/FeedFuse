@@ -6,7 +6,7 @@ const challengeContentHtml =
   '<div><h2>环境异常</h2><p>当前环境异常，完成验证后即可继续访问。</p><p><a>去验证</a></p></div>';
 
 describe('aiSummaryStreamWorker', () => {
-  it('persists draft updates and finalizes article ai summary on completion', async () => {
+  it('coalesces tiny fragments without repeatedly storing full snapshots', async () => {
     const updateSessionDraftMock = vi.fn().mockResolvedValue(undefined);
     const insertEventMock = vi.fn().mockResolvedValue(undefined);
     const completeSessionMock = vi.fn().mockResolvedValue(undefined);
@@ -14,6 +14,7 @@ describe('aiSummaryStreamWorker', () => {
     const setArticleAiSummaryMock = vi.fn().mockResolvedValue(undefined);
     const runArticleTaskWithStatusMock = vi.fn(async ({ fn }: { fn: () => Promise<void> }) => fn());
 
+    const getUiSettingsMock = vi.fn().mockResolvedValue({ ai: { model: 'gpt-4o-mini', apiBaseUrl: 'https://ai.example.com/v1' } });
     const mod = await import('../../worker/aiSummaryStreamWorker');
 
     await mod.runAiSummaryStreamWorker({
@@ -72,18 +73,13 @@ describe('aiSummaryStreamWorker', () => {
             updatedAt: '2026-03-09T00:00:00.000Z',
           }) as never,
         getAiApiKey: async () => 'sk-test',
-        getUiSettings: async () =>
-          ({
-            ai: {
-              model: 'gpt-4o-mini',
-              apiBaseUrl: 'https://ai.example.com/v1',
-            },
-          }) as never,
+        getUiSettings: getUiSettingsMock,
         getFeedFullTextOnOpenEnabled: async () => false,
         runArticleTaskWithStatus: runArticleTaskWithStatusMock,
         streamSummarizeText: async function* () {
           yield 'TL;DR';
-          yield '\n- 第一条';
+          for (const character of '\n- 第一条') yield character;
+          for (let i = 0; i < 1000; i += 1) yield '。';
         },
         updateAiSummarySessionDraft: updateSessionDraftMock,
         insertAiSummaryEvent: insertEventMock,
@@ -110,14 +106,20 @@ describe('aiSummaryStreamWorker', () => {
       expect.anything(),
       expect.objectContaining({
         sessionId: 'session-1',
-        finalText: 'TL;DR\n- 第一条',
+        finalText: `TL;DR\n- 第一条${'。'.repeat(1000)}`,
       }),
     );
     expect(setArticleAiSummaryMock).toHaveBeenCalledWith(
       expect.anything(),
       'article-1',
-      expect.objectContaining({ aiSummary: 'TL;DR\n- 第一条' }),
+      expect.objectContaining({ aiSummary: `TL;DR\n- 第一条${'。'.repeat(1000)}` }),
     );
+    const deltaEvents = insertEventMock.mock.calls.map((call) => call[1]).filter((event) => event.eventType === 'summary.delta');
+    expect(deltaEvents.length).toBeLessThanOrEqual(3);
+    expect(deltaEvents.map((event) => event.payload.deltaText).join('')).toBe(`TL;DR\n- 第一条${'。'.repeat(1000)}`);
+    expect(updateSessionDraftMock.mock.calls.length).toBeLessThanOrEqual(2);
+    expect(getUiSettingsMock.mock.calls.length).toBeLessThanOrEqual(4);
+    expect(insertEventMock.mock.calls.filter((call) => call[1].eventType === 'summary.snapshot')).toHaveLength(1);
     expect(failSessionMock).not.toHaveBeenCalled();
   });
 
@@ -342,6 +344,7 @@ describe('aiSummaryStreamWorker', () => {
           runArticleTaskWithStatus: async ({ fn }) => fn(),
           streamSummarizeText: async function* () {
             yield 'TL;DR';
+            yield '\n- 未完成';
             throw new Error('429 rate limit');
           },
           updateAiSummarySessionDraft: updateSessionDraftMock,
@@ -353,12 +356,11 @@ describe('aiSummaryStreamWorker', () => {
       }),
     ).rejects.toThrow('429 rate limit');
 
-    expect(updateSessionDraftMock).toHaveBeenCalled();
     expect(failSessionMock).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         sessionId: 'session-1',
-        draftText: 'TL;DR',
+        draftText: 'TL;DR\n- 未完成',
         errorCode: 'ai_rate_limited',
         rawErrorMessage: '429 rate limit',
       }),

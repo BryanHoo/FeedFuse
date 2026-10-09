@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const pool = {};
 const articleId = '3001';
@@ -20,6 +20,8 @@ vi.mock('@/server/domains/articles/repositories/articleAiSummaryRepo', () => ({
 }));
 
 describe('ai-summary stream route', () => {
+  afterEach(() => vi.useRealTimers());
+
   beforeEach(() => {
     vi.useRealTimers();
     getArticleByIdMock.mockReset();
@@ -144,4 +146,60 @@ describe('ai-summary stream route', () => {
     abortController.abort();
     await pendingRead;
   });
+  it('serializes slow polls, skips repeated IDs and closes after the terminal event', async () => {
+    vi.useFakeTimers();
+    getArticleByIdMock.mockResolvedValue({ id: articleId });
+    getActiveAiSummarySessionByArticleIdMock.mockResolvedValue({ id: 'session-1', userId: '1', status: 'running' });
+    let resolvePoll!: (events: unknown[]) => void;
+    listAiSummaryEventsAfterMock.mockResolvedValueOnce([]).mockImplementationOnce(() => new Promise((resolve) => {
+      resolvePoll = resolve;
+    })).mockResolvedValue([]);
+    const { GET } = await import('@/app/api/articles/[id]/ai-summary/stream/route');
+    const response = await GET(new Request('http://localhost/stream'), {
+      params: Promise.resolve({ id: articleId }),
+    });
+    const reader = response.body!.getReader();
+    try {
+      const firstRead = reader.read();
+      await vi.advanceTimersByTimeAsync(250 * 4);
+      // 查询超过多个轮询周期时，必须仍然只有一个未完成的数据库请求。
+      expect(listAiSummaryEventsAfterMock).toHaveBeenCalledTimes(2);
+      resolvePoll([
+        { eventId: 2, eventType: 'summary.delta', payload: { deltaText: '你好' } },
+        { eventId: 2, eventType: 'summary.delta', payload: { deltaText: '你好' } },
+        { eventId: 3, eventType: 'session.completed', payload: {} },
+      ]);
+      const first = await firstRead;
+      expect(new TextDecoder().decode(first.value)).toContain('id: 2');
+      const terminal = await reader.read();
+      expect(new TextDecoder().decode(terminal.value)).toContain('session.completed');
+      expect((await reader.read()).done).toBe(true);
+      await vi.advanceTimersByTimeAsync(250 * 4);
+      expect(listAiSummaryEventsAfterMock).toHaveBeenCalledTimes(2);
+      expect(response.headers.get('x-accel-buffering')).toBe('no');
+    } finally {
+      await reader.cancel();
+    }
+  });
+
+  it('stops polling when the client does not consume queued events', async () => {
+    vi.useFakeTimers();
+    getArticleByIdMock.mockResolvedValue({ id: articleId });
+    getActiveAiSummarySessionByArticleIdMock.mockResolvedValue({ id: 'session-1', userId: '1', status: 'running' });
+    listAiSummaryEventsAfterMock.mockResolvedValue([
+      { eventId: 1, eventType: 'summary.delta', payload: {} },
+      { eventId: 2, eventType: 'summary.delta', payload: {} },
+    ]);
+    const { GET } = await import('@/app/api/articles/[id]/ai-summary/stream/route');
+    const response = await GET(new Request('http://localhost/stream'), {
+      params: Promise.resolve({ id: articleId }),
+    });
+    try {
+      await vi.advanceTimersByTimeAsync(250 * 5);
+      expect(listAiSummaryEventsAfterMock).toHaveBeenCalledTimes(1);
+    } finally {
+      await response.body!.cancel();
+    }
+  });
+
 });

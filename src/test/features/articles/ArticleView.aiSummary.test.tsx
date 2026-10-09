@@ -50,6 +50,8 @@ const idleTasks = {
 class FakeEventSource {
   private listeners = new Map<string, Set<(event: Event) => void>>();
 
+  private nextEventId = 0;
+
   close = vi.fn();
 
   addEventListener(type: string, listener: EventListenerOrEventListenerObject) {
@@ -78,7 +80,7 @@ class FakeEventSource {
   emit(eventType: string, payload: Record<string, unknown>) {
     const event = new MessageEvent(eventType, {
       data: JSON.stringify(payload),
-      lastEventId: '1',
+      lastEventId: String(++this.nextEventId),
     });
     for (const listener of this.listeners.get(eventType) ?? []) {
       listener(event);

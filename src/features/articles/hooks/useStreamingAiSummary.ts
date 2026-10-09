@@ -283,8 +283,21 @@ export function useStreamingAiSummary(
       eventSourceRef.current = stream;
       armStreamTimeout(articleId, token);
 
+      // 游标随同一个 EventSource 的自动重连保留；忽略重复或迟到的事件，防止增量重复追加。
+      let lastEventId = -1n;
+      const acceptEvent = (event: Event): boolean => {
+        if (!isCurrentRequest(articleId, token)) return false;
+        const id = (event as MessageEvent).lastEventId;
+        if (!id) return true;
+        if (!/^\d+$/.test(id)) return false;
+        const parsed = BigInt(id);
+        if (parsed <= lastEventId) return false;
+        lastEventId = parsed;
+        return true;
+      };
+
       const onSummaryDelta: EventListener = (event) => {
-        if (!isCurrentRequest(articleId, token)) return;
+        if (!acceptEvent(event)) return;
         armStreamTimeout(articleId, token);
         const payload = parseEventPayload(event);
         const deltaText = typeof payload.deltaText === 'string' ? payload.deltaText : '';
@@ -309,7 +322,7 @@ export function useStreamingAiSummary(
       };
 
       const onSummarySnapshot: EventListener = (event) => {
-        if (!isCurrentRequest(articleId, token)) return;
+        if (!acceptEvent(event)) return;
         armStreamTimeout(articleId, token);
         const payload = parseEventPayload(event);
         if (typeof payload.draftText !== 'string') return;
@@ -333,7 +346,7 @@ export function useStreamingAiSummary(
       };
 
       const onSessionCompleted: EventListener = (event) => {
-        if (!isCurrentRequest(articleId, token)) return;
+        if (!acceptEvent(event)) return;
         const payload = parseEventPayload(event);
 
         setLocalStates((current) =>
@@ -371,7 +384,7 @@ export function useStreamingAiSummary(
       };
 
       const onSessionFailed: EventListener = (event) => {
-        if (!isCurrentRequest(articleId, token)) return;
+        if (!acceptEvent(event)) return;
         const payload = parseEventPayload(event);
 
         setLocalStates((current) =>
