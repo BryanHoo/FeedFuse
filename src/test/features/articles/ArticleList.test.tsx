@@ -413,7 +413,7 @@ describe('ArticleList', () => {
     expect(screen.queryByText('Other Article')).not.toBeInTheDocument();
   });
 
-  it('shows 0 unread count and keeps only selected article after mark-all-as-read in unread-only mode', () => {
+  it('shows 0 unread count and keeps only selected article after bulk read succeeds in unread-only mode', async () => {
     useAppStore.setState({
       selectedView: 'all',
       showUnreadOnly: true,
@@ -424,7 +424,16 @@ describe('ArticleList', () => {
 
     expect(screen.getByText('2 篇')).toBeInTheDocument();
 
+    // 批量已读须等待服务端确认；请求未完成时，列表和计数应保留原状态。
+    let finishWrite!: (response: Response) => void;
+    fetchMock.mockReturnValueOnce(new Promise<Response>((resolve) => { finishWrite = resolve; }));
     fireEvent.click(screen.getByRole('button', { name: MARK_ALL_AS_READ_LABEL }));
+    expect(screen.getByText('Other Article')).toBeInTheDocument();
+    expect(screen.getByText('2 篇')).toBeInTheDocument();
+
+    await act(async () => {
+      finishWrite(jsonResponse({ ok: true, data: { updatedCount: 2 } }));
+    });
 
     expect(screen.getByText('Selected Article')).toBeInTheDocument();
     expect(screen.queryByText('Other Article')).not.toBeInTheDocument();

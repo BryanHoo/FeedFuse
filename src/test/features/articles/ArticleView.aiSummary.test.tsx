@@ -240,6 +240,31 @@ describe('ArticleView ai summary', () => {
     vi.useRealTimers();
   });
 
+  it('已读失败恢复为未读后不自动重复提交，重新打开文章可再次尝试', async () => {
+    await seedArticleViewState({ article: { isRead: false } });
+    const persisted = useSettingsStore.getState().persistedSettings;
+    useSettingsStore.setState({ persistedSettings: {
+      ...persisted,
+      general: { ...persisted.general, autoMarkReadEnabled: true, autoMarkReadDelayMs: 0 },
+    } });
+    const markAsRead = vi.fn();
+    useAppStore.setState({ markAsRead });
+    render(<ArticleView />);
+    expect(markAsRead).toHaveBeenCalledTimes(1);
+
+    // 分别模拟乐观已读与失败恢复，确认文章对象变化不会重新触发自动写入。
+    act(() => useAppStore.setState((state) => ({
+      articles: state.articles.map((article) => ({ ...article, isRead: true })),
+    })));
+    act(() => useAppStore.setState((state) => ({
+      articles: state.articles.map((article) => ({ ...article, isRead: false })),
+    })));
+    expect(markAsRead).toHaveBeenCalledTimes(1);
+    act(() => useAppStore.setState({ selectedArticleId: null }));
+    act(() => useAppStore.setState({ selectedArticleId: 'article-1' }));
+    expect(markAsRead).toHaveBeenCalledTimes(2);
+  });
+
   it('自动模式打开文章会触发摘要入队', async () => {
     enqueueArticleAiSummaryMock.mockResolvedValue({
       enqueued: false,

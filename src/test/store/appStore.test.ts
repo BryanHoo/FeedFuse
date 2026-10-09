@@ -152,6 +152,293 @@ beforeEach(async () => {
 });
 
 describe('appStore api integration', () => {
+  // 使用可控制完成顺序的请求，验证失败恢复和连续操作，而非依赖真实网络时序。
+  async function seedArticleMutationState() {
+    const { mapFeedDto, mapSnapshotArticleItem } = await import('@/lib/api/apiClient');
+    const article = {
+      ...mapSnapshotArticleItem(createSnapshotArticle('art-1', 'feed-1', 'Hello')),
+      content: '<p>缓存正文</p>',
+    };
+    useAppStore.setState({
+      feeds: [mapFeedDto(createSnapshotFeed('feed-1', 'Example', 3), [])],
+      articles: [article],
+      articleDetailCache: { 'art-1': article },
+      articleSnapshotCache: { all: [article], 'feed-1': [article], starred: [article] },
+      selectedView: 'all',
+    });
+  }
+
+  function expectArticleFlagEverywhere(flag: 'isRead' | 'isStarred', value: boolean) {
+    const state = useAppStore.getState();
+    expect(state.articles.find((article) => article.id === 'art-1')?.[flag]).toBe(value);
+    expect(state.articleDetailCache['art-1'][flag]).toBe(value);
+    for (const articles of Object.values(state.articleSnapshotCache)) {
+      expect(articles.find((article) => article.id === 'art-1')?.[flag]).toBe(value);
+    }
+  }
+
+  it('restores failed read flags and unread counts across views without reverting a successful star', async () => {
+    await seedArticleMutationState();
+    const readRequest = createDeferred<Response>();
+    fetchMock.mockImplementationOnce(() => readRequest.promise)
+      .mockResolvedValue(jsonResponse({ ok: true, data: { updated: true } }));
+
+    useAppStore.getState().markAsRead('art-1');
+    expectArticleFlagEverywhere('isRead', true);
+    expect(useAppStore.getState().feeds[0].unreadCount).toBe(2);
+    useAppStore.getState().toggleStar('art-1');
+    useAppStore.getState().setSelectedView('feed-1');
+    readRequest.reject(new Error('读取状态写入失败'));
+    await flushPromises();
+    await flushPromises();
+
+    expectArticleFlagEverywhere('isRead', false);
+    expectArticleFlagEverywhere('isStarred', true);
+    expect(useAppStore.getState().feeds[0].unreadCount).toBe(3);
+    expect(runImmediateFailureMock).toHaveBeenCalledWith(
+      expect.objectContaining({ actionKey: 'article.markRead' }),
+    );
+  });
+
+  it('restores a failed favorite in every cached view and permits retry', async () => {
+    await seedArticleMutationState();
+    fetchMock.mockRejectedValueOnce(new Error('收藏失败'))
+      .mockResolvedValue(jsonResponse({ ok: true, data: { updated: true } }));
+    useAppStore.getState().toggleStar('art-1');
+    expectArticleFlagEverywhere('isStarred', true);
+    await flushPromises();
+    expectArticleFlagEverywhere('isStarred', false);
+    useAppStore.getState().toggleStar('art-1');
+    await flushPromises();
+    expectArticleFlagEverywhere('isStarred', true);
+  });
+
+  it('serializes rapid favorite writes and rolls back to the last confirmed server value', async () => {
+    await seedArticleMutationState();
+    const first = createDeferred<Response>();
+    const second = createDeferred<Response>();
+    const bodies: Record<string, unknown>[] = [];
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push(await getFetchCallJsonBody(input, init));
+      return bodies.length === 1 ? first.promise : second.promise;
+    });
+    useAppStore.getState().toggleStar('art-1');
+    await flushPromises();
+    useAppStore.getState().toggleStar('art-1');
+    await flushPromises();
+    expect(bodies).toEqual([{ isStarred: true }]);
+    expectArticleFlagEverywhere('isStarred', false);
+
+    first.resolve(jsonResponse({ ok: true, data: { updated: true } }));
+    await flushPromises();
+    expect(bodies).toEqual([{ isStarred: true }, { isStarred: false }]);
+    expectArticleFlagEverywhere('isStarred', false);
+    second.reject(new Error('取消收藏失败'));
+    await flushPromises();
+    expectArticleFlagEverywhere('isStarred', true);
+    expect(runImmediateSuccessMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps a newer favorite intent when an earlier write fails', async () => {
+    await seedArticleMutationState();
+    const first = createDeferred<Response>();
+    fetchMock.mockImplementationOnce(() => first.promise)
+      .mockResolvedValue(jsonResponse({ ok: true, data: { updated: true } }));
+    useAppStore.getState().toggleStar('art-1');
+    await flushPromises();
+    useAppStore.getState().toggleStar('art-1');
+    first.reject(new Error('旧请求失败'));
+    await flushPromises();
+    await flushPromises();
+    expectArticleFlagEverywhere('isStarred', false);
+    expect(runImmediateFailureMock).not.toHaveBeenCalled();
+    expect(runImmediateSuccessMock).toHaveBeenCalledWith(
+      expect.objectContaining({ actionKey: 'article.toggleStar', context: { starred: false } }),
+    );
+  });
+
+  it('does not block writes for different articles', async () => {
+    await seedArticleMutationState();
+    const article = { ...useAppStore.getState().articles[0], id: 'art-2' };
+    useAppStore.setState((state) => ({ articles: [...state.articles, article] }));
+    const first = createDeferred<Response>();
+    fetchMock.mockImplementationOnce(() => first.promise)
+      .mockResolvedValue(jsonResponse({ ok: true, data: { updated: true } }));
+    useAppStore.getState().toggleStar('art-1');
+    useAppStore.getState().toggleStar('art-2');
+    await flushPromises();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(useAppStore.getState().articles[1].isStarred).toBe(true);
+    first.resolve(jsonResponse({ ok: true, data: { updated: true } }));
+    await flushPromises();
+  });
+
+  it('discards snapshots that predate a successful mutation and reloads confirmed flags and counts', async () => {
+    await seedArticleMutationState();
+    const staleSnapshot = createDeferred<Response>();
+    let snapshotCalls = 0;
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (getFetchCallMethod(input, init) === 'PATCH') {
+        return jsonResponse({ ok: true, data: { updated: true } });
+      }
+      snapshotCalls += 1;
+      if (snapshotCalls === 1) return staleSnapshot.promise;
+      return jsonResponse({ ok: true, data: createSnapshotPage({
+        feeds: [createSnapshotFeed('feed-1', 'Example', 2)],
+        items: [{ ...createSnapshotArticle('art-1', 'feed-1', 'Hello'), isRead: true, isStarred: true }],
+      }) });
+    });
+    const loading = useAppStore.getState().loadSnapshot();
+    await flushPromises();
+    useAppStore.getState().markAsRead('art-1');
+    useAppStore.getState().toggleStar('art-1');
+    await flushPromises();
+    await flushPromises();
+    staleSnapshot.resolve(jsonResponse({ ok: true, data: createSnapshotPage({
+      feeds: [createSnapshotFeed('feed-1', 'Example', 3)],
+      items: [createSnapshotArticle('art-1', 'feed-1', 'Hello')],
+    }) }));
+    await loading;
+    expect(snapshotCalls).toBe(2);
+    expectArticleFlagEverywhere('isRead', true);
+    expectArticleFlagEverywhere('isStarred', true);
+    expect(useAppStore.getState().feeds[0].unreadCount).toBe(2);
+  });
+
+  it('preserves pending flags when article detail refresh returns stale flags', async () => {
+    await seedArticleMutationState();
+    const writing = createDeferred<Response>();
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (getFetchCallMethod(input, init) === 'PATCH') return writing.promise;
+      return jsonResponse({ ok: true, data: {
+        ...createSnapshotArticle('art-1', 'feed-1', 'Hello'),
+        contentHtml: '<p>刷新正文</p>', contentFullHtml: null,
+      } });
+    });
+    useAppStore.getState().toggleStar('art-1');
+    await useAppStore.getState().refreshArticle('art-1');
+    expectArticleFlagEverywhere('isStarred', true);
+    expect(useAppStore.getState().articleDetailCache['art-1'].content).toContain('刷新正文');
+    writing.reject(new Error('写入失败'));
+    await flushPromises();
+    expectArticleFlagEverywhere('isStarred', false);
+    expect(useAppStore.getState().articleDetailCache['art-1'].content).toContain('刷新正文');
+  });
+
+  it('preserves a confirmed favorite when a detail request started during the write returns later', async () => {
+    await seedArticleMutationState();
+    const writing = createDeferred<Response>();
+    const detail = createDeferred<Response>();
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) =>
+      getFetchCallMethod(input, init) === 'PATCH' ? writing.promise : detail.promise,
+    );
+    useAppStore.getState().toggleStar('art-1');
+    const refreshing = useAppStore.getState().refreshArticle('art-1');
+    writing.resolve(jsonResponse({ ok: true, data: { updated: true } }));
+    await flushPromises();
+    detail.resolve(jsonResponse({ ok: true, data: {
+      ...createSnapshotArticle('art-1', 'feed-1', 'Hello'),
+      contentHtml: '<p>新正文</p>', contentFullHtml: null,
+    } }));
+    await refreshing;
+    expectArticleFlagEverywhere('isStarred', true);
+  });
+
+  it('waits for pending writes before loading a snapshot', async () => {
+    await seedArticleMutationState();
+    const writing = createDeferred<Response>();
+    fetchMock.mockImplementationOnce(() => writing.promise)
+      .mockResolvedValue(jsonResponse({ ok: true, data: createSnapshotPage({
+        feeds: [createSnapshotFeed('feed-1', 'Example', 3)],
+        items: [{ ...createSnapshotArticle('art-1', 'feed-1', 'Hello'), isStarred: true }],
+      }) }));
+    useAppStore.getState().toggleStar('art-1');
+    const loading = useAppStore.getState().loadSnapshot();
+    await flushPromises();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    writing.resolve(jsonResponse({ ok: true, data: { updated: true } }));
+    await loading;
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expectArticleFlagEverywhere('isStarred', true);
+  });
+
+  it('keeps the final intent for three rapid favorite clicks with delayed responses', async () => {
+    await seedArticleMutationState();
+    const first = createDeferred<Response>();
+    const bodies: Record<string, unknown>[] = [];
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push(await getFetchCallJsonBody(input, init));
+      return bodies.length === 1 ? first.promise : jsonResponse({ ok: true, data: { updated: true } });
+    });
+    useAppStore.getState().toggleStar('art-1');
+    useAppStore.getState().toggleStar('art-1');
+    useAppStore.getState().toggleStar('art-1');
+    await flushPromises();
+    expect(bodies).toEqual([{ isStarred: true }]);
+    expectArticleFlagEverywhere('isStarred', true);
+    first.resolve(jsonResponse({ ok: true, data: { updated: true } }));
+    await flushPromises();
+    await flushPromises();
+    expect(bodies).toEqual([{ isStarred: true }, { isStarred: false }, { isStarred: true }]);
+    expectArticleFlagEverywhere('isStarred', true);
+    expect(runImmediateSuccessMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('restores only the failed article unread count when another read succeeds', async () => {
+    await seedArticleMutationState();
+    const article = { ...useAppStore.getState().articles[0], id: 'art-2' };
+    useAppStore.setState((state) => ({ articles: [...state.articles, article] }));
+    const first = createDeferred<Response>();
+    fetchMock.mockImplementationOnce(() => first.promise)
+      .mockResolvedValue(jsonResponse({ ok: true, data: { updated: true } }));
+    useAppStore.getState().markAsRead('art-1');
+    useAppStore.getState().markAsRead('art-2');
+    await flushPromises();
+    first.reject(new Error('第一篇已读失败'));
+    await flushPromises();
+    expectArticleFlagEverywhere('isRead', false);
+    expect(useAppStore.getState().articles[1].isRead).toBe(true);
+    expect(useAppStore.getState().feeds[0].unreadCount).toBe(2);
+  });
+
+  it('does not invent an unread count when the original counter was zero', async () => {
+    await seedArticleMutationState();
+    useAppStore.setState((state) => ({ feeds: state.feeds.map((feed) => ({ ...feed, unreadCount: 0 })) }));
+    fetchMock.mockRejectedValue(new Error('已读写入失败'));
+    useAppStore.getState().markAsRead('art-1');
+    await flushPromises();
+    expectArticleFlagEverywhere('isRead', false);
+    expect(useAppStore.getState().feeds[0].unreadCount).toBe(0);
+  });
+
+  it('does not undo a successful bulk read when an overlapping single read fails', async () => {
+    await seedArticleMutationState();
+    const first = createDeferred<Response>();
+    fetchMock.mockImplementationOnce(() => first.promise)
+      .mockResolvedValue(jsonResponse({ ok: true, data: { updatedCount: 3 } }));
+    useAppStore.getState().markAsRead('art-1');
+    useAppStore.getState().markAllAsRead('feed-1');
+    await flushPromises();
+    first.reject(new Error('单篇已读失败'));
+    await flushPromises();
+    expectArticleFlagEverywhere('isRead', true);
+    expect(useAppStore.getState().feeds[0].unreadCount).toBe(0);
+  });
+
+  it('leaves bulk read state intact on failure and updates all view caches on success', async () => {
+    await seedArticleMutationState();
+    fetchMock.mockRejectedValueOnce(new Error('批量已读失败'))
+      .mockResolvedValue(jsonResponse({ ok: true, data: { updatedCount: 3 } }));
+    useAppStore.getState().markAllAsRead('feed-1');
+    await flushPromises();
+    expectArticleFlagEverywhere('isRead', false);
+    expect(useAppStore.getState().feeds[0].unreadCount).toBe(3);
+    useAppStore.getState().markAllAsRead('feed-1');
+    await flushPromises();
+    expectArticleFlagEverywhere('isRead', true);
+    expect(useAppStore.getState().feeds[0].unreadCount).toBe(0);
+  });
+
   it('keeps snapshot loading failures silent', async () => {
     const { setApiErrorNotifier, clearApiErrorNotifier } = await import('@/lib/api/apiErrorNotifier');
     const notifyError = vi.fn();

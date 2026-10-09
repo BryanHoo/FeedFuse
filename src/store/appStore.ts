@@ -363,20 +363,142 @@ function getArticleFromCollections(
   return articles.find((item) => item.id === articleId) ?? articleDetailCache[articleId];
 }
 
-function updateCachedArticle(
-  articleDetailCache: Record<string, Article>,
-  articleId: string,
-  updater: (article: Article) => Article,
-): Record<string, Article> {
-  const cachedArticle = articleDetailCache[articleId];
-  if (!cachedArticle) {
-    return articleDetailCache;
-  }
+type ArticleFlag = 'isRead' | 'isStarred';
+type ArticleCollections = Pick<AppState, 'articles' | 'articleDetailCache' | 'articleSnapshotCache'>;
+type AppStateUpdater = (update: (state: AppState) => Partial<AppState>) => void;
+type ArticleFlagOperation = {
+  version: number;
+  confirmed: boolean;
+  desired: boolean;
+  pending: boolean;
+};
 
+let articleMutationVersion = 0;
+const articleWriteQueues = new Map<string, Promise<void>>();
+const bulkReadWrites = new Set<Promise<void>>();
+const articleFlagOperations = new Map<string, Partial<Record<ArticleFlag, ArticleFlagOperation>>>();
+
+// 统一更新可见列表、详情与所有视图缓存；回滚只修改目标字段，保留正文及其他操作结果。
+function updateArticleCollections(
+  state: ArticleCollections,
+  updater: (article: Article) => Article,
+): ArticleCollections {
   return {
-    ...articleDetailCache,
-    [articleId]: updater(cachedArticle),
+    articles: state.articles.map(updater),
+    articleDetailCache: Object.fromEntries(
+      Object.entries(state.articleDetailCache).map(([id, article]) => [id, updater(article)]),
+    ),
+    articleSnapshotCache: Object.fromEntries(
+      Object.entries(state.articleSnapshotCache).map(([view, articles]) => [view, articles.map(updater)]),
+    ),
   };
+}
+
+function updateArticleFlag(
+  state: AppState,
+  articleId: string,
+  flag: ArticleFlag,
+  value: boolean,
+  unreadCountDelta?: number,
+) {
+  const article = getArticleFromCollections(articleId, state.articles, state.articleDetailCache)
+    ?? Object.values(state.articleSnapshotCache).flat().find((item) => item.id === articleId);
+  return {
+    ...updateArticleCollections(state, (item) =>
+      item.id === articleId ? { ...item, [flag]: value } : item,
+    ),
+    // 用当前字段的实际变化计算增量，避免失败恢复覆盖同一订阅源内其他文章的未读数。
+    feeds: flag === 'isRead' && article && article.isRead !== value
+      ? state.feeds.map((feed) => feed.id === article.feedId
+        ? { ...feed, unreadCount: Math.max(0, feed.unreadCount + (unreadCountDelta ?? (value ? -1 : 1))) }
+        : feed)
+      : state.feeds,
+  };
+}
+
+function writeArticleFlag(
+  set: AppStateUpdater,
+  article: Article,
+  flag: ArticleFlag,
+  desired: boolean,
+): void {
+  const operations = articleFlagOperations.get(article.id) ?? {};
+  const previous = operations[flag];
+  const operation: ArticleFlagOperation = {
+    version: ++articleMutationVersion,
+    confirmed: previous?.pending ? previous.confirmed : article[flag],
+    desired,
+    pending: true,
+  };
+  operations[flag] = operation;
+  articleFlagOperations.set(article.id, operations);
+  let unreadCountDelta = 0;
+  set((state) => {
+    const update = updateArticleFlag(state, article.id, flag, desired);
+    // 记录实际扣减量；原计数为零时没有扣减，失败恢复也不能凭空增加未读数。
+    unreadCountDelta = (update.feeds.find((feed) => feed.id === article.feedId)?.unreadCount ?? 0)
+      - (state.feeds.find((feed) => feed.id === article.feedId)?.unreadCount ?? 0);
+    return update;
+  });
+
+  const actionKey = flag === 'isRead' ? 'article.markRead' : 'article.toggleStar';
+  const context = flag === 'isStarred' ? { starred: desired } : undefined;
+  const predecessor = articleWriteQueues.get(article.id);
+  // 同一文章的写入串行执行，不同文章互不阻塞；旧请求只更新确认值，不覆盖后续点击。
+  const writing = (async () => {
+    if (predecessor) await predecessor;
+    try {
+      await patchArticle(article.id, { [flag]: desired }, { notifyOnError: false });
+      const latest = operations[flag]!;
+      latest.confirmed = desired;
+      latest.version = ++articleMutationVersion;
+      if (latest !== operation) return;
+      latest.pending = false;
+      runImmediateSuccess({ actionKey, context });
+    } catch (err) {
+      const latest = operations[flag]!;
+      if (latest !== operation) return;
+      latest.pending = false;
+      latest.desired = latest.confirmed;
+      latest.version = ++articleMutationVersion;
+      set((state) => updateArticleFlag(state, article.id, flag, latest.confirmed, -unreadCountDelta));
+      runImmediateFailure({ actionKey, context, err });
+    }
+  })();
+  articleWriteQueues.set(article.id, writing);
+  void writing.then(() => {
+    if (articleWriteQueues.get(article.id) === writing) articleWriteQueues.delete(article.id);
+  });
+}
+
+// 快照同时包含文章状态和未读统计，须等待写入结束后读取，避免把旧统计叠加到乐观状态。
+async function waitForArticleWrites(): Promise<void> {
+  while (articleWriteQueues.size || bulkReadWrites.size) {
+    await Promise.all([...articleWriteQueues.values(), ...bulkReadWrites]);
+  }
+}
+
+function preserveNewerArticleFlags(article: Article, requestVersion: number): Article {
+  const operations = articleFlagOperations.get(article.id);
+  let result = article;
+  for (const flag of ['isRead', 'isStarred'] as const) {
+    const operation = operations?.[flag];
+    // 详情请求仍可刷新正文，但不能用旧响应覆盖正在保存或请求发出之后产生的操作。
+    if (operation && (operation.pending || operation.version > requestVersion)) {
+      result = { ...result, [flag]: operation.desired };
+    }
+  }
+  return result;
+}
+
+function synchronizeSnapshotFlags(state: ArticleCollections, articles: Article[]): ArticleCollections {
+  const byId = new Map(articles.map((article) => [article.id, article]));
+  return updateArticleCollections(state, (article) => {
+    const incoming = byId.get(article.id);
+    return incoming
+      ? { ...article, isRead: incoming.isRead, isStarred: incoming.isStarred }
+      : article;
+  });
 }
 
 export function getSelectedArticleFromState(
@@ -394,7 +516,10 @@ export function getSelectedArticleFromState(
 function mergeArticleIntoCollections(
   state: Pick<AppState, 'articles' | 'articleDetailCache' | 'selectedView' | 'articleSnapshotCache'>,
   article: Article,
+  requestVersion: number,
 ) {
+  article = preserveNewerArticleFlags(article, requestVersion);
+  state = { ...state, ...synchronizeSnapshotFlags(state, [article]) };
   const existingArticle = state.articles.find((item) => item.id === article.id);
   const cachedArticlesForFeed = state.articleSnapshotCache[article.feedId] ?? [];
   const existingCachedArticle = cachedArticlesForFeed.find((item) => item.id === article.id);
@@ -665,10 +790,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (article?.content) return;
 
     void (async () => {
+      const requestVersion = articleMutationVersion;
       try {
         const dto = await getArticle(id, { notifyOnError: false });
         const mapped = mapArticleDto(dto);
-        set((state) => mergeArticleIntoCollections(state, mapped));
+        set((state) => mergeArticleIntoCollections(state, mapped, requestVersion));
       } catch (err) {
         console.error(err);
       }
@@ -725,6 +851,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       },
     })),
   refreshArticle: async (articleId) => {
+    const requestVersion = articleMutationVersion;
     try {
       const dto = await getArticle(articleId, { notifyOnError: false });
       const hasFulltext = Boolean(dto.contentFullHtml);
@@ -734,7 +861,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         dto.aiTranslationBilingualHtml?.trim() || dto.aiTranslationZhHtml?.trim(),
       );
       const mapped = mapArticleDto(dto);
-      set((state) => mergeArticleIntoCollections(state, mapped));
+      set((state) => mergeArticleIntoCollections(state, mapped, requestVersion));
       return { hasFulltext, hasFulltextError, hasAiSummary, hasAiTranslation };
     } catch (err) {
       console.error(err);
@@ -757,12 +884,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
 
     try {
+      await waitForArticleWrites();
+      if (latestSnapshotRequestIdByView.get(view) !== requestId) return;
+      const requestVersion = articleMutationVersion;
       const snapshot = await getReaderSnapshot(
         buildSnapshotRequestInput(get(), view),
         { notifyOnError: false },
       );
 
       if (latestSnapshotRequestIdByView.get(view) !== requestId) return;
+      // 请求期间发生了新操作，整份快照（含未读数）已过期，等待写入后重新读取。
+      if (requestVersion !== articleMutationVersion) {
+        await get().loadSnapshot({ view });
+        return;
+      }
 
       set((state) => {
         const expandedById = new Map(
@@ -807,8 +942,9 @@ export const useAppStore = create<AppState>((set, get) => ({
           ),
           isVisibleView ? preservedSelectedArticle : undefined,
         );
+        const synchronized = synchronizeSnapshotFlags({ ...state, articleDetailCache }, articles);
         const articleSnapshotCache = {
-          ...state.articleSnapshotCache,
+          ...synchronized.articleSnapshotCache,
           [view]: articles,
         };
         const nextCursor = snapshot.articles.nextCursor ?? null;
@@ -817,8 +953,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         return {
           categories,
           feeds,
-          articles: isVisibleView ? articles : state.articles,
-          articleDetailCache,
+          articles: isVisibleView ? articles : synchronized.articles,
+          articleDetailCache: synchronized.articleDetailCache,
           articleSnapshotCache,
           snapshotLoading: isVisibleView ? false : state.snapshotLoading,
           articleListNextCursor: isVisibleView ? nextCursor : state.articleListNextCursor,
@@ -871,6 +1007,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ articleListLoadingMore: true, articleListLoadMoreError: false });
 
     try {
+      await waitForArticleWrites();
+      if (latestSnapshotRequestIdByView.get(view) !== requestId || get().selectedView !== view) return;
+      const requestVersion = articleMutationVersion;
       const snapshot = await getReaderSnapshot(
         buildSnapshotRequestInput(get(), view, { cursor }),
         { notifyOnError: false },
@@ -878,6 +1017,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       if (latestSnapshotRequestIdByView.get(view) !== requestId) return;
       if (get().selectedView !== view) return;
+      if (requestVersion !== articleMutationVersion) {
+        set({ articleListLoadingMore: false });
+        await get().loadMoreSnapshot();
+        return;
+      }
 
       set((currentState) => {
         if (currentState.selectedView !== view) return {};
@@ -891,11 +1035,13 @@ export const useAppStore = create<AppState>((set, get) => ({
           currentState.articleDetailCache,
         );
         const nextCursor = snapshot.articles.nextCursor ?? null;
+        const synchronized = synchronizeSnapshotFlags(currentState, incomingArticles);
 
         return {
           articles,
+          articleDetailCache: synchronized.articleDetailCache,
           articleSnapshotCache: {
-            ...currentState.articleSnapshotCache,
+            ...synchronized.articleSnapshotCache,
             [view]: articles,
           },
           articleListNextCursor: nextCursor,
@@ -920,61 +1066,38 @@ export const useAppStore = create<AppState>((set, get) => ({
   markAsRead: (articleId) => {
     const article = getArticleFromCollections(articleId, get().articles, get().articleDetailCache);
     if (!article || article.isRead) return;
-
-    set((state) => ({
-      articles: state.articles.map((item) =>
-        item.id === articleId ? { ...item, isRead: true } : item,
-      ),
-      articleDetailCache: updateCachedArticle(state.articleDetailCache, articleId, (cachedArticle) => ({
-        ...cachedArticle,
-        isRead: true,
-      })),
-      feeds: state.feeds.map((feed) =>
-        feed.id === article.feedId
-          ? { ...feed, unreadCount: Math.max(0, feed.unreadCount - 1) }
-          : feed,
-      ),
-    }));
-
-    void patchArticle(articleId, { isRead: true }, { notifyOnError: false })
-      .then(() => {
-        runImmediateSuccess({ actionKey: 'article.markRead' });
-      })
-      .catch((err) => {
-        runImmediateFailure({ actionKey: 'article.markRead', err });
-      });
+    writeArticleFlag(set, article, 'isRead', true);
   },
 
   markAllAsRead: (feedId) => {
-    set((state) => ({
-      articles: state.articles.map((item) => {
-        if (feedId && item.feedId !== feedId) return item;
-        return item.isRead ? item : { ...item, isRead: true };
-      }),
-      articleDetailCache: Object.fromEntries(
-        Object.entries(state.articleDetailCache).map(([id, article]) => {
-          if (feedId && article.feedId !== feedId) {
-            return [id, article];
-          }
-
-          return [id, article.isRead ? article : { ...article, isRead: true }];
-        }),
-      ),
-      feeds: state.feeds.map((feed) => {
-        if (!feedId || feed.id === feedId) {
-          return { ...feed, unreadCount: 0 };
-        }
-        return feed;
-      }),
-    }));
-
-    void markAllRead(feedId ? { feedId } : {}, { notifyOnError: false })
+    // 批量操作涉及未加载的文章，成功后再修改本地状态，避免失败时无法可靠恢复全量统计。
+    const writing = markAllRead(feedId ? { feedId } : {}, { notifyOnError: false })
       .then(() => {
+        const version = ++articleMutationVersion;
+        set((state) => ({
+          ...updateArticleCollections(state, (article) => {
+            if (feedId && article.feedId !== feedId) return article;
+            const operations = articleFlagOperations.get(article.id) ?? {};
+            if (operations.isRead?.pending) {
+              // 单篇写入随后失败时也不能撤销已经成功的批量已读。
+              operations.isRead.confirmed = true;
+            } else {
+              operations.isRead = { version, confirmed: true, desired: true, pending: false };
+            }
+            articleFlagOperations.set(article.id, operations);
+            return article.isRead ? article : { ...article, isRead: true };
+          }),
+          feeds: state.feeds.map((feed) => !feedId || feed.id === feedId
+            ? { ...feed, unreadCount: 0 }
+            : feed),
+        }));
         runImmediateSuccess({ actionKey: 'article.markAllRead' });
       })
       .catch((err) => {
         runImmediateFailure({ actionKey: 'article.markAllRead', err });
       });
+    bulkReadWrites.add(writing);
+    void writing.then(() => bulkReadWrites.delete(writing));
   },
 
   addFeed: async (payload) => {
@@ -1142,32 +1265,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   toggleStar: (articleId) => {
     const article = getArticleFromCollections(articleId, get().articles, get().articleDetailCache);
     if (!article) return;
-    const nextValue = !article.isStarred;
-
-    set((state) => ({
-      articles: state.articles.map((item) =>
-        item.id === articleId ? { ...item, isStarred: nextValue } : item,
-      ),
-      articleDetailCache: updateCachedArticle(state.articleDetailCache, articleId, (cachedArticle) => ({
-        ...cachedArticle,
-        isStarred: nextValue,
-      })),
-    }));
-
-    void patchArticle(articleId, { isStarred: nextValue }, { notifyOnError: false })
-      .then(() => {
-        runImmediateSuccess({
-          actionKey: 'article.toggleStar',
-          context: { starred: nextValue },
-        });
-      })
-      .catch((err) => {
-        runImmediateFailure({
-          actionKey: 'article.toggleStar',
-          context: { starred: nextValue },
-          err,
-        });
-      });
+    writeArticleFlag(set, article, 'isStarred', !article.isStarred);
   },
 
   toggleCategory: (categoryId) =>

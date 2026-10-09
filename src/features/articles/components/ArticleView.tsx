@@ -109,6 +109,7 @@ export default function ArticleView({
   renderedAt,
 }: ArticleViewProps = {}) {
   const article = useAppStore((state) => getSelectedArticleFromState(state));
+  const autoReadArticleId = article?.id;
   const feed = useAppStore((state) => {
     const currentArticle = getSelectedArticleFromState(state);
     return currentArticle
@@ -344,25 +345,23 @@ export default function ArticleView({
   }, [article?.id, reportTitleVisibility]);
 
   useEffect(() => {
-    if (!article || article.isRead) {
+    if (!autoReadArticleId || !autoMarkReadEnabled) {
       return undefined;
     }
 
-    if (!autoMarkReadEnabled) {
-      return undefined;
-    }
-
+    // 每次打开文章只自动尝试一次；失败回滚或正文刷新不能重复提交、重置阅读计时。
+    // store 会跳过已经读过的文章，手动标记与重新打开仍可重试失败操作。
     if (autoMarkReadDelayMs === 0) {
-      markAsRead(article.id);
+      markAsRead(autoReadArticleId);
       return undefined;
     }
 
     const timer = setTimeout(() => {
-      markAsRead(article.id);
+      markAsRead(autoReadArticleId);
     }, autoMarkReadDelayMs);
 
     return () => clearTimeout(timer);
-  }, [article, autoMarkReadDelayMs, autoMarkReadEnabled, markAsRead]);
+  }, [autoReadArticleId, autoMarkReadDelayMs, autoMarkReadEnabled, markAsRead]);
 
   const requestFulltext = useCallback(
     async (
