@@ -88,9 +88,11 @@ export const QUEUE_CONTRACTS: Record<string, QueueContract> = {
         : { singletonKey: [ctx.userId, ctx.articleId].filter(Boolean).join(':'), singletonSeconds: 600, retryLimit: 0 },
   },
   'ai.translate_title_zh': {
-    queue: { warningQueueSize: 300 },
+    // 标题翻译由队列统一重试：首次执行加两次重试，总计最多三次。
+    // 显式设置正数延迟，避免临时网络故障时立即重复请求。
+    queue: { retryLimit: 2, retryDelay: 30, retryBackoff: true, warningQueueSize: 300 },
     worker: { localConcurrency: 2, batchSize: 1 },
-    send: (ctx) => ({ singletonKey: [ctx.userId, ctx.articleId].filter(Boolean).join(':'), singletonSeconds: 600, retryLimit: 0 }),
+    send: (ctx) => ({ singletonKey: [ctx.userId, ctx.articleId].filter(Boolean).join(':'), singletonSeconds: 600 }),
   },
   'ai.digest_tick': {
     queue: { warningQueueSize: 5 },

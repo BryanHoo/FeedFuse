@@ -12,8 +12,6 @@ import {
   insertArticleIgnoreDuplicate,
   insertArticleMediaAttachments,
   pruneFeedArticlesToLimit,
-  recordArticleTitleTranslationFailure,
-  setArticleTitleTranslation,
 } from '@/server/domains/articles/repositories/articlesRepo';
 import {
   getAiApiKey,
@@ -35,7 +33,6 @@ import {
   resolveAiConfigFingerprints,
 } from '@/server/integrations/ai/configFingerprints';
 import { articleFilterJudge } from '@/server/integrations/ai/articleFilterJudge';
-import { translateTitle } from '@/server/integrations/ai/translateTitle';
 import {
   isTranslationConfigComplete,
   resolveTranslationConfig,
@@ -66,6 +63,7 @@ import { isFeedDue } from '@/worker/rssScheduler';
 import { runArticleTaskWithStatus } from '@/worker/articleTaskStatus';
 import { runImmersiveTranslateSession } from '@/worker/immersiveTranslateWorker';
 import { runAiSummaryStreamWorker } from '@/worker/aiSummaryStreamWorker';
+import { runAiTitleTranslateWorker } from '@/worker/aiTitleTranslateWorker';
 import { runAiDigestTick } from '@/worker/aiDigestTick';
 import { runAiDigestGenerate } from '@/worker/aiDigestGenerate';
 import { runFeverAutoSyncWorker } from '@/worker/feverAutoSync';
@@ -742,83 +740,15 @@ async function main() {
   const aiTitleTranslateHandler = async (jobs: unknown[]) => {
     const pool = getPool();
     for (const job of jobs) {
-      const data =
-        typeof job === 'object' && job !== null && 'data' in job
-          ? (job as { data?: unknown }).data
-          : null;
-
-      const articleId =
-        readStringField(data, 'articleId');
-
+      const data = getJobData(job);
+      const articleId = readStringField(data, 'articleId');
       if (!articleId) throw new Error('Missing articleId');
-      const userId = readStringField(data, 'userId');
 
-      const article = await getArticleById(pool, articleId, userId ?? undefined);
-      if (!article) continue;
-      if (article.titleZh?.trim()) continue;
-
-      const titleSource = (article.titleOriginal || article.title).trim();
-      if (!titleSource) continue;
-
-      const ensureTranslationConfigCurrent = createConfigFingerprintGuard({
-        loadCurrentFingerprint: async () => {
-          const [uiSettings, aiApiKey, translationApiKey] = await Promise.all([
-            getUiSettings(pool, article.userId),
-            getAiApiKey(pool, article.userId),
-            getTranslationApiKey(pool, article.userId),
-          ]);
-          return resolveAiConfigFingerprints({
-            settings: uiSettings,
-            aiApiKey,
-            translationApiKey,
-          }).translation;
-        },
+      await runAiTitleTranslateWorker({
+        pool,
+        articleId,
+        userId: readStringField(data, 'userId') ?? undefined,
       });
-
-      const uiSettings = await getUiSettings(pool, article.userId);
-      const normalizedSettings = normalizePersistedSettings(uiSettings);
-      const aiApiKey = await getAiApiKey(pool, article.userId);
-      const translationApiKey = await getTranslationApiKey(pool, article.userId);
-      await ensureTranslationConfigCurrent();
-      const resolved = resolveTranslationConfig({
-        settings: normalizedSettings,
-        aiApiKey,
-        translationApiKey,
-      });
-      if (!resolved.apiKey.trim()) continue;
-      if (!isTranslationConfigComplete(resolved)) continue;
-      const { model, apiBaseUrl, apiKey, deepThinkingEnabled } = resolved;
-
-      try {
-        const translatedTitle = await translateTitle({
-          apiBaseUrl,
-          apiKey,
-          model,
-          title: titleSource,
-          // 标题翻译与正文翻译共用同一条用户可配置的翻译提示词。
-          prompt: normalizedSettings.ai.translationPrompt,
-          deepThinkingEnabled,
-        });
-        await ensureTranslationConfigCurrent();
-        if (!translatedTitle.trim()) {
-          throw new Error('Invalid title translation: empty result');
-        }
-
-        await setArticleTitleTranslation(pool, articleId, {
-          userId: article.userId,
-          titleZh: translatedTitle.trim(),
-          titleTranslationModel: model,
-        });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Unknown title translation error';
-        const attempts = await recordArticleTitleTranslationFailure(pool, articleId, {
-          userId: article.userId,
-          error: message,
-        });
-        if (attempts < 3) {
-          throw err instanceof Error ? err : new Error(message);
-        }
-      }
     }
   };
 

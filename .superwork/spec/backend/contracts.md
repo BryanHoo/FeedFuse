@@ -27,6 +27,8 @@
 - Web 首次入队和 Worker 启动必须共用 `src/server/infra/queue/bootstrap.ts` 的初始化入口，使用 `QUEUE_CONTRACTS` 中的队列配置，先创建被引用的死信队列。
 - pg-boss 12.13.0 的 `createQueue` 不更新已有队列；存在契约配置时必须随后调用 `updateQueue`，同步重试、心跳、超时和死信等显式配置字段。无契约配置的队列保留默认创建行为，不能向 `updateQueue` 传空对象。
 - 初始化成功前不能发送任务；并发调用共用初始化结果，缓存必须按 pg-boss 实例隔离，失败后允许重试。回归验证覆盖 `src/test/server/queue/bootstrap.test.ts` 和 `src/test/server/queue/queue.test.ts`。
+- 标题翻译任务 `ai.translate_title_zh` 由 pg-boss 统一负责重试：队列设置 `retryLimit: 2`，即首次执行加两次重试，总计最多三次任务执行；设置 `retryDelay: 30` 和 `retryBackoff: true`，发送选项只配置去重，不覆盖重试预算。
+- 标题翻译 Worker 每次失败都记录文章的累计失败次数与错误，并继续抛出异常，包括最后一次失败；累计失败次数只作诊断，不能控制单个任务的重试或把失败任务标记为完成。回归验证覆盖临时网络错误后恢复、三次失败耗尽预算、历史累计失败次数不影响当前任务，测试位于 `src/test/worker/aiTitleTranslateWorker.test.ts` 和 `src/test/server/queue/contracts.test.ts`。
 
 ## 数据与迁移
 

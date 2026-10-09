@@ -12,6 +12,21 @@ describe('queue contracts', () => {
     expect(getQueueSendOptions('ai.translate_article_zh', { articleId: 'a1' }).retryLimit).toBe(0);
   });
 
+  it('lets the queue retry title translation twice with backoff and preserves deduplication', () => {
+    const queue = getQueueCreateOptions('ai.translate_title_zh');
+    const send = getQueueSendOptions('ai.translate_title_zh', { userId: 'u1', articleId: 'a1' });
+
+    // pg-boss 的 retryLimit 不含首次执行；发送选项不能覆盖队列的两次重试。
+    expect({ ...queue, ...send }).toMatchObject({
+      retryLimit: 2,
+      retryBackoff: true,
+      singletonKey: 'u1:a1',
+      singletonSeconds: 600,
+    });
+    expect(queue.retryDelay).toBeGreaterThan(0);
+    expect(send).not.toHaveProperty('retryLimit');
+  });
+
   it('dedupes ai digest jobs via singleton keys', () => {
     expect(getQueueSendOptions('ai.digest_tick', {}).singletonKey).toBe('ai.digest_tick');
     expect(getQueueSendOptions('ai.digest_generate', { runId: 'r1' }).singletonKey).toBe('r1');
