@@ -1,5 +1,5 @@
 import { Bot, Flame, KeyRound, Palette, Rss, ScrollText, type LucideIcon } from 'lucide-react';
-import { startTransition, useEffect, useRef, useState } from 'react';
+import { startTransition, useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -108,13 +108,15 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
   const validationErrors = useSettingsStore((state) => state.validationErrors);
   const validationErrorKeys = Object.keys(validationErrors);
   const hasErrors = validationErrorKeys.length > 0;
+  // 稳定保存回调，避免草稿响应或状态渲染反复重置防抖计时器。
+  const saveDraftWithResult = useCallback(async () => {
+    const result = await saveDraft();
+    lastAutosaveResultRef.current = result;
+    return result;
+  }, [saveDraft]);
   const autosave = useSettingsAutosave({
     draftVersion,
-    saveDraft: async () => {
-      const result = await saveDraft();
-      lastAutosaveResultRef.current = result;
-      return result;
-    },
+    saveDraft: saveDraftWithResult,
     hasErrors,
   });
 

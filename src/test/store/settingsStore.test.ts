@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSettingsStore } from '../../store/settingsStore';
 import { defaultPersistedSettings } from '../../features/settings/settingsSchema';
+import type { PersistedSettings } from '../../types';
 
 function getFetchCallUrl(input: RequestInfo | URL): string {
   if (typeof input === 'string') return input;
@@ -32,6 +33,10 @@ describe('settingsStore', () => {
   let lastTranslationApiKeyPutBodyText: string | null = null;
   let lastAiApiKeyDeleteCalled = false;
   let lastSettingsPutBodyText: string | null = null;
+  let pendingSettingsPuts: Array<{
+    body: PersistedSettings;
+    respond: (ok?: boolean) => void;
+  }> | null = null;
 
   beforeEach(() => {
     remoteHasApiKey = false;
@@ -40,6 +45,7 @@ describe('settingsStore', () => {
     lastTranslationApiKeyPutBodyText = null;
     lastAiApiKeyDeleteCalled = false;
     lastSettingsPutBodyText = null;
+    pendingSettingsPuts = null;
 
     useSettingsStore.setState((state) => ({
       ...state,
@@ -83,6 +89,23 @@ describe('settingsStore', () => {
           }
           if (url.includes('/api/settings')) {
             lastSettingsPutBodyText = bodyText ?? null;
+            // 手动释放响应，确定性地模拟请求期间继续编辑和多个保存排队。
+            if (pendingSettingsPuts) {
+              return new Promise<Response>((resolve) => {
+                pendingSettingsPuts!.push({
+                  body,
+                  respond: (ok = true) => resolve(new Response(JSON.stringify(
+                    ok ? { ok: true, data: body } : {
+                      ok: false,
+                      error: { code: 'save_failed', message: '保存失败' },
+                    },
+                  ), {
+                    status: ok ? 200 : 500,
+                    headers: { 'content-type': 'application/json' },
+                  })),
+                });
+              });
+            }
             return new Response(JSON.stringify({ ok: true, data: body }), {
               status: 200,
               headers: { 'content-type': 'application/json' },
@@ -133,6 +156,145 @@ describe('settingsStore', () => {
         });
       }),
     );
+  });
+
+  it('保留保存较大字号期间改为较小字号的新草稿', async () => {
+    pendingSettingsPuts = [];
+    useSettingsStore.getState().loadDraft();
+    useSettingsStore.getState().updateDraft((draft) => {
+      draft.persisted.general.fontSize = 'large';
+    });
+    const saving = useSettingsStore.getState().saveDraft();
+    await vi.waitFor(() => expect(pendingSettingsPuts).toHaveLength(1));
+
+    useSettingsStore.getState().updateDraft((draft) => {
+      draft.persisted.general.fontSize = 'small';
+    });
+    pendingSettingsPuts[0].respond();
+    expect((await saving).ok).toBe(true);
+    expect(useSettingsStore.getState().persistedSettings.general.fontSize).toBe('large');
+    expect(useSettingsStore.getState().draft?.persisted.general.fontSize).toBe('small');
+  });
+
+  it('串行保存，并在排队请求开始时读取最新草稿', async () => {
+    pendingSettingsPuts = [];
+    useSettingsStore.getState().loadDraft();
+    useSettingsStore.getState().updateDraft((draft) => {
+      draft.persisted.general.fontSize = 'large';
+    });
+    const firstSave = useSettingsStore.getState().saveDraft();
+    await vi.waitFor(() => expect(pendingSettingsPuts).toHaveLength(1));
+    useSettingsStore.getState().updateDraft((draft) => {
+      draft.persisted.general.fontSize = 'medium';
+    });
+    const secondSave = useSettingsStore.getState().saveDraft();
+    useSettingsStore.getState().updateDraft((draft) => {
+      draft.persisted.general.fontSize = 'small';
+    });
+    // 让所有微任务执行完，确认首个请求未结束时没有第二个网络请求。
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const concurrentCount = pendingSettingsPuts.length;
+    pendingSettingsPuts[0].respond();
+    await firstSave;
+    await vi.waitFor(() => expect(pendingSettingsPuts).toHaveLength(2));
+    const secondFontSize = pendingSettingsPuts[1].body.general.fontSize;
+    pendingSettingsPuts[1].respond();
+    await secondSave;
+
+    expect(concurrentCount).toBe(1);
+    expect(secondFontSize).toBe('small');
+    expect(useSettingsStore.getState().persistedSettings.general.fontSize).toBe('small');
+    expect(useSettingsStore.getState().draft?.persisted.general.fontSize).toBe('small');
+  });
+
+  it('保留保存期间新输入的两种密钥及 RSS 校验状态', async () => {
+    pendingSettingsPuts = [];
+    useSettingsStore.getState().loadDraft();
+    useSettingsStore.getState().updateDraft((draft) => {
+      draft.session.ai.apiKey = 'sk-old';
+      draft.persisted.ai.translation.useSharedAi = false;
+      draft.persisted.ai.translation.apiBaseUrl = 'https://api.example.com/v1';
+      draft.session.ai.translationApiKey = 'sk-translation-old';
+    });
+    const saving = useSettingsStore.getState().saveDraft();
+    await vi.waitFor(() => expect(pendingSettingsPuts).toHaveLength(1));
+    useSettingsStore.getState().updateDraft((draft) => {
+      draft.session.ai.apiKey = 'sk-new';
+      draft.session.ai.translationApiKey = 'sk-translation-new';
+      draft.session.rssValidation.new = { status: 'validating', verifiedUrl: null };
+    });
+    pendingSettingsPuts[0].respond();
+    await saving;
+
+    const ai = useSettingsStore.getState().draft?.session.ai;
+    expect(ai?.apiKey).toBe('sk-new');
+    expect(ai?.translationApiKey).toBe('sk-translation-new');
+    expect(ai?.hasApiKey).toBe(true);
+    expect(ai?.hasTranslationApiKey).toBe(true);
+    expect(useSettingsStore.getState().draft?.session.rssValidation.new.status).toBe('validating');
+  });
+
+  it('请求返回时清理已保存且未再次编辑的密钥，保留其他新修改', async () => {
+    pendingSettingsPuts = [];
+    useSettingsStore.getState().loadDraft();
+    useSettingsStore.getState().updateDraft((draft) => {
+      draft.session.ai.apiKey = 'sk-saved';
+    });
+    const saving = useSettingsStore.getState().saveDraft();
+    await vi.waitFor(() => expect(pendingSettingsPuts).toHaveLength(1));
+    useSettingsStore.getState().updateDraft((draft) => {
+      draft.persisted.general.fontSize = 'small';
+    });
+    pendingSettingsPuts[0].respond();
+    await saving;
+
+    expect(useSettingsStore.getState().draft?.session.ai.apiKey).toBe('');
+    expect(useSettingsStore.getState().draft?.persisted.general.fontSize).toBe('small');
+  });
+
+  it.each([false, true])('旧响应不重建已放弃或重新打开的草稿（重新打开：%s）', async (reopen) => {
+    pendingSettingsPuts = [];
+    useSettingsStore.getState().loadDraft();
+    useSettingsStore.getState().updateDraft((draft) => {
+      draft.persisted.general.fontSize = 'large';
+    });
+    const saving = useSettingsStore.getState().saveDraft();
+    await vi.waitFor(() => expect(pendingSettingsPuts).toHaveLength(1));
+    const queuedSave = useSettingsStore.getState().saveDraft();
+    useSettingsStore.getState().discardDraft();
+    if (reopen) {
+      useSettingsStore.getState().loadDraft();
+      useSettingsStore.getState().updateDraft((draft) => {
+        draft.persisted.general.fontSize = 'small';
+      });
+    }
+    pendingSettingsPuts[0].respond();
+    await Promise.all([saving, queuedSave]);
+
+    expect(pendingSettingsPuts).toHaveLength(1);
+    if (reopen) {
+      expect(useSettingsStore.getState().draft?.persisted.general.fontSize).toBe('small');
+    } else {
+      expect(useSettingsStore.getState().draft).toBeNull();
+    }
+  });
+
+  it('保存失败后仍能继续保存新修改', async () => {
+    pendingSettingsPuts = [];
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    useSettingsStore.getState().loadDraft();
+    const firstSave = useSettingsStore.getState().saveDraft();
+    await vi.waitFor(() => expect(pendingSettingsPuts).toHaveLength(1));
+    useSettingsStore.getState().updateDraft((draft) => {
+      draft.persisted.general.fontSize = 'small';
+    });
+    pendingSettingsPuts[0].respond(false);
+    expect((await firstSave).ok).toBe(false);
+    const retry = useSettingsStore.getState().saveDraft();
+    await vi.waitFor(() => expect(pendingSettingsPuts).toHaveLength(2));
+    pendingSettingsPuts[1].respond();
+    expect((await retry).ok).toBe(true);
+    expect(useSettingsStore.getState().persistedSettings.general.fontSize).toBe('small');
   });
 
   it('saves apiKey to backend without persisting it to localStorage', async () => {

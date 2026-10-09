@@ -18,19 +18,26 @@ export function useSettingsAutosave(input: {
     }
 
     const targetVersion = draftVersion;
+    let active = true;
     const timer = window.setTimeout(() => {
       void saveDraft()
         .then((result) => {
+          // 草稿已更新或组件已卸载时，旧请求不能再修改当前保存状态。
+          if (!active) return;
           setLastSavedVersion(targetVersion);
           setLastResult(result.ok ? 'saved' : 'error');
         })
         .catch(() => {
+          if (!active) return;
           setLastSavedVersion(targetVersion);
           setLastResult('error');
         });
     }, delayMs);
 
-    return () => window.clearTimeout(timer);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
   }, [draftVersion, hasErrors, saveDraft, delayMs]);
 
   const status = useMemo<AutosaveStatus>(() => {

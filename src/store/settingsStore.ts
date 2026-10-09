@@ -48,6 +48,7 @@ interface SettingsState {
   persistedSettings: PersistedSettings;
   sessionSettings: SessionSettings;
   draft: SettingsDraft | null;
+  draftVersion: number;
   validationErrors: Record<string, string>;
   hydratePersistedSettings: () => Promise<void>;
   loadDraft: () => void;
@@ -171,12 +172,18 @@ function readSettingsStorageValue(): string | null {
   return null;
 }
 
+// 保存队列覆盖设置和密钥请求的完整流程，避免后发请求先写入服务端。
+let draftSaveQueue: Promise<void> = Promise.resolve();
+// 关闭或重新加载草稿后递增，防止旧任务保存或覆盖另一次编辑会话。
+let draftGeneration = 0;
+
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set, get) => ({
       persistedSettings: cloneDeep(defaultPersistedSettings),
       sessionSettings: cloneDeep(defaultSessionSettings),
       draft: null,
+      draftVersion: 0,
       validationErrors: {},
       settings: pickUserSettings(defaultPersistedSettings),
       hydratePersistedSettings: async () => {
@@ -227,11 +234,14 @@ export const useSettingsStore = create<SettingsState>()(
           console.error(err);
         }
       },
-      loadDraft: () =>
+      loadDraft: () => {
+        draftGeneration += 1;
         set((state) => ({
           draft: createDraft(state.persistedSettings, state.sessionSettings),
+          draftVersion: state.draftVersion + 1,
           validationErrors: {},
-        })),
+        }));
+      },
       updateDraft: (updater) =>
         set((state) => {
           const baseDraft = state.draft ?? createDraft(state.persistedSettings, state.sessionSettings);
@@ -240,98 +250,143 @@ export const useSettingsStore = create<SettingsState>()(
 
           return {
             draft: nextDraft,
+            draftVersion: state.draftVersion + 1,
             validationErrors: {},
           };
         }),
-      saveDraft: async () => {
-        const state = get();
-        if (!state.draft) {
-          return { ok: true };
-        }
-
-        const validation = validateSettingsDraft(state.draft);
-        if (!validation.valid) {
-          set({ validationErrors: validation.errors });
-          return { ok: false };
-        }
-
-        const nextPersistedSettings = ensureAiTranslationSettings(state.draft.persisted);
-        let settingsSaved = false;
-
-        try {
-          const savedSettings = await putSettings(nextPersistedSettings, {
-            notifyOnError: false,
-          });
-          settingsSaved = true;
-          const shouldClearApiKey = state.draft.session.ai.clearApiKey;
-          const apiKey = state.draft.session.ai.apiKey.trim();
-          const shouldClearTranslationApiKey = state.draft.session.ai.clearTranslationApiKey ?? false;
-          const translationApiKey = (state.draft.session.ai.translationApiKey ?? '').trim();
-
-          let hasApiKey = state.draft.session.ai.hasApiKey;
-          let hasTranslationApiKey = state.draft.session.ai.hasTranslationApiKey ?? false;
-          let clearDraftApiKey = false;
-          let clearDraftTranslationApiKey = false;
-
-          if (shouldClearApiKey) {
-            const result = await deleteAiApiKey();
-            hasApiKey = result.hasApiKey;
-            clearDraftApiKey = true;
-          } else if (apiKey) {
-            const result = await putAiApiKey({ apiKey });
-            hasApiKey = result.hasApiKey;
-            clearDraftApiKey = true;
+      saveDraft: () => {
+        const generation = draftGeneration;
+        const saving = draftSaveQueue.then(async (): Promise<SaveDraftResult> => {
+          // 在轮到当前任务时取快照，排队期间的新编辑也能进入下一次请求。
+          const state = get();
+          if (!state.draft || generation !== draftGeneration) {
+            return { ok: true };
           }
 
-          if (!nextPersistedSettings.ai.translation.useSharedAi) {
-            if (shouldClearTranslationApiKey) {
-              const result = await deleteTranslationApiKey();
-              hasTranslationApiKey = result.hasApiKey;
-              clearDraftTranslationApiKey = true;
-            } else if (translationApiKey) {
-              const result = await putTranslationApiKey({ apiKey: translationApiKey });
-              hasTranslationApiKey = result.hasApiKey;
-              clearDraftTranslationApiKey = true;
+          const submittedDraft = state.draft;
+          const validation = validateSettingsDraft(submittedDraft);
+          if (!validation.valid) {
+            set({ validationErrors: validation.errors });
+            return { ok: false };
+          }
+
+          const nextPersistedSettings = ensureAiTranslationSettings(submittedDraft.persisted);
+          let settingsSaved = false;
+
+          try {
+            const savedSettings = await putSettings(nextPersistedSettings, {
+              notifyOnError: false,
+            });
+            settingsSaved = true;
+            const shouldClearApiKey = submittedDraft.session.ai.clearApiKey;
+            const apiKey = submittedDraft.session.ai.apiKey.trim();
+            const shouldClearTranslationApiKey = submittedDraft.session.ai.clearTranslationApiKey ?? false;
+            const translationApiKey = (submittedDraft.session.ai.translationApiKey ?? '').trim();
+
+            let hasApiKey = submittedDraft.session.ai.hasApiKey;
+            let hasTranslationApiKey = submittedDraft.session.ai.hasTranslationApiKey ?? false;
+            let clearDraftApiKey = false;
+            let clearDraftTranslationApiKey = false;
+
+            if (shouldClearApiKey) {
+              const result = await deleteAiApiKey();
+              hasApiKey = result.hasApiKey;
+              clearDraftApiKey = true;
+            } else if (apiKey) {
+              const result = await putAiApiKey({ apiKey });
+              hasApiKey = result.hasApiKey;
+              clearDraftApiKey = true;
             }
+
+            if (!nextPersistedSettings.ai.translation.useSharedAi) {
+              if (shouldClearTranslationApiKey) {
+                const result = await deleteTranslationApiKey();
+                hasTranslationApiKey = result.hasApiKey;
+                clearDraftTranslationApiKey = true;
+              } else if (translationApiKey) {
+                const result = await putTranslationApiKey({ apiKey: translationApiKey });
+                hasTranslationApiKey = result.hasApiKey;
+                clearDraftTranslationApiKey = true;
+              }
+            }
+
+            const nextSessionSettings: SessionSettings = {
+              ai: {
+                apiKey: clearDraftApiKey ? '' : submittedDraft.session.ai.apiKey,
+                hasApiKey,
+                clearApiKey: false,
+                translationApiKey: clearDraftTranslationApiKey
+                  ? ''
+                  : (submittedDraft.session.ai.translationApiKey ?? ''),
+                hasTranslationApiKey,
+                clearTranslationApiKey: false,
+              },
+              rssValidation: {},
+            };
+
+            set((current) => {
+              let nextDraft = current.draft;
+              const sameGeneration = generation === draftGeneration;
+              const sameVersion = state.draftVersion === current.draftVersion;
+
+              if (sameGeneration && nextDraft) {
+                if (sameVersion) {
+                  nextDraft = createDraft(savedSettings, nextSessionSettings);
+                } else {
+                  // 旧响应只确认已提交内容；保留请求期间的新设置、密钥和 RSS 校验状态。
+                  nextDraft = cloneDeep(nextDraft);
+                  const currentAi = nextDraft.session.ai;
+                  const submittedAi = submittedDraft.session.ai;
+                  currentAi.hasApiKey = hasApiKey;
+                  currentAi.hasTranslationApiKey = hasTranslationApiKey;
+
+                  // 仅消费与请求快照一致的密钥操作，不能清空用户后来输入的值或删除意图。
+                  if (clearDraftApiKey && currentAi.apiKey === submittedAi.apiKey &&
+                      currentAi.clearApiKey === submittedAi.clearApiKey) {
+                    currentAi.apiKey = '';
+                    currentAi.clearApiKey = false;
+                  }
+                  if (clearDraftTranslationApiKey &&
+                      currentAi.translationApiKey === submittedAi.translationApiKey &&
+                      currentAi.clearTranslationApiKey === submittedAi.clearTranslationApiKey) {
+                    currentAi.translationApiKey = '';
+                    currentAi.clearTranslationApiKey = false;
+                  }
+                }
+              }
+
+              return {
+                persistedSettings: cloneDeep(savedSettings),
+                sessionSettings: nextSessionSettings,
+                draft: nextDraft,
+                // 新草稿的校验结果不能由旧请求清空。
+                validationErrors: sameGeneration && sameVersion ? {} : current.validationErrors,
+                settings: pickUserSettings(savedSettings),
+              };
+            });
+
+            return { ok: true };
+          } catch (err) {
+            console.error(err);
+            return {
+              ok: false,
+              err,
+              shouldNotify: !settingsSaved,
+            };
           }
-
-          const nextSessionSettings: SessionSettings = {
-            ai: {
-              apiKey: clearDraftApiKey ? '' : state.draft.session.ai.apiKey,
-              hasApiKey,
-              clearApiKey: false,
-              translationApiKey: clearDraftTranslationApiKey
-                ? ''
-                : (state.draft.session.ai.translationApiKey ?? ''),
-              hasTranslationApiKey,
-              clearTranslationApiKey: false,
-            },
-            rssValidation: {},
-          };
-
-          set({
-            persistedSettings: cloneDeep(savedSettings),
-            sessionSettings: nextSessionSettings,
-            draft: createDraft(savedSettings, nextSessionSettings),
-            validationErrors: {},
-            settings: pickUserSettings(savedSettings),
-          });
-
-          return { ok: true };
-        } catch (err) {
-          console.error(err);
-          return {
-            ok: false,
-            err,
-            shouldNotify: !settingsSaved,
-          };
-        }
+        });
+        // 无论本次成功还是失败，后续保存都可以继续执行。
+        draftSaveQueue = saving.then(() => undefined, () => undefined);
+        return saving;
       },
-      discardDraft: () =>
-        set({
+      discardDraft: () => {
+        draftGeneration += 1;
+        set((state) => ({
           draft: null,
+          draftVersion: state.draftVersion + 1,
           validationErrors: {},
-        }),
+        }));
+      },
       updateSettings: (partial) =>
         set((state) => ({
           persistedSettings: {
