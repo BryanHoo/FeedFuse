@@ -19,17 +19,52 @@ describe('ssrfGuard', () => {
     vi.unstubAllEnvs();
   });
 
-  it('accepts localhost ip', async () => {
-    await expect(isSafeExternalUrl('http://127.0.0.1/feed')).resolves.toBe(true);
+  it.each(['127.0.0.1', '127.1', '2130706433', '[::1]', '[::ffff:127.0.0.1]'])(
+    'rejects loopback IP literals by default: %s', async (host) => {
+      await expect(isSafeExternalUrl(`http://${host}/feed`)).resolves.toBe(false);
+    },
+  );
+
+  it.each(['public', 'fake-ip', 'lan'])('rejects localhost in %s mode', async (mode) => {
+    vi.stubEnv('RSS_NETWORK_MODE', mode);
+    lookupMock.mockResolvedValue([{ address: '127.0.0.1', family: 4 }]);
+    await expect(isSafeExternalUrl('http://localhost/feed')).resolves.toBe(false);
+    await expect(isSafeExternalUrl('http://rss.localhost/feed')).resolves.toBe(false);
   });
 
-  it('accepts localhost hostname', async () => {
+  it('accepts loopback only when the administrator explicitly allows its CIDR', async () => {
+    vi.stubEnv('RSS_NETWORK_MODE', 'custom');
+    vi.stubEnv('RSS_ALLOWED_CIDRS', '127.0.0.1/32,::1/128');
+    lookupMock.mockResolvedValue([{ address: '127.0.0.1', family: 4 }]);
     await expect(isSafeExternalUrl('http://localhost/feed')).resolves.toBe(true);
+    await expect(isSafeExternalUrl('http://127.0.0.1/feed')).resolves.toBe(true);
+    await expect(isSafeExternalUrl('http://[::1]/feed')).resolves.toBe(true);
+    await expect(isSafeExternalUrl('http://127.0.0.2/feed')).resolves.toBe(false);
   });
 
-  it('accepts Docker host alias', async () => {
+  it('rejects Docker host alias by default and checks its resolved CIDR in custom mode', async () => {
     lookupMock.mockResolvedValue([{ address: '192.168.65.254', family: 4 }]);
+    await expect(isSafeExternalUrl('http://host.docker.internal/feed')).resolves.toBe(false);
+    vi.stubEnv('RSS_NETWORK_MODE', 'custom');
+    vi.stubEnv('RSS_ALLOWED_CIDRS', '192.168.65.254/32');
     await expect(isSafeExternalUrl('http://host.docker.internal/feed')).resolves.toBe(true);
+    lookupMock.mockResolvedValue([{ address: '192.168.65.253', family: 4 }]);
+    await expect(isSafeExternalUrl('http://host.docker.internal/feed')).resolves.toBe(false);
+  });
+
+  it.each(['localhost', 'rss.localhost', 'host.docker.internal', 'host.docker.internal.'])(
+    'does not use unresolved-host fallback for local aliases: %s', async (host) => {
+      lookupMock.mockRejectedValue(new Error('ENOTFOUND'));
+      await expect(isSafeExternalUrl(`http://${host}/feed`, {
+        allowUnresolvedHostname: true,
+      })).resolves.toBe(false);
+    },
+  );
+
+  it('ignores allowed CIDRs outside custom mode', async () => {
+    vi.stubEnv('RSS_NETWORK_MODE', 'public');
+    vi.stubEnv('RSS_ALLOWED_CIDRS', '127.0.0.0/8');
+    await expect(isSafeExternalUrl('http://127.0.0.1/feed')).resolves.toBe(false);
   });
 
   it('rejects non-http protocols', async () => {

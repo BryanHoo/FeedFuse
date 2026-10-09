@@ -67,6 +67,8 @@
 - 安全检测页需结合 HTML 根节点与检测特征识别，不能把 RSS 正文中的相关内容误判为检测页。备用请求及重定向必须复用 SSRF、响应大小和超时限制，换主机时去掉原主机的条件缓存请求头，且只有可解析的 RSS/Atom 响应才能视为恢复成功。
 - 安全检测恢复失败时，校验接口返回 `access_blocked`，后台更新记录 `fetch_access_blocked`，明确提示源站安全验证阻止访问；备用主机的网络或解析错误不能覆盖该诊断，安全阻断和资源限制错误仍按原有规则上报。回归测试覆盖 `src/test/server/http/externalHttpClient.feedAccess.test.ts`、RSS 校验接口和后台错误映射。
 - `src/server/integrations/rss/ssrfGuard.ts` 是 RSS 外链安全判定的统一入口；`route.ts`、worker 和抓取流程不要各自散落一套网络地址规则。
+- `RSS_NETWORK_MODE=public` 不得默认豁免本机或 Docker 宿主机地址；`localhost`、`host.docker.internal` 与 IP 字面量必须按实际 IP 判断，回环地址仅能由部署管理员在 `custom` 模式下通过 `RSS_ALLOWED_CIDRS` 显式放行。网络例外对所有账号的 RSS、正文与媒体请求生效。
+- URL 预检不能替代连接时 DNS 校验；外部 HTTP 连接必须校验此次解析的全部候选地址并直接使用已校验结果，重定向和备用主机同样受限。未解析主机名的预检兼容不能绕过连接校验。回归测试需覆盖 DNS 从公网变成回环、混合公网/私网结果及管理员 CIDR 例外，测试入口为 `src/test/server/http/externalHttpTransport.ssrf.test.ts`。
 - RSS 链接在发起抓取前要校验原始 URL，抓取完成后如果拿到了重定向后的 `finalUrl`，还必须再次按相同策略校验，避免通过公网入口跳转到内网或 fake-ip 地址绕过限制。
 - RSS 和 fulltext 这类外部 HTTP 抓取不能依赖客户端自动跟随重定向；必须在每一跳 `Location` 发起请求前先按同一安全策略校验目标 URL。
 - Docker/host fallback 只能用于网络类失败；`Unsafe URL`、响应体超限和重定向次数超限这类确定性错误必须保留原始错误。

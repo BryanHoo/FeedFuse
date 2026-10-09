@@ -68,6 +68,10 @@ RSS 网络访问默认使用 `RSS_NETWORK_MODE=public`，仅允许公网地址�
 - `RSS_NETWORK_MODE=custom`
 - `RSS_ALLOWED_CIDRS=192.168.0.0/16,10.0.0.0/8`
 
+`localhost`、`127.0.0.1`、`::1` 和 `host.docker.internal` 没有默认豁免，域名与直接填写的 IP 都按实际目标地址校验。确需访问本机 RSS 时，由部署管理员设置 `RSS_NETWORK_MODE=custom` 和 `RSS_ALLOWED_CIDRS=127.0.0.1/32,::1/128`；访问 Docker 宿主机时，将其在容器内实际解析到的 IP 以 `/32`（IPv4）或 `/128`（IPv6）加入白名单。`lan` 仅额外允许 RFC1918 网段，不额外允许回环地址。
+
+这些环境变量是部署级策略，适用于所有账号的 RSS、正文与媒体请求；多账号部署应仅配置必要的目标地址。每次新建 HTTP 连接都会校验此次 DNS 解析返回的全部候选 IP，并直接使用已校验结果连接；重定向的每一跳也会执行校验。
+
 ## 3. 拉取镜像并启动服务
 
 ```bash

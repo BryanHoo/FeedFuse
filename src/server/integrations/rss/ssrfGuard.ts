@@ -1,5 +1,6 @@
 import ipaddr from 'ipaddr.js';
 import { lookup } from 'node:dns/promises';
+import type { LookupFunction } from 'node:net';
 import { getRssNetworkConfig, type RssNetworkConfig } from '@/server/infra/env';
 
 const DOCKER_HOST_ALIAS = 'host.docker.internal';
@@ -105,7 +106,7 @@ function normalizeIpAddress(ip: string): ipaddr.IPv4 | ipaddr.IPv6 {
   return addr;
 }
 
-function getIpSafety(ip: string, options?: { allowLoopback?: boolean }): ExternalUrlSafetyResult {
+function getIpSafety(ip: string): ExternalUrlSafetyResult {
   if (!ipaddr.isValid(ip)) return { safe: false, reason: 'unsafe_ip' };
   const addr = normalizeIpAddress(ip);
   const range = addr.range();
@@ -121,7 +122,6 @@ function getIpSafety(ip: string, options?: { allowLoopback?: boolean }): Externa
   if (config.mode === 'custom' && isExplicitlyAllowedByCidrs(addr, config.allowedCidrs)) {
     return { safe: true };
   }
-  if (options?.allowLoopback && range === 'loopback') return { safe: true };
   if (range === 'reserved' && isBenchmarkTestingIp(addr)) {
     return { safe: false, reason: 'fake_ip', address: ip, mode: config.mode };
   }
@@ -134,7 +134,28 @@ function getIpSafety(ip: string, options?: { allowLoopback?: boolean }): Externa
   return { safe: false, reason: 'unsafe_ip', address: ip, mode: config.mode };
 }
 
+// HTTP 连接必须使用本次已校验的 DNS 结果，不能在 URL 预检后交给系统再次解析。
+// 同时校验全部候选地址，避免 Node 的 IPv4/IPv6 自动回退连接到受限地址。
+export const safeExternalDnsLookup: LookupFunction = (hostname, options, callback) => {
+  void lookup(hostname, { ...options, all: true }).then((addresses) => {
+    if (!addresses.length) {
+      throw Object.assign(new Error('Hostname did not resolve'), { code: 'ENOTFOUND' });
+    }
+    if (addresses.some(({ address }) => !getIpSafety(address).safe)) {
+      throw new Error('Unsafe URL');
+    }
+    return addresses;
+  }).then((addresses) => {
+    if (options.all) {
+      callback(null, addresses);
+    } else {
+      callback(null, addresses[0].address, addresses[0].family);
+    }
+  }, (error: NodeJS.ErrnoException) => callback(error, ''));
+};
+
 function looksLikePublicHostname(hostname: string): boolean {
+  if (hostname === DOCKER_HOST_ALIAS) return false;
   if (!hostname.includes('.')) return false;
   if (!/^[a-z0-9.-]+$/i.test(hostname)) return false;
 
@@ -166,18 +187,12 @@ export async function getExternalUrlSafety(
   }
   if (url.username || url.password) return { safe: false, reason: 'credentials' };
 
-  const hostname = url.hostname.toLowerCase();
+  // URL 的 IPv6 hostname 带方括号；域名末尾的根标签不应改变安全判断。
+  const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
   const config = getNetworkConfig();
   if (!hostname) return { safe: false, reason: 'missing_hostname' };
 
-  // Docker users may enter the host alias directly; treat it the same as localhost.
-  if (hostname === DOCKER_HOST_ALIAS) {
-    return { safe: true };
-  }
-
-  if (hostname === 'localhost' || hostname.endsWith('.localhost')) {
-    return { safe: true };
-  }
+  // localhost 和 Docker 宿主机别名必须继续解析，按实际 IP 与管理员 CIDR 配置判断。
   // `.local` 通常用于 mDNS，本地部署在 lan/custom 模式下需要继续解析后按 IP 策略判断。
   if (hostname.endsWith('.local') && config.mode === 'public') {
     return { safe: false, reason: 'local_hostname', mode: config.mode };
@@ -185,7 +200,7 @@ export async function getExternalUrlSafety(
   if (hostname === '0.0.0.0') return { safe: false, reason: 'zero_address' };
 
   if (ipaddr.isValid(hostname)) {
-    return getIpSafety(hostname, { allowLoopback: true });
+    return getIpSafety(hostname);
   }
 
   try {

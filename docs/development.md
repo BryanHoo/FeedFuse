@@ -50,6 +50,8 @@ RSS 网络访问默认使用 `RSS_NETWORK_MODE=public`，只允许公网地址�
 
 如果你在 Clash、sing-box 等 fake-ip 网络环境下录入 RSS 源，优先改成 `RSS_NETWORK_MODE=fake-ip`。如果你只想放开特定局域网网段，使用 `RSS_NETWORK_MODE=custom` 并设置 `RSS_ALLOWED_CIDRS=192.168.0.0/16,10.0.0.0/8`。
 
+本机地址与 Docker 宿主机别名没有默认豁免。开发时访问本机 RSS，可显式设置 `RSS_NETWORK_MODE=custom` 和 `RSS_ALLOWED_CIDRS=127.0.0.1/32,::1/128`；Docker 宿主机需要加入其实际解析到的 IP。`lan` 不额外允许回环地址。这是所有账号共用的部署策略，也适用于正文和媒体抓取；连接时会校验全部 DNS 候选 IP 并使用已校验地址，重定向每一跳同样受限。
+
 ## 2. 准备 PostgreSQL
 
 你可以使用自己本地已有的 PostgreSQL 16，也可以显式叠加开发配置，启动一个仅向宿主机回环地址开放端口的数据库：

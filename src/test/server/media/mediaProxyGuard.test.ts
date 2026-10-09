@@ -19,10 +19,11 @@ describe('mediaProxyGuard', () => {
     vi.unstubAllEnvs();
   });
 
-  it('accepts local media targets allowed by the RSS guard', async () => {
-    await expect(isSafeMediaUrl('http://localhost/image.jpg')).resolves.toBe(true);
-    await expect(isSafeMediaUrl('http://127.0.0.1/image.jpg')).resolves.toBe(true);
-    await expect(isSafeMediaUrl('http://host.docker.internal/image.jpg')).resolves.toBe(true);
+  it('rejects local media targets by default', async () => {
+    lookupMock.mockResolvedValue([{ address: '127.0.0.1', family: 4 }]);
+    await expect(isSafeMediaUrl('http://localhost/image.jpg')).resolves.toBe(false);
+    await expect(isSafeMediaUrl('http://127.0.0.1/image.jpg')).resolves.toBe(false);
+    await expect(isSafeMediaUrl('http://host.docker.internal/image.jpg')).resolves.toBe(false);
   });
 
   it('rejects domains resolving to private addresses', async () => {
@@ -82,11 +83,13 @@ describe('mediaProxyGuard', () => {
     await expect(isSafeMediaUrl('http://media.local/video.mp4')).resolves.toBe(true);
   });
 
-  it('accepts local media targets in lan mode', async () => {
+  it('rejects loopback media in lan mode and checks the Docker host address', async () => {
     vi.stubEnv('RSS_NETWORK_MODE', 'lan');
 
-    await expect(isSafeMediaUrl('http://localhost/image.jpg')).resolves.toBe(true);
-    await expect(isSafeMediaUrl('http://127.0.0.1/image.jpg')).resolves.toBe(true);
+    lookupMock.mockResolvedValue([{ address: '127.0.0.1', family: 4 }]);
+    await expect(isSafeMediaUrl('http://localhost/image.jpg')).resolves.toBe(false);
+    await expect(isSafeMediaUrl('http://127.0.0.1/image.jpg')).resolves.toBe(false);
+    lookupMock.mockResolvedValue([{ address: '192.168.65.254', family: 4 }]);
     await expect(isSafeMediaUrl('http://host.docker.internal/image.jpg')).resolves.toBe(true);
   });
 

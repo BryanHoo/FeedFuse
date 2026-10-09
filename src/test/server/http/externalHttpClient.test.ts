@@ -20,6 +20,9 @@ describe('externalHttpClient', () => {
   let privateHtmlHits = 0;
 
   beforeEach(async () => {
+    // 测试服务器使用回环地址，按生产规则显式授予管理员 CIDR 例外。
+    vi.stubEnv('RSS_NETWORK_MODE', 'custom');
+    vi.stubEnv('RSS_ALLOWED_CIDRS', '127.0.0.1/32');
     writeSystemLogMock.mockReset();
     privateRssHits = 0;
     privateHtmlHits = 0;
@@ -103,6 +106,7 @@ describe('externalHttpClient', () => {
 
   afterEach(async () => {
     await closeServer?.();
+    vi.unstubAllEnvs();
   });
 
   it('fetchRssXml returns status/xml/etag/lastModified and logs success metadata', async () => {
