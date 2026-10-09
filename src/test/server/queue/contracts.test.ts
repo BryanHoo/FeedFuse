@@ -53,6 +53,13 @@ describe('queue contracts', () => {
     );
   });
 
+  it('runs the independent article filter recovery scanner serially', () => {
+    expect(getWorkerOptions('article.filter_recover')).toMatchObject({ localConcurrency: 1, batchSize: 1 });
+    expect(getQueueSendOptions('article.filter_recover', {})).toEqual({
+      singletonKey: 'article.filter_recover', singletonSeconds: 55,
+    });
+  });
+
   it('keeps fever sync dedupe window short for repeated manual sync', () => {
     expect(getQueueSendOptions('fever.sync', { accountId: 'account-1' })).toEqual({
       singletonKey: 'account-1',

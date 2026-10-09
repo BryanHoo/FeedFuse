@@ -4,7 +4,7 @@ describe('podcast feed ingestion', () => {
   it('stores media attachments and skips article filtering for podcast feeds', async () => {
     const boss = { send: vi.fn().mockResolvedValue('job-1') };
     const deps = {
-      getPool: () => ({ query: vi.fn() }),
+      getPool: () => ({ query: vi.fn(), connect: vi.fn().mockResolvedValue({ query: vi.fn(), release: vi.fn() }) }),
       getFeedForFetch: vi.fn().mockResolvedValue({
         id: 'feed-1',
         userId: '1',
@@ -98,7 +98,7 @@ describe('podcast feed ingestion', () => {
   it('keeps normal RSS feeds on the article filter queue', async () => {
     const boss = { send: vi.fn().mockResolvedValue('job-1') };
     const deps = {
-      getPool: () => ({ query: vi.fn() }),
+      getPool: () => ({ query: vi.fn(), connect: vi.fn().mockResolvedValue({ query: vi.fn(), release: vi.fn() }) }),
       getFeedForFetch: vi.fn().mockResolvedValue({
         id: 'feed-1',
         userId: '1',

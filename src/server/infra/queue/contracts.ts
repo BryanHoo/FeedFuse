@@ -74,6 +74,11 @@ export const QUEUE_CONTRACTS: Record<string, QueueContract> = {
     worker: { localConcurrency: 3, batchSize: 1 },
     send: (ctx) => ({ singletonKey: [ctx.userId, ctx.articleId].filter(Boolean).join(':'), singletonSeconds: 600 }),
   },
+  'article.filter_recover': {
+    queue: { warningQueueSize: 5 },
+    worker: { localConcurrency: 1, batchSize: 1 },
+    send: () => ({ singletonKey: 'article.filter_recover', singletonSeconds: 55 }),
+  },
   'ai.summarize_article': {
     queue: { heartbeatSeconds: 60, expireInSeconds: 1800, warningQueueSize: 300 },
     worker: { localConcurrency: 2, batchSize: 1 },

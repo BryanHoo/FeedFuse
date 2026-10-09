@@ -8,5 +8,6 @@ export const JOB_AI_DIGEST_GENERATE = 'ai.digest_generate';
 export const JOB_FEVER_SYNC = 'fever.sync';
 export const JOB_FEVER_SYNC_DUE = 'fever.sync_due';
 export const JOB_ARTICLE_FILTER = 'article.filter';
+export const JOB_ARTICLE_FILTER_RECOVER = 'article.filter_recover';
 export const JOB_ARTICLE_FULLTEXT_FETCH = 'article.fetch_fulltext';
 export const JOB_SYSTEM_LOG_CLEANUP = 'system_logs.cleanup';

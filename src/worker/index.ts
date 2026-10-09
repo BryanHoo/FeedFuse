@@ -40,6 +40,7 @@ import {
 import { startBoss } from '@/server/infra/queue/boss';
 import { bootstrapQueues } from '@/server/infra/queue/bootstrap';
 import { getQueueSendOptions, QUEUE_CONTRACTS } from '@/server/infra/queue/contracts';
+import { createQueueTransactionDb } from '@/server/infra/queue/transactionDb';
 import {
   JOB_AI_DIGEST_GENERATE,
   JOB_AI_DIGEST_TICK,
@@ -47,6 +48,7 @@ import {
   JOB_AI_TRANSLATE,
   JOB_AI_TRANSLATE_TITLE,
   JOB_ARTICLE_FILTER,
+  JOB_ARTICLE_FILTER_RECOVER,
   JOB_ARTICLE_FULLTEXT_FETCH,
   JOB_FEVER_SYNC,
   JOB_FEVER_SYNC_DUE,
@@ -72,6 +74,7 @@ import { runFeverAutoSyncWorker } from '@/worker/feverAutoSync';
 import { enqueueFeverRefreshAllTargets } from '@/worker/feverRefreshAll';
 import { runFeverSyncWorker } from '@/worker/feverSync';
 import { runArticleFilterWorker, type ArticleFilterJobData } from '@/worker/articleFilterWorker';
+import { runArticleFilterRecovery } from '@/worker/articleFilterRecovery';
 import { runSystemLogCleanup } from '@/worker/systemLogCleanup';
 import { normalizeUserId } from '@/server/domains/users/userScope';
 import { listUsers } from '@/server/domains/auth/repositories/usersRepo';
@@ -283,6 +286,7 @@ export async function fetchAndIngestFeed(
   let status: number | null = null;
   let etag: string | null = null;
   let lastModified: string | null = null;
+  let processedSuccessfully = false;
   let error: string | null = null;
   let rawError: string | null = null;
   let inserted = 0;
@@ -299,7 +303,10 @@ export async function fetchAndIngestFeed(
     etag = res.etag;
     lastModified = res.lastModified;
 
-    if (status === 304 || !res.xml) return { inserted: 0, errorMessage: null };
+    if (status === 304) {
+      processedSuccessfully = true;
+      return { inserted: 0, errorMessage: null };
+    }
 
     if (status < 200 || status >= 300) {
       const mapped = mapFeedFetchError(`HTTP ${status}`);
@@ -308,59 +315,83 @@ export async function fetchAndIngestFeed(
       return { inserted: 0, errorMessage: mapped.errorMessage };
     }
 
+    // 只有 304 可以不含正文；空响应不能作为已成功处理的 RSS 推进缓存标记。
+    if (!res.xml) throw new Error('Empty RSS response');
+
     const parsed = await deps.parseFeed(res.xml, fetchedAt);
     const isPodcastSource = parsed.items.some((item) => item.mediaAttachments.length > 0);
     for (const item of parsed.items) {
       const baseUrl = item.link ?? parsed.link ?? feed.url;
-      const created = await deps.insertArticleIgnoreDuplicate(pool, {
-        userId: feed.userId,
-        feedId,
-        dedupeKey: buildDedupeKey(item),
-        title: item.title || '(untitled)',
-        link: item.link,
-        author: item.author,
-        publishedAt: item.publishedAt.toISOString(),
-        contentHtml: deps.sanitizeContent(item.contentHtml, { baseUrl }),
-        previewImageUrl: item.previewImage,
-        summary: item.summary,
-        sourceLanguage: parsed.language,
-        filterStatus: isPodcastSource ? 'passed' : 'pending',
-        isFiltered: false,
-        filteredBy: [],
-        filterEvaluatedAt: isPodcastSource ? new Date().toISOString() : null,
-        filterErrorMessage: null,
-      });
-      if (!created) continue;
-      inserted += 1;
+      const client = await pool.connect();
+      try {
+        await client.query('begin');
+        const created = await deps.insertArticleIgnoreDuplicate(client, {
+          userId: feed.userId,
+          feedId,
+          dedupeKey: buildDedupeKey(item),
+          title: item.title || '(untitled)',
+          link: item.link,
+          author: item.author,
+          publishedAt: item.publishedAt.toISOString(),
+          contentHtml: deps.sanitizeContent(item.contentHtml, { baseUrl }),
+          previewImageUrl: item.previewImage,
+          summary: item.summary,
+          sourceLanguage: parsed.language,
+          filterStatus: isPodcastSource ? 'passed' : 'pending',
+          isFiltered: false,
+          filteredBy: [],
+          filterEvaluatedAt: isPodcastSource ? new Date().toISOString() : null,
+          filterErrorMessage: null,
+        });
+        if (!created) {
+          await client.query('commit');
+          continue;
+        }
 
-      if (item.mediaAttachments.length > 0) {
-        await deps.insertArticleMediaAttachments(pool, created.id, item.mediaAttachments, feed.userId);
-      }
+        if (item.mediaAttachments.length > 0) {
+          await deps.insertArticleMediaAttachments(client, created.id, item.mediaAttachments, feed.userId);
+        }
 
-      if (isPodcastSource) {
-        continue;
-      }
+        if (isPodcastSource) {
+          await client.query('commit');
+          inserted += 1;
+          continue;
+        }
 
-      const filterJob: ArticleFilterJobData = {
-        userId: feed.userId,
-        articleId: created.id,
-        articleFilter: uiSettings.rss.articleFilter,
-        feed: {
-          fullTextOnFetchEnabled: feed.fullTextOnFetchEnabled,
-          aiSummaryOnFetchEnabled: feed.aiSummaryOnFetchEnabled,
-          bodyTranslateOnFetchEnabled: feed.bodyTranslateOnFetchEnabled,
-          titleTranslateEnabled: feed.titleTranslateEnabled,
-        },
-      };
-
-      await boss.send(
-        JOB_ARTICLE_FILTER,
-        filterJob,
-        getQueueSendOptions(JOB_ARTICLE_FILTER, {
+        const filterJob: ArticleFilterJobData = {
           userId: feed.userId,
           articleId: created.id,
-        }),
-      );
+          articleFilter: uiSettings.rss.articleFilter,
+          feed: {
+            fullTextOnFetchEnabled: feed.fullTextOnFetchEnabled,
+            aiSummaryOnFetchEnabled: feed.aiSummaryOnFetchEnabled,
+            bodyTranslateOnFetchEnabled: feed.bodyTranslateOnFetchEnabled,
+            titleTranslateEnabled: feed.titleTranslateEnabled,
+          },
+        };
+
+        // 文章与过滤任务共用事务；入队失败时不留下无法再次补发的 pending 文章。
+        const jobId = await boss.send(
+          JOB_ARTICLE_FILTER,
+          filterJob,
+          {
+            ...getQueueSendOptions(JOB_ARTICLE_FILTER, {
+              userId: feed.userId,
+              articleId: created.id,
+            }),
+            db: createQueueTransactionDb(client),
+          },
+        );
+        // 新文章尚无历史过滤任务；返回 null 也不能视为任务已创建。
+        if (!jobId) throw new Error('Article filter job was not created');
+        await client.query('commit');
+        inserted += 1;
+      } catch (error) {
+        await client.query('rollback');
+        throw error;
+      } finally {
+        client.release();
+      }
     }
 
     if (inserted > 0) {
@@ -372,6 +403,7 @@ export async function fetchAndIngestFeed(
       );
     }
 
+    processedSuccessfully = true;
     return { inserted, errorMessage: null };
   } catch (err) {
     const mapped = mapFeedFetchError(err);
@@ -382,8 +414,8 @@ export async function fetchAndIngestFeed(
     await deps.recordFeedFetchResult(pool, feedId, {
       userId: feed?.userId ?? input?.userId,
       status,
-      etag,
-      lastModified,
+      // 失败仍记录状态和错误，但保留上次成功处理的缓存标记供下次重试。
+      ...(processedSuccessfully ? { etag, lastModified } : {}),
       error,
       rawError,
     });
@@ -934,6 +966,12 @@ async function main() {
     [JOB_FEVER_SYNC_DUE]: feverAutoSyncHandler,
     [JOB_FEED_FETCH]: feedFetchHandler,
     [JOB_ARTICLE_FILTER]: articleFilterHandler,
+    [JOB_ARTICLE_FILTER_RECOVER]: async () => {
+      // 补偿独立于源站抓取和到期判断；即使持续返回 304，也能恢复历史遗漏的过滤任务。
+      for (const userId of await listActiveWorkerUserIds(pool)) {
+        await runArticleFilterRecovery({ pool, boss, userId });
+      }
+    },
     [JOB_ARTICLE_FULLTEXT_FETCH]: fulltextHandler,
     [JOB_AI_SUMMARIZE]: aiSummaryHandler,
     [JOB_AI_TRANSLATE]: aiTranslateHandler,
@@ -951,6 +989,8 @@ async function main() {
   await boss.send(JOB_AI_DIGEST_TICK, {});
   await boss.schedule(JOB_FEVER_SYNC_DUE, '* * * * *');
   await boss.send(JOB_FEVER_SYNC_DUE, {}, getQueueSendOptions(JOB_FEVER_SYNC_DUE, {}));
+  await boss.schedule(JOB_ARTICLE_FILTER_RECOVER, '* * * * *');
+  await boss.send(JOB_ARTICLE_FILTER_RECOVER, {}, getQueueSendOptions(JOB_ARTICLE_FILTER_RECOVER, {}));
   // Run cleanup hourly and trigger one immediate pass on worker boot.
   await boss.schedule(JOB_SYSTEM_LOG_CLEANUP, '0 * * * *');
   await boss.send(JOB_SYSTEM_LOG_CLEANUP, {});

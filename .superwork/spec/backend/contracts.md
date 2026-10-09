@@ -37,6 +37,14 @@
 - 标题翻译任务 `ai.translate_title_zh` 由 pg-boss 统一负责重试：队列设置 `retryLimit: 2`，即首次执行加两次重试，总计最多三次任务执行；设置 `retryDelay: 30` 和 `retryBackoff: true`，发送选项只配置去重，不覆盖重试预算。
 - 标题翻译 Worker 每次失败都记录文章的累计失败次数与错误，并继续抛出异常，包括最后一次失败；累计失败次数只作诊断，不能控制单个任务的重试或把失败任务标记为完成。回归验证覆盖临时网络错误后恢复、三次失败耗尽预算、历史累计失败次数不影响当前任务，测试位于 `src/test/worker/aiTitleTranslateWorker.test.ts` 和 `src/test/server/queue/contracts.test.ts`。
 
+## RSS 入库与过滤补偿契约
+
+- RSS 新响应的 `ETag` / `Last-Modified` 只能在解析、文章入库、过滤任务创建及本轮裁剪成功后保存；任何处理失败都只记录抓取状态与错误，保留上次成功处理的缓存标记。304 可作为成功响应，但其他无正文响应必须报错。
+- 单篇文章写入、媒体附件写入和 `article.filter` 任务创建必须共用同一 PostgreSQL 事务连接，通过 pg-boss 的 `db.executeSql` 适配器入队；入队抛错或新文章的任务 ID 为空时回滚，不能遗留无任务的 `pending` 文章。
+- `article.filter_recover` 在 Worker 启动时执行一次，此后每分钟扫描活跃用户的本地文本 RSS `pending` 文章；补偿不依赖订阅抓取是否到期、去重结果或上游是否返回 304。已入库文章的补偿不以订阅是否启用为条件，Fever、非 RSS 和有媒体附件的文章不进入扫描。
+- 补偿按文章主键分页，在事务内锁定并重新检查文章的用户归属与 `pending` 状态；存在 `created` / `retry` / `active` 过滤任务时跳过，历史终态任务不阻止补发。使用当前用户的过滤设置与订阅自动处理开关，保留队列去重；时间窗冲突返回空 ID 时留待后续扫描重试。
+- 回归验证位于 `src/test/worker/feedIngestionReliability.test.ts`、`src/test/worker/articleFilterRecovery.test.ts`；配置 `DATABASE_URL` 后运行 `src/test/worker/rssReliability.integration.test.ts`，使用随机隔离 schema 与真实 pg-boss 验证双写回滚、缓存重试、304 后补偿、并发扫描与用户隔离，结束后清理隔离 schema。
+
 ## 数据与迁移
 
 - schema 变化必须同步更新 `src/server/infra/db/migrations/**`
