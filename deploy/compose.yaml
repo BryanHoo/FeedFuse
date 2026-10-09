@@ -50,6 +50,8 @@ services:
     restart: unless-stopped
 
   worker:
+    # 对齐 Worker 的 60 秒任务等待和 70 秒总退出上限，额外留 5 秒余量。
+    stop_grace_period: 75s
     image: ghcr.io/bryanhoo/feedfuse-worker:latest
     command:
       [

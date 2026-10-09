@@ -58,6 +58,7 @@ import { sampleQueueStats } from '@/server/infra/queue/observability';
 import { mapFeedFetchError } from '@/server/domains/feeds/tasks/feedFetchErrorMapping';
 import { normalizePersistedSettings } from '@/features/settings/settingsSchema';
 import { registerWorkers } from '@/worker/workerRegistry';
+import { createWorkerLifecycle } from '@/worker/lifecycle';
 import { buildFeedFetchJobData, selectFeedsForRefreshAll } from '@/worker/refreshAll';
 import { isFeedDue } from '@/worker/rssScheduler';
 import { runArticleTaskWithStatus } from '@/worker/articleTaskStatus';
@@ -918,7 +919,12 @@ async function main() {
     }
   };
 
-  await registerWorkers(boss, {
+  const lifecycle = createWorkerLifecycle({
+    boss,
+    pool,
+    sampleStats: () => sampleQueueStats(boss, Object.keys(QUEUE_CONTRACTS)),
+  });
+  const handlers = {
     [JOB_REFRESH_ALL]: refreshAllHandler,
     [JOB_AI_DIGEST_TICK]: aiDigestTickHandler,
     [JOB_AI_DIGEST_GENERATE]: aiDigestGenerateHandler,
@@ -931,15 +937,11 @@ async function main() {
     [JOB_AI_TRANSLATE]: aiTranslateHandler,
     [JOB_AI_TRANSLATE_TITLE]: aiTitleTranslateHandler,
     [JOB_SYSTEM_LOG_CLEANUP]: systemLogCleanupHandler,
-  });
-
-  const queueNames = Object.keys(QUEUE_CONTRACTS);
-  const statsTimer = setInterval(() => {
-    void sampleQueueStats(boss, queueNames).catch((err) => {
-      console.warn('[pgboss.stats.error]', err);
-    });
-  }, 60_000);
-  statsTimer.unref?.();
+  };
+  // 所有业务回调都纳入退出等待，连接池关闭不能早于任务完成。
+  await registerWorkers(boss, Object.fromEntries(
+    Object.entries(handlers).map(([name, handler]) => [name, lifecycle.trackHandler(handler)]),
+  ));
 
   await boss.schedule(JOB_REFRESH_ALL, '* * * * *');
   await boss.send(JOB_REFRESH_ALL, {});
@@ -951,12 +953,16 @@ async function main() {
   await boss.schedule(JOB_SYSTEM_LOG_CLEANUP, '0 * * * *');
   await boss.send(JOB_SYSTEM_LOG_CLEANUP, {});
 
-  const shutdown = async () => {
-    await boss.stop();
+  const shutdown = () => {
+    // 信号回调不能遗留未处理的 Promise 拒绝；清理失败应以非零状态退出。
+    void lifecycle.shutdown().catch((error) => {
+      console.error('[worker.shutdown.error]', error);
+      process.exit(1);
+    });
   };
 
-  process.on('SIGINT', () => void shutdown());
-  process.on('SIGTERM', () => void shutdown());
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 }
 
 const isDirectRun = process.argv[1] && import.meta.url === new URL(process.argv[1], 'file:').href;
