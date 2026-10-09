@@ -6,11 +6,18 @@
 
 ## 环境要求
 
-- `Node >=20.19.0`；与仓库 Dockerfile 对齐时使用 Node.js 24
+- `Node >=22.12.0`，满足锁定依赖 `pg-boss@12.13.0` 的最低要求；推荐使用 Node.js 24，与 `.nvmrc` 和 Dockerfile 对齐
 - `pnpm@10.30.3`，以 `package.json` 的 `packageManager` 为准
 - PostgreSQL 16
 
 以下命令均在仓库根目录执行。Web、Worker 和迁移需要连接同一个数据库。
+
+使用 nvm 时，先按 `.nvmrc` 安装并切换推荐的 Node.js 版本：
+
+```bash
+nvm install
+nvm use
+```
 
 ## 1. 准备环境变量
 
