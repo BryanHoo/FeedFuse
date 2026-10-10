@@ -23,7 +23,7 @@ export interface ArticleTaskRow {
 }
 
 export async function getArticleTasksByArticleId(
-  pool: Pool,
+  pool: Pick<Pool, 'query'>,
   articleId: string,
   userId?: string | null,
 ): Promise<ArticleTaskRow[]> {
@@ -55,7 +55,7 @@ export async function getArticleTasksByArticleId(
 }
 
 async function upsertBase(
-  pool: Pool,
+  pool: Pick<Pool, 'query'>,
   input: {
     userId?: string | null;
     articleId: string;
@@ -70,8 +70,9 @@ async function upsertBase(
     errorMessage?: string | null;
     rawErrorMessage?: string | null;
     clearError?: boolean;
+    allowNewJob?: boolean;
   },
-): Promise<void> {
+): Promise<boolean> {
   const scopedUserId = normalizeUserId(input.userId);
   const requestedAtSql =
     input.requestedAt === 'now'
@@ -102,7 +103,10 @@ async function upsertBase(
   const errorMessage = input.clearError ? null : (input.errorMessage ?? null);
   const rawErrorMessage = input.clearError ? null : (input.rawErrorMessage ?? null);
 
-  await pool.query(
+  // 摘要任务只能推进属于同一 jobId 的预期状态，旧 Worker 不得覆盖重试任务或终态。
+  const guarded = input.type === 'ai_summary' && input.status !== 'queued';
+  const expectedStatuses = input.status === 'succeeded' ? ['running'] : ['queued', 'running'];
+  const result = await pool.query(
     `
       insert into article_tasks (
         user_id,
@@ -133,6 +137,10 @@ async function upsertBase(
         error_message = $7,
         raw_error_message = $8,
         updated_at = now()
+      ${guarded ? `where (
+        (article_tasks.job_id = $5 and article_tasks.status = any($9::text[]))
+        ${input.status === 'running' ? "or ($10::boolean and article_tasks.status in ('succeeded', 'failed'))" : ''}
+      )` : ''}
     `,
     [
       scopedUserId,
@@ -143,12 +151,14 @@ async function upsertBase(
       errorCode,
       errorMessage,
       rawErrorMessage,
+      ...(guarded ? [expectedStatuses, ...(input.status === 'running' ? [input.allowNewJob ?? false] : [])] : []),
     ],
   );
+  return result.rowCount !== 0;
 }
 
 export async function upsertTaskQueued(
-  pool: Pool,
+  pool: Pick<Pool, 'query'>,
   input: { userId?: string | null; articleId: string; type: ArticleTaskType; jobId: string | null },
 ): Promise<void> {
   await upsertBase(pool, {
@@ -166,15 +176,17 @@ export async function upsertTaskQueued(
 }
 
 export async function upsertTaskRunning(
-  pool: Pool,
-  input: { userId?: string | null; articleId: string; type: ArticleTaskType; jobId: string | null },
-): Promise<void> {
-  await upsertBase(pool, {
+  pool: Pick<Pool, 'query'>,
+  input: { userId?: string | null; articleId: string; type: ArticleTaskType; jobId: string | null; allowNewJob?: boolean },
+): Promise<boolean> {
+  return upsertBase(pool, {
     userId: input.userId,
     articleId: input.articleId,
     type: input.type,
     status: 'running',
     jobId: input.jobId,
+    // 自动任务没有 API 预建的任务行，允许接续历史终态；仍禁止抢占其他 jobId 的活跃任务。
+    allowNewJob: input.allowNewJob,
     requestedAt: 'keep',
     startedAt: 'now',
     finishedAt: 'null',
@@ -184,10 +196,10 @@ export async function upsertTaskRunning(
 }
 
 export async function upsertTaskSucceeded(
-  pool: Pool,
+  pool: Pick<Pool, 'query'>,
   input: { userId?: string | null; articleId: string; type: ArticleTaskType; jobId: string | null },
-): Promise<void> {
-  await upsertBase(pool, {
+): Promise<boolean> {
+  return upsertBase(pool, {
     userId: input.userId,
     articleId: input.articleId,
     type: input.type,
@@ -202,7 +214,7 @@ export async function upsertTaskSucceeded(
 }
 
 export async function upsertTaskFailed(
-  pool: Pool,
+  pool: Pick<Pool, 'query'>,
   input: {
     userId?: string | null;
     articleId: string;
@@ -212,8 +224,8 @@ export async function upsertTaskFailed(
     errorMessage: string;
     rawErrorMessage: string | null;
   },
-): Promise<void> {
-  await upsertBase(pool, {
+): Promise<boolean> {
+  return upsertBase(pool, {
     userId: input.userId,
     articleId: input.articleId,
     type: input.type,

@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const poolQueryMock = vi.fn();
-const pool = { query: poolQueryMock };
+const poolReleaseMock = vi.fn();
+const pool = { query: poolQueryMock, connect: async () => pool, release: poolReleaseMock };
 
 const getArticleByIdMock = vi.fn();
 const listArticleMediaAttachmentsMock = vi.fn();
@@ -236,6 +237,7 @@ vi.mock('@/server/domains/articles/repositories/articleTranslationRepo', () => (
 vi.mock('@/server/domains/articles/repositories/articleAiSummaryRepo', () => ({
   getActiveAiSummarySessionByArticleId: (...args: unknown[]) =>
     getActiveAiSummarySessionByArticleIdMock(...args),
+  lockArticleForAiSummary: async () => true,
   upsertAiSummarySession: (...args: unknown[]) => upsertAiSummarySessionMock(...args),
   markAiSummarySessionSuperseded: (...args: unknown[]) =>
     markAiSummarySessionSupersededMock(...args),
@@ -243,6 +245,7 @@ vi.mock('@/server/domains/articles/repositories/articleAiSummaryRepo', () => ({
 vi.mock('@/server/domains/articles/repositories/articleAiSummaryRepo', () => ({
   getActiveAiSummarySessionByArticleId: (...args: unknown[]) =>
     getActiveAiSummarySessionByArticleIdMock(...args),
+  lockArticleForAiSummary: async () => true,
   upsertAiSummarySession: (...args: unknown[]) => upsertAiSummarySessionMock(...args),
   markAiSummarySessionSuperseded: (...args: unknown[]) =>
     markAiSummarySessionSupersededMock(...args),
@@ -250,6 +253,7 @@ vi.mock('@/server/domains/articles/repositories/articleAiSummaryRepo', () => ({
 vi.mock('@/server/domains/articles/repositories/articleAiSummaryRepo', () => ({
   getActiveAiSummarySessionByArticleId: (...args: unknown[]) =>
     getActiveAiSummarySessionByArticleIdMock(...args),
+  lockArticleForAiSummary: async () => true,
   upsertAiSummarySession: (...args: unknown[]) => upsertAiSummarySessionMock(...args),
   markAiSummarySessionSuperseded: (...args: unknown[]) =>
     markAiSummarySessionSupersededMock(...args),
@@ -257,6 +261,7 @@ vi.mock('@/server/domains/articles/repositories/articleAiSummaryRepo', () => ({
 vi.mock('@/server/domains/articles/repositories/articleAiSummaryRepo', () => ({
   getActiveAiSummarySessionByArticleId: (...args: unknown[]) =>
     getActiveAiSummarySessionByArticleIdMock(...args),
+  lockArticleForAiSummary: async () => true,
   upsertAiSummarySession: (...args: unknown[]) => upsertAiSummarySessionMock(...args),
   markAiSummarySessionSuperseded: (...args: unknown[]) =>
     markAiSummarySessionSupersededMock(...args),
@@ -308,6 +313,7 @@ describe('/api/articles', () => {
     updateArticleStateWithWritebackMock.mockReset();
     markAllArticlesReadWithWritebackMock.mockReset();
     poolQueryMock.mockReset();
+    poolReleaseMock.mockReset();
 
     getTranslationSessionByArticleIdMock.mockResolvedValue(null);
     getArticleTasksByArticleIdMock.mockResolvedValue([]);
@@ -1701,6 +1707,46 @@ describe('/api/articles', () => {
     });
   });
 
+  it.each(['thrown', 'duplicate', 'task_write'])('POST /:id/ai-summary rolls back on %s without exposing a new session', async (failure) => {
+    getAiApiKeyMock.mockResolvedValue('sk-test');
+    getArticleByIdMock.mockResolvedValue({ id: articleId, feedId, contentHtml: '<p>rss</p>' });
+    if (failure === 'thrown') enqueueWithResultMock.mockRejectedValue(new Error('queue unavailable'));
+    else if (failure === 'duplicate') enqueueWithResultMock.mockResolvedValue({ status: 'throttled_or_duplicate' });
+    else {
+      enqueueWithResultMock.mockResolvedValue({ status: 'enqueued', jobId: 'job-id-1' });
+      upsertTaskQueuedMock.mockRejectedValue(new Error('task write failed'));
+    }
+    const mod = await import('../../../../app/api/articles/[id]/ai-summary/route');
+    const res = await mod.POST(new Request(`http://localhost/api/articles/${articleId}/ai-summary`), {
+      params: Promise.resolve({ id: articleId }),
+    });
+    const json = await res.json();
+    expect(poolQueryMock).toHaveBeenCalledWith('rollback');
+    expect(poolQueryMock).not.toHaveBeenCalledWith('commit');
+    expect(poolReleaseMock).toHaveBeenCalledOnce();
+    expect(writeUserOperationStartedLogMock).not.toHaveBeenCalled();
+    if (failure === 'duplicate') {
+      expect(json.data).toEqual({ enqueued: false, reason: 'already_enqueued' });
+    } else expect(res.status).toBe(500);
+  });
+
+  it('POST /:id/ai-summary retries an orphan queued session without a task', async () => {
+    getAiApiKeyMock.mockResolvedValue('sk-test');
+    getArticleByIdMock.mockResolvedValue({ id: articleId, feedId, contentHtml: '<p>rss</p>' });
+    getActiveAiSummarySessionByArticleIdMock.mockResolvedValue({
+      id: 'orphan-session', status: 'queued', jobId: null,
+    });
+    enqueueWithResultMock.mockResolvedValue({ status: 'enqueued', jobId: 'job-id-1' });
+    const mod = await import('../../../../app/api/articles/[id]/ai-summary/route');
+    const res = await mod.POST(new Request(`http://localhost/api/articles/${articleId}/ai-summary`), {
+      params: Promise.resolve({ id: articleId }),
+    });
+    expect((await res.json()).data.enqueued).toBe(true);
+    expect(markAiSummarySessionSupersededMock).toHaveBeenCalledWith(pool, {
+      userId: '1', sessionId: 'orphan-session', supersededBySessionId: 'summary-session-id-1',
+    });
+  });
+
   it('POST /:id/ai-summary enqueues summarize job', async () => {
     getAiApiKeyMock.mockResolvedValue('sk-test');
     getArticleByIdMock.mockResolvedValue({
@@ -1737,6 +1783,10 @@ describe('/api/articles', () => {
     expect(json.data.enqueued).toBe(true);
     expect(json.data.jobId).toBe('job-id-1');
     expect(json.data.sessionId).toBe('summary-session-id-1');
+    expect(poolQueryMock).toHaveBeenCalledWith('begin');
+    expect(poolQueryMock).toHaveBeenCalledWith('commit');
+    expect(upsertAiSummarySessionMock).toHaveBeenCalledOnce();
+    expect(enqueueWithResultMock.mock.calls[0][2].db).toEqual({ executeSql: expect.any(Function) });
     expect(enqueueWithResultMock).toHaveBeenCalledWith(
       'ai.summarize_article',
       expect.objectContaining({
@@ -1805,7 +1855,6 @@ describe('/api/articles', () => {
     expect(json.data).toEqual({
       enqueued: false,
       reason: 'already_enqueued',
-      sessionId: 'summary-session-id-1',
     });
     expect(upsertTaskQueuedMock).not.toHaveBeenCalled();
     expect(writeUserOperationStartedLogMock).not.toHaveBeenCalled();
@@ -1852,6 +1901,10 @@ describe('/api/articles', () => {
       createdAt: '2026-03-09T00:00:00.000Z',
       updatedAt: '2026-03-09T00:00:10.000Z',
     });
+    getArticleTasksByArticleIdMock.mockResolvedValue([{
+      type: 'ai_summary', status: 'running', jobId: 'job-id-running-1',
+      startedAt: new Date().toISOString(),
+    }]);
     upsertAiSummarySessionMock.mockResolvedValue({
       id: 'summary-session-new',
       articleId,

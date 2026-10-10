@@ -26,15 +26,19 @@ export async function runArticleTaskWithStatus<T>(input: {
   articleId: string;
   type: ArticleTaskType;
   jobId: string | null;
+  allowNewJob?: boolean;
   userOperation?: ArticleTaskUserOperation;
   fn: () => Promise<T>;
-}): Promise<T> {
-  await upsertTaskRunning(input.pool, {
+}): Promise<T | undefined> {
+  const claimed = await upsertTaskRunning(input.pool, {
     userId: input.userId,
     articleId: input.articleId,
     type: input.type,
     jobId: input.jobId,
+    ...(input.allowNewJob !== undefined ? { allowNewJob: input.allowNewJob } : {}),
   });
+  // 条件更新未命中时，任务已被重试任务替代或已经终结；不能执行旧任务，也不能误报启动。
+  if (claimed === false) return;
   if (input.userOperation) {
     await writeUserOperationStartedLog(input.pool, {
       ...input.userOperation,
@@ -44,13 +48,13 @@ export async function runArticleTaskWithStatus<T>(input: {
 
   try {
     const result = await input.fn();
-    await upsertTaskSucceeded(input.pool, {
+    const succeeded = await upsertTaskSucceeded(input.pool, {
       userId: input.userId,
       articleId: input.articleId,
       type: input.type,
       jobId: input.jobId,
     });
-    if (input.userOperation) {
+    if (succeeded !== false && input.userOperation) {
       await writeUserOperationSucceededLog(input.pool, {
         ...input.userOperation,
         userId: input.userId ?? input.userOperation.userId,
@@ -59,7 +63,7 @@ export async function runArticleTaskWithStatus<T>(input: {
     return result;
   } catch (err) {
     const mapped = mapTaskError({ type: input.type, err });
-    await upsertTaskFailed(input.pool, {
+    const failed = await upsertTaskFailed(input.pool, {
       userId: input.userId,
       articleId: input.articleId,
       type: input.type,
@@ -68,7 +72,7 @@ export async function runArticleTaskWithStatus<T>(input: {
       errorMessage: mapped.errorMessage,
       rawErrorMessage: mapped.rawErrorMessage,
     });
-    if (input.userOperation) {
+    if (failed !== false && input.userOperation) {
       await writeUserOperationFailedLog(input.pool, {
         ...input.userOperation,
         userId: input.userId ?? input.userOperation.userId,

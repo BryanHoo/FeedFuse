@@ -1,6 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
 
 describe('articleAiSummaryRepo', () => {
+  it('rejects session transitions after ownership or expected status changes', async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [] });
+    const mod = await import('@/server/domains/articles/repositories/articleAiSummaryRepo');
+    const result = await mod.upsertAiSummarySession({ query } as never, {
+      userId: '2', sessionId: '10', articleId: '20', sourceTextHash: 'hash',
+      status: 'running', draftText: '', jobId: 'old-job',
+    });
+    expect(result).toBeNull();
+    const sql = String(query.mock.calls[0][0]);
+    expect(sql).toContain('job_id = $9');
+    expect(sql).toContain("status in ('queued', 'running')");
+    expect(sql).toContain('superseded_by_session_id is null');
+  });
+
   it('upserts a running summary session and lists events after event id', async () => {
     const query = vi
       .fn()
@@ -139,6 +153,7 @@ describe('articleAiSummaryRepo', () => {
 
     await mod.failAiSummarySession(pool as never, {
       sessionId: 'session-1',
+      jobId: 'job-1',
       draftText: 'TL;DR',
       errorCode: 'ai_rate_limited',
       errorMessage: '请求太频繁了，请稍后重试',
@@ -153,6 +168,7 @@ describe('articleAiSummaryRepo', () => {
       '请求太频繁了，请稍后重试',
       '429 rate limit',
       '1',
+      'job-1',
     ]);
   });
 
@@ -193,8 +209,8 @@ describe('articleAiSummaryRepo', () => {
     });
 
     const sql = String(query.mock.calls[0]?.[0] ?? '');
-    expect(sql).toContain('on conflict (id) do update');
-    expect(sql).toContain('where article_ai_summary_sessions.user_id = excluded.user_id');
+    expect(sql).toContain('update article_ai_summary_sessions');
+    expect(sql).toContain('where user_id = $1');
     expect(sql).not.toContain('set\n        user_id = excluded.user_id');
   });
   it('limits replay batches and removes only expired intermediate events of the current user', async () => {

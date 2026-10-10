@@ -17,20 +17,10 @@ import {
 } from '@/server/domains/articles/repositories/articlesRepo';
 import {
   getActiveAiSummarySessionByArticleId,
-  markAiSummarySessionSuperseded,
-  upsertAiSummarySession,
 } from '@/server/domains/articles/repositories/articleAiSummaryRepo';
-import {
-  getArticleTasksByArticleId,
-  type ArticleTaskRow,
-  upsertTaskQueued,
-} from '@/server/domains/articles/repositories/articleTasksRepo';
+import { enqueueAiSummarySession } from '@/server/domains/articles/services/aiSummarySessionService';
 import { getFeedFullTextOnOpenEnabled } from '@/server/domains/feeds/repositories/feedsRepo';
 import { getAiApiKey, getUiSettings } from '@/server/domains/settings/repositories/settingsRepo';
-import { writeUserOperationStartedLog } from '@/server/infra/logging/userOperationLogger';
-import { getQueueSendOptions } from '@/server/infra/queue/contracts';
-import { enqueueWithResult } from '@/server/infra/queue/queue';
-import { JOB_AI_SUMMARIZE } from '@/server/infra/queue/jobs';
 import {
   getUsableFulltextHtml,
   isFulltextPending,
@@ -45,7 +35,6 @@ const paramsSchema = z.object({
 const bodySchema = z.object({
   force: z.boolean().optional(),
 });
-const SUMMARY_TASK_STALE_MS = 10 * 60 * 1000;
 
 function zodIssuesToFields(error: z.ZodError): Record<string, string> {
   const fields: Record<string, string> = {};
@@ -100,29 +89,6 @@ function buildSessionSnapshot(
     finishedAt: session.finishedAt,
     updatedAt: session.updatedAt,
   };
-}
-
-function parseIsoMs(value: string | null): number | null {
-  if (!value) return null;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function isAiSummaryTaskActive(
-  task: ArticleTaskRow | undefined,
-  nowMs: number,
-): boolean {
-  if (!task) return true;
-  if (task.status !== 'queued' && task.status !== 'running') return false;
-
-  const referenceMs =
-    parseIsoMs(task.startedAt) ??
-    parseIsoMs(task.requestedAt) ??
-    parseIsoMs(task.updatedAt) ??
-    parseIsoMs(task.createdAt);
-  if (referenceMs === null) return true;
-
-  return nowMs - referenceMs <= SUMMARY_TASK_STALE_MS;
 }
 
 export async function GET(
@@ -214,24 +180,6 @@ export async function POST(
       translationApiKey: '',
     });
 
-    const existingSession = await getActiveAiSummarySessionByArticleId(pool, articleId, authSession.userId);
-    let staleExistingSessionIdToSupersede: string | null = null;
-    if (existingSession?.status === 'queued' || existingSession?.status === 'running') {
-      const nowMs = Date.now();
-      const taskRows = await getArticleTasksByArticleId(pool, articleId, authSession.userId);
-      const aiSummaryTask = taskRows.find((task) => task.type === 'ai_summary');
-      if (isAiSummaryTaskActive(aiSummaryTask, nowMs)) {
-        return ok({
-          enqueued: false,
-          reason: 'already_enqueued',
-          sessionId: existingSession.id,
-        });
-      }
-
-      // Stale running/queued session should not keep hijacking future snapshots.
-      staleExistingSessionIdToSupersede = existingSession.id;
-    }
-
     if (!force && article.aiSummary && article.aiSummary.trim()) {
       return ok({ enqueued: false, reason: 'already_summarized' });
     }
@@ -252,79 +200,15 @@ export async function POST(
     });
     const sourceTextHash = sha256(sourceText);
 
-    const summarySession = await upsertAiSummarySession(pool, {
+    const result = await enqueueAiSummarySession({
+      pool,
       userId: authSession.userId,
       articleId,
       sourceTextHash,
-      status: 'queued',
-      draftText: '',
-      finalText: null,
-      model: null,
-      jobId: null,
-      errorCode: null,
-      errorMessage: null,
-      rawErrorMessage: null,
-      supersededBySessionId: null,
+      sharedConfigFingerprint,
+      force,
     });
-
-    if (
-      existingSession &&
-      existingSession.id !== summarySession.id &&
-      (force || staleExistingSessionIdToSupersede === existingSession.id)
-    ) {
-      await markAiSummarySessionSuperseded(pool, {
-        userId: authSession.userId,
-        sessionId: existingSession.id,
-        supersededBySessionId: summarySession.id,
-      });
-    }
-
-    const enqueueResult = await enqueueWithResult(
-      JOB_AI_SUMMARIZE,
-      { userId: authSession.userId, articleId, sessionId: summarySession.id, sharedConfigFingerprint },
-      getQueueSendOptions(JOB_AI_SUMMARIZE, {
-        userId: authSession.userId,
-        articleId,
-      }),
-    );
-    if (enqueueResult.status !== 'enqueued') {
-      return ok({ enqueued: false, reason: 'already_enqueued', sessionId: summarySession.id });
-    }
-
-    await upsertAiSummarySession(pool, {
-      userId: authSession.userId,
-      sessionId: summarySession.id,
-      articleId,
-      sourceTextHash,
-      status: 'queued',
-      draftText: summarySession.draftText,
-      finalText: summarySession.finalText,
-      model: summarySession.model,
-      jobId: enqueueResult.jobId,
-      errorCode: null,
-      errorMessage: null,
-      rawErrorMessage: null,
-      supersededBySessionId: null,
-    });
-
-    await upsertTaskQueued(pool, {
-      userId: authSession.userId,
-      articleId,
-      type: 'ai_summary',
-      jobId: enqueueResult.jobId,
-    });
-
-    await writeUserOperationStartedLog(pool, {
-      userId: authSession.userId,
-      actionKey: 'article.aiSummary.generate',
-      source: 'app/api/articles/[id]/ai-summary',
-      context: {
-        articleId,
-        sessionId: summarySession.id,
-        jobId: enqueueResult.jobId,
-      },
-    });
-    return ok({ enqueued: true, jobId: enqueueResult.jobId, sessionId: summarySession.id });
+    return ok(result);
   } catch (err) {
     return fail(err);
   }

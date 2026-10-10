@@ -50,6 +50,7 @@ describe('articleTasksRepo', () => {
       'ai_timeout',
       'timeout',
       '429 rate limit',
+      ['queued', 'running'],
     ]);
   });
 });

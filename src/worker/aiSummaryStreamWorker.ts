@@ -131,7 +131,7 @@ async function ensureSummarySession(input: {
   jobId: string | null;
   sourceTextHash: string;
   deps: AiSummaryStreamWorkerDeps;
-}): Promise<AiSummarySessionRow> {
+}): Promise<AiSummarySessionRow | null> {
   const { pool, articleId, sessionId, jobId, sourceTextHash, deps } = input;
 
   if (sessionId) {
@@ -228,6 +228,7 @@ export async function runAiSummaryStreamWorker(
     articleId: input.articleId,
     type: 'ai_summary',
     jobId: input.jobId,
+    allowNewJob: !input.sessionId,
     userOperation: {
       actionKey: 'article.aiSummary.generate',
       source: 'worker/aiSummaryStreamWorker',
@@ -289,6 +290,8 @@ export async function runAiSummaryStreamWorker(
           sourceTextHash,
           deps,
         });
+        // 条件更新失败表示任务已失去归属或会话已终结，旧 Worker 安静退出，不能再发布结果。
+        if (!session) return;
         sessionIdForFailure = session.id;
 
         const sharedAiConfig = resolveSharedAiConfig({
@@ -358,6 +361,7 @@ export async function runAiSummaryStreamWorker(
             await deps.updateAiSummarySessionDraft(input.pool, {
               userId: article.userId,
               sessionId: session.id,
+              jobId: input.jobId,
               draftText,
             });
             lastDraftPersistedAt = Date.now();
@@ -374,14 +378,17 @@ export async function runAiSummaryStreamWorker(
         await deps.updateAiSummarySessionDraft(input.pool, {
           userId: article.userId,
           sessionId: session.id,
+          jobId: input.jobId,
           draftText,
         });
-        await deps.completeAiSummarySession(input.pool, {
+        const completedSession = await deps.completeAiSummarySession(input.pool, {
           userId: article.userId,
           sessionId: session.id,
+          jobId: input.jobId,
           finalText,
           model,
         });
+        if (completedSession === null) return;
         await deps.insertAiSummaryEvent(input.pool, {
           userId: article.userId,
           sessionId: session.id,
@@ -415,14 +422,16 @@ export async function runAiSummaryStreamWorker(
           }
 
           try {
-            await deps.failAiSummarySession(input.pool, {
+            const failedSession = await deps.failAiSummarySession(input.pool, {
               userId: input.userId ?? undefined,
               sessionId: sessionIdForFailure,
+              jobId: input.jobId,
               draftText: failureDraftText,
               errorCode: mapped.errorCode,
               errorMessage: mapped.errorMessage,
               rawErrorMessage: mapped.rawErrorMessage,
             });
+            if (failedSession === null) throw err;
             await deps.insertAiSummaryEvent(input.pool, {
               userId: input.userId ?? undefined,
               sessionId: sessionIdForFailure,

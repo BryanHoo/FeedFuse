@@ -35,6 +35,19 @@ describe('articleTaskStatus', () => {
     writeUserOperationFailedLogMock.mockReset();
   });
 
+  it('does not run or log a worker after a task ownership claim is rejected', async () => {
+    upsertTaskRunningMock.mockResolvedValue(false);
+    const fn = vi.fn();
+    const mod = await import('@/worker/articleTaskStatus');
+    await mod.runArticleTaskWithStatus({
+      pool: {} as never, userId: '1', articleId: '20', type: 'ai_summary', jobId: 'old-job',
+      userOperation: { actionKey: 'article.aiSummary.generate', source: 'test' }, fn,
+    });
+    expect(fn).not.toHaveBeenCalled();
+    expect(writeUserOperationStartedLogMock).not.toHaveBeenCalled();
+    expect(upsertTaskSucceededMock).not.toHaveBeenCalled();
+  });
+
   it('writes started and succeeded lifecycle logs when configured', async () => {
     const mod = await import('../../worker/articleTaskStatus');
     const result = await mod.runArticleTaskWithStatus({

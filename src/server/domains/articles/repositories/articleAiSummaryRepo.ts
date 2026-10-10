@@ -49,12 +49,14 @@ export interface UpsertAiSummarySessionInput {
 }
 
 export interface UpdateAiSummarySessionDraftInput {
+  jobId: string | null;
   userId?: string;
   sessionId: string;
   draftText: string;
 }
 
 export interface CompleteAiSummarySessionInput {
+  jobId: string | null;
   userId?: string;
   sessionId: string;
   finalText: string;
@@ -62,6 +64,7 @@ export interface CompleteAiSummarySessionInput {
 }
 
 export interface FailAiSummarySessionInput {
+  jobId: string | null;
   userId?: string;
   sessionId: string;
   draftText: string;
@@ -111,10 +114,18 @@ function sessionSelectSql() {
   `;
 }
 
-export async function upsertAiSummarySession(
-  pool: Pool,
+export function upsertAiSummarySession(
+  pool: Pick<Pool, 'query'>,
+  input: UpsertAiSummarySessionInput & { sessionId?: null },
+): Promise<AiSummarySessionRow>;
+export function upsertAiSummarySession(
+  pool: Pick<Pool, 'query'>,
   input: UpsertAiSummarySessionInput,
-): Promise<AiSummarySessionRow> {
+): Promise<AiSummarySessionRow | null>;
+export async function upsertAiSummarySession(
+  pool: Pick<Pool, 'query'>,
+  input: UpsertAiSummarySessionInput,
+): Promise<AiSummarySessionRow | null> {
   const userId = normalizeUserId(input.userId);
   if (input.sessionId == null) {
     const { rows } = await pool.query<AiSummarySessionRow>(
@@ -175,88 +186,29 @@ export async function upsertAiSummarySession(
     return rows[0] as AiSummarySessionRow;
   }
 
+  // Worker 只更新当前任务仍拥有的待处理会话；不能把终态重置为 running，也不能复活已替代会话。
   const { rows } = await pool.query<AiSummarySessionRow>(
     `
-      insert into article_ai_summary_sessions (
-        user_id,
-        id,
-        article_id,
-        source_text_hash,
-        status,
-        draft_text,
-        final_text,
-        model,
-        job_id,
-        error_code,
-        error_message,
-        raw_error_message,
-        superseded_by_session_id,
-        started_at,
-        finished_at,
-        created_at,
-        updated_at
-      )
-      values (
-        $1,
-        $2::bigint,
-        $3,
-        $4,
-        $5,
-        $6,
-        $7,
-        $8,
-        $9,
-        $10,
-        $11,
-        $12,
-        $13,
-        now(),
-        case when $5 in ('succeeded', 'failed') then now() else null end,
-        now(),
-        now()
-      )
-      on conflict (id) do update
-      set
-        article_id = excluded.article_id,
-        source_text_hash = excluded.source_text_hash,
-        status = excluded.status,
-        draft_text = excluded.draft_text,
-        final_text = excluded.final_text,
-        model = excluded.model,
-        job_id = excluded.job_id,
-        error_code = excluded.error_code,
-        error_message = excluded.error_message,
-        raw_error_message = excluded.raw_error_message,
-        superseded_by_session_id = excluded.superseded_by_session_id,
-        finished_at = case
-          when excluded.status in ('succeeded', 'failed') then coalesce(article_ai_summary_sessions.finished_at, now())
-          else null
-        end,
-        updated_at = now()
-      where article_ai_summary_sessions.user_id = excluded.user_id
+      update article_ai_summary_sessions
+      set source_text_hash = $4, status = $5, draft_text = $6,
+          final_text = $7, model = $8,
+          error_code = $10, error_message = $11, raw_error_message = $12,
+          finished_at = null, updated_at = now()
+      where user_id = $1 and id = $2::bigint and article_id = $3
+        and job_id = $9
+        and status in ('queued', 'running')
+        and superseded_by_session_id is null
       returning ${sessionSelectSql()}
     `,
-    [
-      userId,
-      input.sessionId ?? null,
-      input.articleId,
-      input.sourceTextHash,
-      input.status,
-      input.draftText,
-      input.finalText ?? null,
-      input.model ?? null,
-      input.jobId ?? null,
-      input.errorCode ?? null,
-      input.errorMessage ?? null,
-      input.rawErrorMessage ?? null,
-      input.supersededBySessionId ?? null,
-    ],
+    [userId, input.sessionId, input.articleId, input.sourceTextHash, input.status,
+      input.draftText, input.finalText ?? null, input.model ?? null, input.jobId ?? null,
+      input.errorCode ?? null, input.errorMessage ?? null, input.rawErrorMessage ?? null],
   );
-  return rows[0] as AiSummarySessionRow;
+  return rows[0] ?? null;
 }
 
 export async function getActiveAiSummarySessionByArticleId(
-  pool: Pool,
+  pool: Pick<Pool, 'query'>,
   articleId: string,
   userId?: string,
 ): Promise<AiSummarySessionRow | null> {
@@ -279,7 +231,7 @@ export async function getActiveAiSummarySessionByArticleId(
 }
 
 export async function getAiSummarySessionById(
-  pool: Pool,
+  pool: Pick<Pool, 'query'>,
   sessionId: string,
   userId?: string,
 ): Promise<AiSummarySessionRow | null> {
@@ -298,9 +250,9 @@ export async function getAiSummarySessionById(
 }
 
 export async function updateAiSummarySessionDraft(
-  pool: Pool,
+  pool: Pick<Pool, 'query'>,
   input: UpdateAiSummarySessionDraftInput,
-): Promise<AiSummarySessionRow> {
+): Promise<AiSummarySessionRow | null> {
   const { rows } = await pool.query<AiSummarySessionRow>(
     `
       update article_ai_summary_sessions
@@ -310,17 +262,20 @@ export async function updateAiSummarySessionDraft(
         updated_at = now()
       where id = $1
         and user_id = $3
+        and job_id = $4
+        and status = 'running'
+        and superseded_by_session_id is null
       returning ${sessionSelectSql()}
     `,
-    [input.sessionId, input.draftText, normalizeUserId(input.userId)],
+    [input.sessionId, input.draftText, normalizeUserId(input.userId), input.jobId],
   );
-  return rows[0] as AiSummarySessionRow;
+  return rows[0] ?? null;
 }
 
 export async function completeAiSummarySession(
-  pool: Pool,
+  pool: Pick<Pool, 'query'>,
   input: CompleteAiSummarySessionInput,
-): Promise<AiSummarySessionRow> {
+): Promise<AiSummarySessionRow | null> {
   const { rows } = await pool.query<AiSummarySessionRow>(
     `
       update article_ai_summary_sessions
@@ -336,17 +291,20 @@ export async function completeAiSummarySession(
         updated_at = now()
       where id = $1
         and user_id = $4
+        and job_id = $5
+        and status = 'running'
+        and superseded_by_session_id is null
       returning ${sessionSelectSql()}
     `,
-    [input.sessionId, input.finalText, input.model, normalizeUserId(input.userId)],
+    [input.sessionId, input.finalText, input.model, normalizeUserId(input.userId), input.jobId],
   );
-  return rows[0] as AiSummarySessionRow;
+  return rows[0] ?? null;
 }
 
 export async function failAiSummarySession(
-  pool: Pool,
+  pool: Pick<Pool, 'query'>,
   input: FailAiSummarySessionInput,
-): Promise<AiSummarySessionRow> {
+): Promise<AiSummarySessionRow | null> {
   const { rows } = await pool.query<AiSummarySessionRow>(
     `
       update article_ai_summary_sessions
@@ -360,6 +318,9 @@ export async function failAiSummarySession(
         updated_at = now()
       where id = $1
         and user_id = $6
+        and job_id = $7
+        and status in ('queued', 'running')
+        and superseded_by_session_id is null
       returning ${sessionSelectSql()}
     `,
     [
@@ -369,13 +330,14 @@ export async function failAiSummarySession(
       input.errorMessage,
       input.rawErrorMessage,
       normalizeUserId(input.userId),
+      input.jobId,
     ],
   );
-  return rows[0] as AiSummarySessionRow;
+  return rows[0] ?? null;
 }
 
 export async function markAiSummarySessionSuperseded(
-  pool: Pool,
+  pool: Pick<Pool, 'query'>,
   input: MarkAiSummarySessionSupersededInput,
 ): Promise<void> {
   await pool.query(
@@ -392,7 +354,7 @@ export async function markAiSummarySessionSuperseded(
 }
 
 export async function insertAiSummaryEvent(
-  pool: Pool,
+  pool: Pick<Pool, 'query'>,
   input: InsertAiSummaryEventInput,
 ): Promise<AiSummaryEventRow> {
   const { rows } = await pool.query<AiSummaryEventRow>(
@@ -418,7 +380,7 @@ export async function insertAiSummaryEvent(
 }
 
 export async function listAiSummaryEventsAfter(
-  pool: Pool,
+  pool: Pick<Pool, 'query'>,
   input: ListAiSummaryEventsAfterInput,
 ): Promise<AiSummaryEventRow[]> {
   const { rows } = await pool.query<AiSummaryEventRow>(
@@ -465,4 +427,17 @@ export async function deleteExpiredAiSummaryEvents(
     [normalizeUserId(input.userId)],
   );
   return result.rowCount ?? 0;
+}
+
+// 以文章行作为摘要创建的互斥点，锁内重新读取会话和任务，消除并发请求的检查后写入窗口。
+export async function lockArticleForAiSummary(
+  db: Pick<Pool, 'query'>,
+  articleId: string,
+  userId: string,
+): Promise<boolean> {
+  const { rows } = await db.query(
+    'select id from articles where id = $1 and user_id = $2 for update',
+    [articleId, normalizeUserId(userId)],
+  );
+  return rows.length > 0;
 }

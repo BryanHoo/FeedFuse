@@ -6,6 +6,31 @@ const challengeContentHtml =
   '<div><h2>环境异常</h2><p>当前环境异常，完成验证后即可继续访问。</p><p><a>去验证</a></p></div>';
 
 describe('aiSummaryStreamWorker', () => {
+  it('skips a worker whose session claim was rejected', async () => {
+    const stream = vi.fn();
+    const fail = vi.fn();
+    const events = vi.fn();
+    const mod = await import('@/worker/aiSummaryStreamWorker');
+    await mod.runAiSummaryStreamWorker({
+      pool: {} as never, userId: '1', articleId: '20', sessionId: '10', jobId: 'old-job',
+      deps: {
+        runArticleTaskWithStatus: async ({ fn }) => fn(),
+        getArticleById: async () => ({ id: '20', userId: '1', feedId: '30', contentHtml: '<p>Body</p>' }) as never,
+        getAiSummarySessionById: async () => ({ id: '10', articleId: '20', jobId: 'new-job' }) as never,
+        upsertAiSummarySession: vi.fn().mockResolvedValue(null),
+        getFeedFullTextOnOpenEnabled: async () => false,
+        getAiApiKey: async () => 'test',
+        getUiSettings: async () => ({ ai: { model: 'test', apiBaseUrl: 'https://example.com/v1' } }) as never,
+        streamSummarizeText: stream,
+        failAiSummarySession: fail,
+        insertAiSummaryEvent: events,
+      },
+    });
+    expect(stream).not.toHaveBeenCalled();
+    expect(fail).not.toHaveBeenCalled();
+    expect(events).not.toHaveBeenCalled();
+  });
+
   it('coalesces tiny fragments without repeatedly storing full snapshots', async () => {
     const updateSessionDraftMock = vi.fn().mockResolvedValue(undefined);
     const insertEventMock = vi.fn().mockResolvedValue(undefined);

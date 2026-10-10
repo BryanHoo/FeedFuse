@@ -149,6 +149,9 @@
 
 ## AI 流事件与持久化契约
 
+- 手动摘要创建由 `aiSummarySessionService` 编排：事务内锁定当前用户的文章行，重新检查会话和任务，再用同一连接创建摘要会话、`article_tasks` 与 pg-boss 队列记录；通过 `db.executeSql` 适配器入队。入队抛错、去重返回空 ID 或后续业务写入失败都必须回滚；不能返回已回滚的新会话 ID，也不能提前替代旧会话。
+- 摘要会话首次创建即绑定预分配的 `jobId`；提交后 API 不再重写 queued。缺失任务、任务 `jobId` 不匹配或已过期时，queued/running 会话不能阻止重试。
+- 摘要 Worker 更新必须同时限定用户、任务 `jobId` 和预期状态；已替代会话与终态不能重新进入 running，旧 Worker 不能覆盖新任务状态。自动摘要没有 API 预建任务行，允许新 jobId 接续历史终态任务记录，但不能抢占其他 jobId 的活跃记录。条件更新未命中时停止对应的状态发布，不能再发布完成或失败事件。回归位于摘要 API、摘要仓储、摘要 Worker 与 `articleTaskStatus` 测试；配置 `DATABASE_URL` 后执行 `src/test/server/services/aiSummarySessionService.integration.test.ts`，在随机隔离 schema 中验证真实 PostgreSQL/pg-boss 回滚、提交可见性、并发请求与旧任务写入保护。
 - 摘要和翻译 SSE 共用 `src/server/infra/http/eventStream.ts`，同一连接只能有一个未完成的查询；游标只在事件排入输出队列后前进，并跳过旧 ID 或重复 ID；PostgreSQL bigint 游标按整数比较，不能做字符串比较或丢失超出安全整数的精度。
 - 输出必须响应消费者背压，停止消费时不得持续查询或无限排入事件；重放查询按 ID 升序、每批最多 200 条。完成或失败事件送出后关闭连接，abort/cancel 清理计时器和监听器，并丢弃晚到的查询结果。
 - 摘要片段先过滤思考文本再合并，首段即时发送，其余按时间或大小合并；provider 暂停时仍需按期送出已有片段，上游报错前收到的尾部必须进入失败草稿。
