@@ -59,7 +59,9 @@ export const QUEUE_CONTRACTS: Record<string, QueueContract> = {
       expireInSeconds: 1200,
       warningQueueSize: 300,
     },
-    worker: { localConcurrency: 4, batchSize: 2 },
+    // pg-boss 按整批结算回调异常，单条批次隔离各文章的失败与重试预算。
+    // 吞吐由四个并发消费者保持，避免已完成或尚未执行的任务被连带重试。
+    worker: { localConcurrency: 4, batchSize: 1 },
     send: (ctx) => ({ singletonKey: [ctx.userId, ctx.articleId].filter(Boolean).join(':'), singletonSeconds: 600 }),
   },
   'article.filter': {

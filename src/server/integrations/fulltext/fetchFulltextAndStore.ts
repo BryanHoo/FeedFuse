@@ -44,6 +44,7 @@ export async function fetchFulltextAndStore(
   const article = await getArticleById(pool, articleId, userId ?? undefined);
   if (!article) return;
 
+  // 队列重试或重复投递时复用已落库的有效正文，避免再次抓取和覆盖成功结果。
   if (getUsableFulltextHtml(article)) return;
 
   const link = article.link?.trim() ?? '';

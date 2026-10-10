@@ -38,6 +38,14 @@ describe('queue contracts', () => {
     expect(getQueueCreateOptions('feed.fetch').retryLimit).toBeGreaterThan(0);
   });
 
+  it('isolates fulltext failures to one job while preserving concurrency', () => {
+    // pg-boss 按整个回调结算失败，单条批次避免其他文章被连带重试或消耗重试预算。
+    expect(getWorkerOptions('article.fetch_fulltext')).toMatchObject({
+      localConcurrency: 4,
+      batchSize: 1,
+    });
+  });
+
   it('provides worker concurrency defaults', () => {
     expect(getWorkerOptions('feed.fetch').localConcurrency).toBeGreaterThanOrEqual(1);
     expect(Object.keys(QUEUE_CONTRACTS)).toContain('ai.translate_title_zh');

@@ -119,6 +119,28 @@ describe('fetchFulltextAndStore', () => {
     expect(setArticleFulltextErrorMock).not.toHaveBeenCalled();
   });
 
+  it('skips fetching and writing when a repeated job already has usable fulltext', async () => {
+    const pool = {};
+    getArticleByIdMock.mockResolvedValue({
+      id: 'article-1',
+      userId: 'user-1',
+      link: 'https://example.com/a',
+      contentFullHtml: '<p>已保存的正文</p>',
+      contentFullSourceUrl: 'https://example.com/a',
+    });
+
+    const { fetchFulltextAndStore } = await import('@/server/integrations/fulltext/fetchFulltextAndStore');
+    // 模拟成功落库后任务再次投递，两次执行都应复用正文且不产生抓取或写入副作用。
+    await fetchFulltextAndStore(pool as never, 'article-1', 'user-1');
+    await fetchFulltextAndStore(pool as never, 'article-1', 'user-1');
+
+    expect(getArticleByIdMock).toHaveBeenCalledWith(pool, 'article-1', 'user-1');
+    expect(getAppSettingsMock).not.toHaveBeenCalled();
+    expect(fetchHtmlMock).not.toHaveBeenCalled();
+    expect(setArticleFulltextMock).not.toHaveBeenCalled();
+    expect(setArticleFulltextErrorMock).not.toHaveBeenCalled();
+  });
+
   it('stores error instead of saving upstream verification pages as fulltext', async () => {
     const pool = {};
 
