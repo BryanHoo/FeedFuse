@@ -4,14 +4,15 @@ import { ok, fail } from '@/server/infra/http/apiResponse';
 import { ConflictError, ForbiddenError, ValidationError } from '@/server/infra/http/errors';
 import { requireApiSession } from '@/server/domains/auth/services/session';
 import { hashPassword } from '@/server/domains/auth/services/password';
+import { isPasswordWithinLimit, MAX_USERNAME_LENGTH } from '@/server/domains/auth/services/inputLimits';
 import { createUser, listUsers } from '@/server/domains/auth/repositories/usersRepo';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const createUserBodySchema = z.object({
-  username: z.string().trim().min(1),
-  password: z.string().min(8),
+  username: z.string().max(MAX_USERNAME_LENGTH, '用户名最多允许 128 个字符').trim().min(1),
+  password: z.string().min(8).refine(isPasswordWithinLimit, '密码最多允许 1024 个 UTF-8 字节'),
   role: z.enum(['admin', 'member']).default('member'),
 });
 
@@ -72,7 +73,7 @@ export async function POST(request: Request) {
 
     const user = await createUser(getPool(), {
       username: parsed.data.username,
-      passwordHash: hashPassword(parsed.data.password),
+      passwordHash: await hashPassword(parsed.data.password),
       role: parsed.data.role,
     });
 

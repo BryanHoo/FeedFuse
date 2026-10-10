@@ -11,13 +11,14 @@ import {
   requireApiSession,
 } from '@/server/domains/auth/services/session';
 import { changeOwnPassword } from '@/server/domains/auth/services/changeOwnPasswordService';
+import { MAX_USERNAME_LENGTH } from '@/server/domains/auth/services/inputLimits';
 import { updateUser } from '@/server/domains/auth/repositories/usersRepo';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const patchCurrentUserBodySchema = z.object({
-  username: z.string().trim().min(1, '请输入用户名'),
+  username: z.string().max(MAX_USERNAME_LENGTH, '用户名最多允许 128 个字符').trim().min(1, '请输入用户名'),
   currentPassword: z.string().optional(),
   nextPassword: z.string().optional().default(''),
 });

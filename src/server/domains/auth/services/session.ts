@@ -149,7 +149,7 @@ async function verifyPasswordForUser(
   }
 
   if (user.passwordHash.trim()) {
-    return verifyPassword(password, user.passwordHash)
+    return (await verifyPassword(password, user.passwordHash))
       ? {
           ok: true,
           user: { userId: user.id, role: user.role, sessionVersion: user.sessionVersion },
@@ -172,7 +172,7 @@ async function verifyPasswordForUser(
 
   const updated = await persistInitialAdminPassword(getPool(), {
     userId: user.id,
-    passwordHash: hashPassword(password),
+    passwordHash: await hashPassword(password),
   });
   const nextUser = updated ?? user;
 

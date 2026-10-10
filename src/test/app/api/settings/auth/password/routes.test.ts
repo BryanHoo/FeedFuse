@@ -51,8 +51,8 @@ describe('/api/settings/auth/password', () => {
       sessionVersion: 1,
       type: 'initial_admin',
     });
-    hashPasswordMock.mockReset().mockReturnValue('scrypt$hashed-next');
-    verifyPasswordMock.mockReset().mockReturnValue(true);
+    hashPasswordMock.mockReset().mockResolvedValue('scrypt$hashed-next');
+    verifyPasswordMock.mockReset().mockResolvedValue(true);
   });
 
   it('updates current initial user password and rotates session cookie', async () => {
@@ -112,7 +112,7 @@ describe('/api/settings/auth/password', () => {
       sessionVersion: 1,
       type: 'admin',
     });
-    verifyPasswordMock.mockReturnValue(true);
+    verifyPasswordMock.mockResolvedValue(true);
 
     const mod = await import('../../../../../../app/api/settings/auth/password/route');
     const res = await mod.POST(
@@ -134,7 +134,7 @@ describe('/api/settings/auth/password', () => {
   });
 
   it('returns 401 when current password is invalid', async () => {
-    verifyPasswordMock.mockReturnValue(false);
+    verifyPasswordMock.mockResolvedValue(false);
 
     const mod = await import('../../../../../../app/api/settings/auth/password/route');
     const res = await mod.POST(

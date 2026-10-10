@@ -43,12 +43,12 @@ vi.mock('@/server/infra/env', () => ({
 }));
 
 describe('auth password helpers', () => {
-  it('hashes and verifies passwords', () => {
-    const hash = hashPassword('test-password');
+  it('hashes and verifies passwords', async () => {
+    const hash = await hashPassword('test-password');
 
     expect(hash.startsWith('scrypt$')).toBe(true);
-    expect(verifyPassword('test-password', hash)).toBe(true);
-    expect(verifyPassword('wrong-password', hash)).toBe(false);
+    expect(await verifyPassword('test-password', hash)).toBe(true);
+    expect(await verifyPassword('wrong-password', hash)).toBe(false);
   });
 
   it('verifies plain fallback password with constant-time comparison helper', () => {
@@ -181,6 +181,17 @@ describe('auth password helpers', () => {
       role: 'admin',
       sessionVersion: 5,
     });
+  });
+
+  it('awaits stored password verification and refuses an incorrect password', async () => {
+    findUserByUsernameMock.mockResolvedValue({
+      id: '2', role: 'member', status: 'active', sessionVersion: 1,
+      passwordHash: await hashPassword('correct-password'),
+    });
+    expect(await verifyUserPassword({ username: 'member', password: 'wrong-password' }))
+      .toEqual({ ok: false, reason: 'invalid_password' });
+    expect(await verifyUserPassword({ username: 'member', password: 'correct-password' }))
+      .toEqual({ ok: true, user: { userId: '2', role: 'member', sessionVersion: 1 } });
   });
 
   it('accepts initial password fallback for the renamed initial user', async () => {

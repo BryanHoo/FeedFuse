@@ -48,6 +48,8 @@ cp .env.example .env
 
 `AUTH_COOKIE_SECURE=false` 用于本地 HTTP 访问。如果你用 HTTPS 访问开发环境，可以改为 `AUTH_COOKIE_SECURE=true`。
 
+`AUTH_TRUST_PROXY=false` 是登录来源识别的默认值；本地直连时共用来源配额。仅在 Web 只能由可信代理访问、且代理覆盖 `X-Real-IP` 时启用该变量，配置方法和登录限制见 [部署指南](./deploy.md#2-编辑-env)。密码服务的 `hashPassword` 和 `verifyPassword` 均返回 Promise，所有调用点必须等待结果后再写入数据库或决定认证成功。
+
 RSS 网络访问默认使用 `RSS_NETWORK_MODE=public`，只允许公网地址。可选模式：
 
 - `public`：默认，仅允许公网地址

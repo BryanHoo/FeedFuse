@@ -80,6 +80,7 @@ const envSchema = z
       z.string().min(1).optional(),
     ),
     AUTH_COOKIE_SECURE: optionalBooleanSchema,
+    AUTH_TRUST_PROXY: optionalBooleanSchema,
     RSS_NETWORK_MODE: rssNetworkModeOverrideSchema,
     RSS_ALLOWED_CIDRS: rssAllowedCidrsSchema,
   })

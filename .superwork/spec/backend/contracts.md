@@ -6,6 +6,15 @@
 - 可复用业务流程进入 `src/server/domains/**/services/**`
 - 响应格式尽量通过 `src/server/infra/http/apiResponse.ts` 等公共工具统一
 
+## 登录与密码计算契约
+
+- `hashPassword`、`verifyPassword` 使用异步 scrypt，调用点必须等待结果；兼容既有 `scrypt$盐$哈希` 格式、NFKC 规范化和密码首尾空格，不得截断密码或把 Promise 当作验证布尔值。
+- 登录请求在查询用户和计算密码前检查来源配额、请求体与凭据上限，并同步预占账号与全局校验名额；同账号大小写变体和不同来源共用失败状态，异常退出也必须释放名额。
+- 账号失败 5 次、来源失败 10 次后采用 1 秒起、翻倍至最多 15 分钟的冷却，闲置 15 分钟回收状态；来源每分钟最多 30 次请求，全局最多 2 个校验。成功仅重置账号失败状态，拒绝请求不延长冷却。超限通过统一响应返回 `too_many_requests`、HTTP 429 和 `Retry-After`。
+- 登录请求体按实际流字节数限制为 8 KiB；用户名最多 128 个字符，密码原文和 NFKC 规范化后均最多 1024 个 UTF-8 字节。创建用户、编辑用户名、重置及自助修改密码必须遵循相同凭据上限。
+- `AUTH_TRUST_PROXY` 默认关闭，仅在 Web 只能由可信代理访问且代理覆盖 `X-Real-IP` 时开启；来源 IP 必须规范化，缺失、非法或未信任来源共用配额，不使用客户端提供的 `X-Forwarded-For`。当前限流只在单个 Web 进程内共享，重启会清空状态，多副本必须在入口增加共享限流。
+- 回归验证覆盖 `src/test/server/auth/password.test.ts`、`loginThrottle.test.ts`、`session.test.ts`、`src/test/app/api/auth/login/routes.test.ts` 和用户及改密接口测试；必须验证旧哈希、事件循环可继续处理任务、跨账号/来源攻击、并发预占、冷却恢复、状态容量及异常释放。
+
 ## 设置写入契约
 
 - `PUT /api/settings` 完整替换当前用户设置，必须提交完整的 `general`、`ai`、`categories`、`rss`、`logging` 及其必填嵌套字段；所有对象拒绝未知字段，不允许将缺失字段补成默认值或强制转换类型。

@@ -73,6 +73,13 @@ describe('env', () => {
     ).toThrow(/AUTH_COOKIE_SECURE/);
   });
 
+  it('only accepts explicit boolean values for AUTH_TRUST_PROXY', () => {
+    expect(parseEnv({ DATABASE_URL: 'postgres://example' }).AUTH_TRUST_PROXY).toBeUndefined();
+    expect(parseEnv({ DATABASE_URL: 'postgres://example', AUTH_TRUST_PROXY: 'true' }).AUTH_TRUST_PROXY).toBe(true);
+    expect(parseEnv({ DATABASE_URL: 'postgres://example', AUTH_TRUST_PROXY: 'false' }).AUTH_TRUST_PROXY).toBe(false);
+    expect(() => parseEnv({ DATABASE_URL: 'postgres://example', AUTH_TRUST_PROXY: 'all' })).toThrow(/AUTH_TRUST_PROXY/);
+  });
+
   it('defaults RSS_NETWORK_MODE to public with empty allowed cidrs', () => {
     const env = parseEnv({
       DATABASE_URL: 'postgres://example',

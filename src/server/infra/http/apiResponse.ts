@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { AppError } from '@/server/infra/http/errors';
+import { AppError, TooManyRequestsError } from '@/server/infra/http/errors';
 
 export function ok<T>(data: T, init?: ResponseInit) {
   return NextResponse.json({ ok: true, data }, init);
@@ -14,7 +14,12 @@ export function fail(err: unknown) {
       };
     if (err.fields) error.fields = err.fields;
 
-    return NextResponse.json({ ok: false, error }, { status: err.status });
+    return NextResponse.json({ ok: false, error }, {
+      status: err.status,
+      headers: err instanceof TooManyRequestsError
+        ? { 'Retry-After': String(err.retryAfterSeconds) }
+        : undefined,
+    });
   }
 
   return NextResponse.json(

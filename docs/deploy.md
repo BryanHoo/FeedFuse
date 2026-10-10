@@ -55,6 +55,12 @@ curl -fsSL -o .env https://raw.githubusercontent.com/BryanHoo/FeedFuse/main/depl
 
 `AUTH_COOKIE_SECURE=false` 适合默认的 HTTP 端口访问，包含局域网 IP 访问。如果你在前面接了 HTTPS 反向代理，并且用户通过 `https://` 访问 FeedFuse，建议改成 `AUTH_COOKIE_SECURE=true`。
 
+登录保护按账号和来源分别计数：账号连续失败 5 次、来源失败 10 次后，从 1 秒开始递增冷却，每次失败翻倍，最长 15 分钟；15 分钟没有新尝试后回收计数。每个来源每分钟最多提交 30 次登录请求，成功登录也计入配额。成功登录仅清除该账号的失败计数。冷却和配额超限返回 HTTP 429 与 `Retry-After` 秒数，同时最多执行 2 个登录校验。登录请求体最多 8 KiB，用户名最多 128 个字符，密码原文与 NFKC 规范化后均最多 1024 个 UTF-8 字节，超限直接拒绝，不截断。
+
+默认 `AUTH_TRUST_PROXY=false`，忽略客户端提供的 IP 请求头。由于应用的 Request 接口不提供 socket 地址，所有来源共用一个来源配额。要按真实 IP 区分来源，只能在 **Web 仅接受可信反向代理访问**、且代理 **覆盖** `X-Real-IP` 的部署中启用 `AUTH_TRUST_PROXY=true`。例如 Nginx 的登录代理配置应包含 `proxy_set_header X-Real-IP $remote_addr;`，并通过监听地址或防火墙阻止用户直连 Web；不要透传用户提供的 `X-Real-IP`。无效或缺失 IP 仍共用来源配额，`X-Forwarded-For` 不参与来源识别。修改 `.env` 后重建 Web 容器；源码 Compose 需在 `web.environment` 中传入该变量。
+
+限流状态保存在单个 Web 进程内，最多跟踪 10000 条账号与来源记录，容量耗尽时拒绝新记录，保留现有冷却状态；进程重启会清空计数。部署多个 Web 进程或副本时，应在入口增加共享限流，才能跨进程合并配额。密码计算使用异步 scrypt，兼容已有密码哈希。策略参考 [OWASP 登录节流](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html#login-throttling) 与 [Node.js 事件循环指南](https://nodejs.org/en/learn/asynchronous-work/dont-block-the-event-loop)。
+
 RSS 网络访问默认使用 `RSS_NETWORK_MODE=public`，仅允许公网地址。常见模式：
 
 - `public`：默认，仅允许公网地址

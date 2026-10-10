@@ -5,6 +5,7 @@ import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@
 import { numericIdSchema } from '@/server/infra/http/idSchemas';
 import { requireApiSession } from '@/server/domains/auth/services/session';
 import { hashPassword } from '@/server/domains/auth/services/password';
+import { isPasswordWithinLimit, MAX_USERNAME_LENGTH } from '@/server/domains/auth/services/inputLimits';
 import { getUserById, updateUser } from '@/server/domains/auth/repositories/usersRepo';
 import { deleteUserAndOwnedData } from '@/server/domains/auth/services/userLifecycleService';
 import { isInitialUser } from '@/server/domains/auth/userType';
@@ -13,10 +14,10 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const patchUserBodySchema = z.object({
-  username: z.string().trim().min(1).optional(),
+  username: z.string().max(MAX_USERNAME_LENGTH, '用户名最多允许 128 个字符').trim().min(1).optional(),
   role: z.enum(['admin', 'member']).optional(),
   status: z.enum(['active', 'disabled']).optional(),
-  password: z.string().min(8).optional(),
+  password: z.string().min(8).refine(isPasswordWithinLimit, '密码最多允许 1024 个 UTF-8 字节').optional(),
 });
 
 function zodIssuesToFields(error: z.ZodError): Record<string, string> {
@@ -85,7 +86,7 @@ export async function PATCH(
       username: parsed.data.username,
       role: parsed.data.role,
       status: parsed.data.status,
-      passwordHash: parsed.data.password ? hashPassword(parsed.data.password) : undefined,
+      passwordHash: parsed.data.password ? await hashPassword(parsed.data.password) : undefined,
     });
     return ok(user);
   } catch (err) {

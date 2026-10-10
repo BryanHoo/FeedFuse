@@ -20,9 +20,9 @@ const currentPassword = '  old-password-123  ';
 const nextPassword = '  new-password-123  ';
 
 describe('changeOwnPassword', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetAllMocks();
-    getUserByIdMock.mockResolvedValue({ id: '2', passwordHash: hashPassword(currentPassword) });
+    getUserByIdMock.mockResolvedValue({ id: '2', passwordHash: await hashPassword(currentPassword) });
     const updated = { id: '2', role: 'member', sessionVersion: 2 };
     changeUserPasswordMock.mockResolvedValue(updated);
     updateUserMock.mockResolvedValue(updated);
@@ -39,9 +39,9 @@ describe('changeOwnPassword', () => {
     const otherWriter = username === undefined ? updateUserMock : changeUserPasswordMock;
     const input = writer.mock.calls[0][1];
     expect(input.userId).toBe('2');
-    expect(verifyPassword(nextPassword, input.passwordHash)).toBe(true);
-    expect(verifyPassword(nextPassword.trim(), input.passwordHash)).toBe(false);
-    expect(verifyPassword(currentPassword, input.passwordHash)).toBe(false);
+    expect(await verifyPassword(nextPassword, input.passwordHash)).toBe(true);
+    expect(await verifyPassword(nextPassword.trim(), input.passwordHash)).toBe(false);
+    expect(await verifyPassword(currentPassword, input.passwordHash)).toBe(false);
     expect(otherWriter).not.toHaveBeenCalled();
   });
 

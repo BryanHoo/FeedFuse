@@ -63,8 +63,8 @@ describe('/api/users', () => {
     createSessionCookieHeaderMock.mockReset().mockResolvedValue(
       'feedfuse_session=rotated-token; Path=/; HttpOnly; SameSite=Lax; Max-Age=3600',
     );
-    hashPasswordMock.mockReset().mockReturnValue('scrypt$hashed');
-    verifyPasswordMock.mockReset().mockReturnValue(true);
+    hashPasswordMock.mockReset().mockResolvedValue('scrypt$hashed');
+    verifyPasswordMock.mockReset().mockResolvedValue(true);
   });
 
   it('GET lists users for admins', async () => {
@@ -141,6 +141,20 @@ describe('/api/users', () => {
     );
 
     expect(hashPasswordMock).toHaveBeenCalledWith('  password-123  ');
+  });
+
+  it.each([
+    { username: 'a'.repeat(129), password: 'password-123' },
+    { username: 'member', password: 'a'.repeat(1025) },
+  ])('rejects credentials that exceed login input limits (case %#)', async (input) => {
+    createUserMock.mockResolvedValue({ id: '2', username: input.username, role: 'member', status: 'active', sessionVersion: 1 });
+    const { POST } = await import('../../../../app/api/users/route');
+    const response = await POST(new Request('http://localhost/api/users', {
+      method: 'POST', body: JSON.stringify(input),
+    }));
+    expect(response.status).toBe(400);
+    expect(hashPasswordMock).not.toHaveBeenCalled();
+    expect(createUserMock).not.toHaveBeenCalled();
   });
 
   it('PATCH updates username role status and password', async () => {
@@ -359,7 +373,7 @@ describe('/api/users', () => {
     });
 
     it('rejects wrong current password without changing username or password', async () => {
-      verifyPasswordMock.mockReturnValue(false);
+      verifyPasswordMock.mockResolvedValue(false);
       const res = await requestChange({ currentPassword: 'wrong-password' });
       expect(res.status).toBe(401);
       expect(hashPasswordMock).not.toHaveBeenCalled();
