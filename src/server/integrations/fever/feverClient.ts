@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { ServiceUnavailableError } from '@/server/infra/http/errors';
 import { mapFeverError } from '@/server/integrations/fever/feverErrors';
 import {
   parseFeverEnvelope,
@@ -31,6 +32,8 @@ export function createFeverClient(input: {
   username: string;
   apiKey: string;
   fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+  signal?: AbortSignal;
 }): FeverClient {
   const fetchImpl = input.fetchImpl ?? fetch;
   const baseUrl = normalizeBaseUrl(input.baseUrl);
@@ -40,6 +43,10 @@ export function createFeverClient(input: {
     params: URLSearchParams,
     options?: { selectorInQuery?: boolean },
   ): Promise<FeverEnvelope> {
+    // 超时覆盖建立连接和读取响应体；调用方取消时同样中断远端请求。
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(new DOMException('Fever request timed out', 'TimeoutError')), input.timeoutMs ?? 10_000);
+    const signal = input.signal ? AbortSignal.any([input.signal, controller.signal]) : controller.signal;
     try {
       const selectorInQuery = options?.selectorInQuery ?? false;
       // Fever 读接口要求查询选择器走 query string，否则部分实现只返回 auth 状态而不返回数据体。
@@ -53,12 +60,18 @@ export function createFeverClient(input: {
         method: 'POST',
         headers: { 'content-type': 'application/x-www-form-urlencoded' },
         body,
+        signal,
       });
+
+      if (!response.ok) throw new ServiceUnavailableError(`Fever 请求失败（HTTP ${response.status}）`);
 
       const json = await response.json();
       return parseFeverEnvelope(json);
     } catch (error) {
+      if (signal.reason?.name === 'TimeoutError') throw new ServiceUnavailableError('Fever 请求超时，请重试');
       throw mapFeverError(error);
+    } finally {
+      clearTimeout(timer);
     }
   }
 

@@ -135,6 +135,12 @@ export const QUEUE_CONTRACTS: Record<string, QueueContract> = {
         ? { singletonKey: [ctx.userId, ctx.accountId].filter(Boolean).join(':'), singletonSeconds: 5 }
         : {},
   },
+  'fever.batch_read_item': {
+    // 每条任务最多处理一篇文章，避免大批次超过租约；重试仅用于进程或入库故障恢复。
+    queue: { retryLimit: 3, retryDelay: 30, retryBackoff: true, expireInSeconds: 120, warningQueueSize: 1000 },
+    worker: { localConcurrency: 1, batchSize: 1, includeMetadata: true },
+    send: () => ({}),
+  },
   'fever.sync_due': {
     queue: { warningQueueSize: 5 },
     worker: { localConcurrency: 1, batchSize: 1 },

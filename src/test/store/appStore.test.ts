@@ -425,6 +425,28 @@ describe('appStore api integration', () => {
     expect(useAppStore.getState().feeds[0].unreadCount).toBe(0);
   });
 
+  it('keeps inactive Fever article state when only the local fallback succeeds', async () => {
+    await seedArticleMutationState();
+    useAppStore.setState((state) => ({ feeds: state.feeds.map((feed) => ({ ...feed, provider: 'fever' })) }));
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, data: { updatedCount: 0, task: null } }));
+    useAppStore.getState().markAllAsRead('feed-1');
+    await flushPromises();
+    expectArticleFlagEverywhere('isRead', false);
+    expect(useAppStore.getState().feeds[0].unreadCount).toBe(3);
+  });
+
+  it('does not treat a queued Fever batch as completed or zero its unread count', async () => {
+    await seedArticleMutationState();
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, data: { updatedCount: 0, task: {
+      id: '7', feedId: 'feed-1', status: 'queued', totalCount: 3, succeededCount: 0, failedCount: 0, localUpdatedCount: 0, failures: [],
+    } } }));
+    useAppStore.getState().markAllAsRead('feed-1');
+    await flushPromises();
+    expectArticleFlagEverywhere('isRead', false);
+    expect(useAppStore.getState().feeds[0].unreadCount).toBe(3);
+    expect(runImmediateSuccessMock).not.toHaveBeenCalled();
+  });
+
   it('leaves bulk read state intact on failure and updates all view caches on success', async () => {
     await seedArticleMutationState();
     fetchMock.mockRejectedValueOnce(new Error('批量已读失败'))

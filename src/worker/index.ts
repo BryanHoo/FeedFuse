@@ -50,6 +50,7 @@ import {
   JOB_ARTICLE_FILTER,
   JOB_ARTICLE_FILTER_RECOVER,
   JOB_ARTICLE_FULLTEXT_FETCH,
+  JOB_FEVER_BATCH_READ_ITEM,
   JOB_FEVER_SYNC,
   JOB_FEVER_SYNC_DUE,
   JOB_FEED_FETCH,
@@ -76,6 +77,7 @@ import { runAiDigestTick } from '@/worker/aiDigestTick';
 import { runAiDigestGenerate } from '@/worker/aiDigestGenerate';
 import { runFeverAutoSyncWorker } from '@/worker/feverAutoSync';
 import { enqueueFeverRefreshAllTargets } from '@/worker/feverRefreshAll';
+import { runFeverBatchReadWorker } from '@/worker/feverBatchRead';
 import { runFeverSyncWorker } from '@/worker/feverSync';
 import { runArticleFilterWorker, type ArticleFilterJobData } from '@/worker/articleFilterWorker';
 import { runArticleFilterRecovery } from '@/worker/articleFilterRecovery';
@@ -995,6 +997,11 @@ async function main() {
     [JOB_REFRESH_ALL]: refreshAllHandler,
     [JOB_AI_DIGEST_TICK]: aiDigestTickHandler,
     [JOB_AI_DIGEST_GENERATE]: aiDigestGenerateHandler,
+    [JOB_FEVER_BATCH_READ_ITEM]: async (jobs: unknown[]) => {
+      for (const job of jobs) {
+        await runFeverBatchReadWorker(pool, job as Parameters<typeof runFeverBatchReadWorker>[1]);
+      }
+    },
     [JOB_FEVER_SYNC]: feverSyncHandler,
     [JOB_FEVER_SYNC_DUE]: feverAutoSyncHandler,
     [JOB_FEED_FETCH]: feedFetchHandler,

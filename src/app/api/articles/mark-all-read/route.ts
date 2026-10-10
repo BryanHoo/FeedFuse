@@ -4,9 +4,11 @@ import { getPool } from '@/server/infra/db/pool';
 import { ok, fail } from '@/server/infra/http/apiResponse';
 import { ValidationError } from '@/server/infra/http/errors';
 import { optionalNumericIdSchema } from '@/server/infra/http/idSchemas';
-import { markAllArticlesReadWithWriteback } from '@/server/domains/fever/services/feverWritebackService';
+import { startFeverBatchRead } from '@/server/domains/fever/services/feverBatchReadService';
+import { listBatchReadTasks } from '@/server/domains/fever/repositories/feverBatchReadRepo';
 import {
   writeUserOperationFailedLog,
+  writeUserOperationStartedLog,
   writeUserOperationSucceededLog,
 } from '@/server/infra/logging/userOperationLogger';
 
@@ -47,17 +49,17 @@ export async function POST(request: Request) {
     }
 
     const pool = getPool();
-    const updatedCount = await markAllArticlesReadWithWriteback(pool, {
+    const result = await startFeverBatchRead(pool, {
       feedId: parsed.data.feedId,
       userId: session.userId,
     });
-    await writeUserOperationSucceededLog(pool, {
+    await (result.task ? writeUserOperationStartedLog : writeUserOperationSucceededLog)(pool, {
       userId: session.userId,
       actionKey: 'article.markAllRead',
       source: 'app/api/articles/mark-all-read',
-      context: { feedId: parsed.data.feedId, updatedCount },
+      context: { feedId: parsed.data.feedId, updatedCount: result.updatedCount, runId: result.task?.id },
     });
-    return ok({ updatedCount });
+    return ok(result, { status: result.task ? 202 : 200 });
   } catch (err) {
     await writeUserOperationFailedLog(getPool(), {
       userId: session.userId,
@@ -66,5 +68,17 @@ export async function POST(request: Request) {
       err,
     });
     return fail(err);
+  }
+}
+
+
+export async function GET() {
+  const session = await requireApiSession();
+  if ('response' in session) return session.response;
+  try {
+    const tasks = await listBatchReadTasks(getPool(), session.userId);
+    return ok({ tasks }, { headers: { 'cache-control': 'no-store' } });
+  } catch (error) {
+    return fail(error);
   }
 }

@@ -201,3 +201,13 @@
 - Fever 同步必须显式区分增量模式与全量校正模式；只有全量校正才能根据返回的 `items` 集合失活缺失 item，并写回 `last_full_sync_at`。
 - Fever article 的写回查询必须同时过滤 `fever_item_mappings.is_active = true`、`fever_feed_mappings.is_active = true` 和 `fever_accounts.enabled = true`；已停用或已失效的来源不能继续参与远端写回。
 - `POST /api/fever/accounts` 与 `PATCH /api/fever/accounts` 在写入连接配置前必须先验证 Fever 服务可连通且凭据有效，不能把错误配置保存成成功状态。
+
+## Fever 批量已读契约
+
+- `POST /api/articles/mark-all-read` 只提交本地更新与逐篇持久化任务；含 Fever 目标时返回 HTTP 202 和 `{ updatedCount, task }`，不在 Web 请求内执行远端写回。无远端目标时 `task` 为 `null`。
+- `fever.batch_read_item` 每条队列消息对应一篇文章。批次、逐项记录、本地 RSS 已读和队列消息共用 PostgreSQL 事务；入队失败全部回滚，批量入队不得逐篇网络往返。
+- 每项执行前重验当前用户的活跃映射与账号；远端确认后立即在同一事务写本地已读与成功结果。失效、停用和未确认成功的 Fever 文章不能走本地批量兜底。
+- 远端失败逐项记录原因并继续处理其他项；进程或入库异常交给 pg-boss 重试，耗尽真实任务预算后转为可重试失败项。队列恢复跳过成功项。
+- `GET /api/articles/mark-all-read` 返回当前用户的持久化批次与成功、失败计数及失败文章；禁止缓存。`POST /api/articles/mark-all-read/[id]/retry` 锁定当前用户的批次，仅重置失败项、递增执行版本并原子入队，旧版本消息不能覆盖新结果。
+- Fever 客户端默认每个请求 10 秒超时，覆盖连接与响应体读取；支持调用方取消，结束后清理定时器，HTTP 错误不能当作写回成功。
+- 回归测试位于 `src/test/server/services/feverBatchReadService.test.ts`、`src/test/worker/feverBatchRead.test.ts`、`src/test/app/api/articles/batchRead.test.ts` 和 Fever 客户端测试。配置 `DATABASE_URL` 后运行 `src/test/server/services/feverBatchRead.integration.test.ts`，在随机 schema 中执行迁移 0039、真实 SQL 与 pg-boss，验证即时落库、部分失败、仅重试失败项、并发重试去重、双写回滚、旧消息隔离和用户隔离。

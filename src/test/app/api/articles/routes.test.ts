@@ -35,7 +35,9 @@ const writeUserOperationStartedLogMock = vi.fn();
 const writeUserOperationSucceededLogMock = vi.fn();
 const writeUserOperationFailedLogMock = vi.fn();
 const updateArticleStateWithWritebackMock = vi.fn();
-const markAllArticlesReadWithWritebackMock = vi.fn();
+const startFeverBatchReadMock = vi.fn();
+
+vi.mock('@/server/domains/fever/services/feverBatchReadService', () => ({ startFeverBatchRead: (...args: unknown[]) => startFeverBatchReadMock(...args) }));
 
 const challengeSourceUrl =
   'https://mp.weixin.qq.com/mp/wappoc_appmsgcaptcha?poc_token=test&target_url=https%3A%2F%2Fmp.weixin.qq.com%2Fs%2Fabc';
@@ -133,8 +135,7 @@ vi.mock('@/server/infra/logging/userOperationLogger', () => ({
 vi.mock('@/server/domains/fever/services/feverWritebackService', () => ({
   updateArticleStateWithWriteback: (...args: unknown[]) =>
     updateArticleStateWithWritebackMock(...args),
-  markAllArticlesReadWithWriteback: (...args: unknown[]) =>
-    markAllArticlesReadWithWritebackMock(...args),
+
 }));
 vi.mock('@/server/infra/logging/userOperationLogger', () => ({
   writeUserOperationStartedLog: (...args: unknown[]) =>
@@ -311,7 +312,7 @@ describe('/api/articles', () => {
     writeUserOperationSucceededLogMock.mockReset();
     writeUserOperationFailedLogMock.mockReset();
     updateArticleStateWithWritebackMock.mockReset();
-    markAllArticlesReadWithWritebackMock.mockReset();
+    startFeverBatchReadMock.mockReset();
     poolQueryMock.mockReset();
     poolReleaseMock.mockReset();
 
@@ -1013,7 +1014,7 @@ describe('/api/articles', () => {
   });
 
   it('POST /mark-all-read supports feedId?', async () => {
-    markAllArticlesReadWithWritebackMock.mockResolvedValue(12);
+    startFeverBatchReadMock.mockResolvedValue({ updatedCount: 12, task: null });
 
     const mod = await import('../../../../app/api/articles/mark-all-read/route');
     const res = await mod.POST(
@@ -1025,7 +1026,7 @@ describe('/api/articles', () => {
     );
     const json = await res.json();
     expect(json.ok).toBe(true);
-    expect(markAllArticlesReadWithWritebackMock).toHaveBeenCalledWith(pool, { feedId, userId: '1' });
+    expect(startFeverBatchReadMock).toHaveBeenCalledWith(pool, { feedId, userId: '1' });
     expect(json.data.updatedCount).toBe(12);
     expect(writeUserOperationSucceededLogMock).toHaveBeenCalledWith(
       pool,
@@ -3482,4 +3483,4 @@ describe('/api/articles', () => {
   });
 });
     updateArticleStateWithWritebackMock.mockResolvedValue(undefined);
-    markAllArticlesReadWithWritebackMock.mockResolvedValue(0);
+    startFeverBatchReadMock.mockResolvedValue({ updatedCount: 0, task: null });

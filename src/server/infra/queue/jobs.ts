@@ -11,3 +11,4 @@ export const JOB_ARTICLE_FILTER = 'article.filter';
 export const JOB_ARTICLE_FILTER_RECOVER = 'article.filter_recover';
 export const JOB_ARTICLE_FULLTEXT_FETCH = 'article.fetch_fulltext';
 export const JOB_SYSTEM_LOG_CLEANUP = 'system_logs.cleanup';
+export const JOB_FEVER_BATCH_READ_ITEM = 'fever.batch_read_item';

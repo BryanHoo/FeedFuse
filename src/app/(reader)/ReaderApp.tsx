@@ -1,5 +1,6 @@
 'use client';
 
+import { BatchReadProgress } from '@/features/articles/components/BatchReadProgress';
 import ReaderLayout from '../../features/reader/components/ReaderLayout';
 import { ToastHost } from '../../features/toast/components/ToastHost';
 import { useTheme } from '../../hooks';
@@ -29,6 +30,7 @@ export default function ReaderApp({
   const loadSnapshot = useAppStore((state) => state.loadSnapshot);
   const rehydrateUserScopedLocalState = useAppStore((state) => state.rehydrateUserScopedLocalState);
   const hydratePersistedSettings = useSettingsStore((state) => state.hydratePersistedSettings);
+  const currentUserId = useAuthStore((state) => state.currentUser?.id);
   const setCurrentUser = useAuthStore((state) => state.setCurrentUser);
   const lastAutoSnapshotAtRef = useRef<number | null>(null);
   const userScopedStateReadyRef = useRef(false);
@@ -110,6 +112,7 @@ export default function ReaderApp({
   return (
     <>
       <ReaderLayout renderedAt={renderedAt} initialSelectedView={initialSelectedView} />
+      {userScopedStateReady && currentUserId && <BatchReadProgress key={currentUserId} userId={currentUserId} />}
       <ToastHost />
     </>
   );

@@ -201,4 +201,61 @@ describe('feverClient', () => {
       status: 502,
     });
   });
+  it('aborts stalled requests after the configured timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchImpl = vi.fn((_url: unknown, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true });
+      }));
+      const { createFeverClient } = await import('@/server/integrations/fever/feverClient');
+      const client = createFeverClient({ baseUrl: 'https://example.com', username: 'u', apiKey: 'k', fetchImpl, timeoutMs: 100 });
+      const result = expect(client.markItem({ itemId: '1', as: 'read' })).rejects.toMatchObject({ status: 503, message: 'Fever 请求超时，请重试' });
+      await vi.advanceTimersByTimeAsync(100);
+      await result;
+      expect(fetchImpl.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the timeout active while reading the response body', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchImpl = vi.fn((_url: unknown, init?: RequestInit) => Promise.resolve({
+        ok: true,
+        json: () => new Promise((_resolve, reject) => init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true })),
+      } as Response));
+      const { createFeverClient } = await import('@/server/integrations/fever/feverClient');
+      const client = createFeverClient({ baseUrl: 'https://example.com', username: 'u', apiKey: 'k', fetchImpl, timeoutMs: 100 });
+      const result = expect(client.markItem({ itemId: '1', as: 'read' })).rejects.toMatchObject({ status: 503 });
+      await vi.advanceTimersByTimeAsync(100);
+      await result;
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('propagates caller cancellation to the remote request and clears the timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      const controller = new AbortController();
+      const fetchImpl = vi.fn((_url: unknown, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true });
+      }));
+      const { createFeverClient } = await import('@/server/integrations/fever/feverClient');
+      const client = createFeverClient({ baseUrl: 'https://example.com', username: 'u', apiKey: 'k', fetchImpl, signal: controller.signal });
+      const result = expect(client.markItem({ itemId: '1', as: 'read' })).rejects.toThrow();
+      controller.abort();
+      await result;
+      expect(fetchImpl.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('does not accept an HTTP error carrying a successful auth envelope', async () => {
+    const { createFeverClient } = await import('@/server/integrations/fever/feverClient');
+    const client = createFeverClient({ baseUrl: 'https://example.com', username: 'u', apiKey: 'k', fetchImpl: vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({ auth: 1, api_version: 3 }) }) });
+    await expect(client.markItem({ itemId: '1', as: 'read' })).rejects.toThrow('HTTP 500');
+  });
+
 });

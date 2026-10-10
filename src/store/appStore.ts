@@ -1,3 +1,4 @@
+import { useBatchReadStore } from '@/features/articles/batchReadStore';
 import { create } from 'zustand';
 import type { Article, Category, Feed, ViewType } from '../types';
 import { useSettingsStore } from './settingsStore';
@@ -1070,13 +1071,21 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   markAllAsRead: (feedId) => {
-    // 批量操作涉及未加载的文章，成功后再修改本地状态，避免失败时无法可靠恢复全量统计。
+    // 后台任务只表示受理；逐项成功后的文章状态由进度轮询读取服务端快照。
+    const userId = getCurrentStorageUserId();
     const writing = markAllRead(feedId ? { feedId } : {}, { notifyOnError: false })
-      .then(() => {
+      .then((result) => {
+        if (getCurrentStorageUserId() !== userId) return;
+        if (result.task) {
+          ++articleMutationVersion;
+          useBatchReadStore.getState().track(result.task, userId);
+          return;
+        }
         const version = ++articleMutationVersion;
         set((state) => ({
           ...updateArticleCollections(state, (article) => {
             if (feedId && article.feedId !== feedId) return article;
+            if (state.feeds.find((feed) => feed.id === article.feedId)?.provider === 'fever') return article;
             const operations = articleFlagOperations.get(article.id) ?? {};
             if (operations.isRead?.pending) {
               // 单篇写入随后失败时也不能撤销已经成功的批量已读。
@@ -1087,7 +1096,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             articleFlagOperations.set(article.id, operations);
             return article.isRead ? article : { ...article, isRead: true };
           }),
-          feeds: state.feeds.map((feed) => !feedId || feed.id === feedId
+          feeds: state.feeds.map((feed) => (!feedId || feed.id === feedId) && feed.provider !== 'fever'
             ? { ...feed, unreadCount: 0 }
             : feed),
         }));

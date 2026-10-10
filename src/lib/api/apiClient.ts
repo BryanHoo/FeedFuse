@@ -1,3 +1,4 @@
+import type { FeverBatchReadTask, MarkAllReadResult } from '@/types/feverBatchRead';
 import ky from 'ky';
 import type {
   Article,
@@ -926,7 +927,7 @@ export async function patchArticle(
 export async function markAllRead(
   input: { feedId?: string } = {},
   options?: RequestApiOptions,
-): Promise<{ updatedCount: number }> {
+): Promise<MarkAllReadResult> {
   return requestApi(
     '/api/articles/mark-all-read',
     {
@@ -936,6 +937,14 @@ export async function markAllRead(
     },
     options,
   );
+}
+
+export async function listFeverBatchReadTasks(options?: RequestApiOptions): Promise<{ tasks: FeverBatchReadTask[] }> {
+  return requestApi('/api/articles/mark-all-read', { cache: 'no-store' }, options);
+}
+
+export async function retryFeverBatchReadTask(runId: string, options?: RequestApiOptions): Promise<{ task: FeverBatchReadTask }> {
+  return requestApi(`/api/articles/mark-all-read/${encodeURIComponent(runId)}/retry`, { method: 'POST' }, options);
 }
 
 export interface FeverAccountDto {
