@@ -17,6 +17,9 @@
 
 ## 设置写入契约
 
+- 设置中心通过 `PUT /api/settings` 提交 `{ settings, secrets }`，`settings` 遵循完整替换校验；`secrets` 只允许 `aiApiKey` 与 `translationApiKey`。省略密钥表示保留，`null` 表示删除，非空字符串表示替换；拒绝空白密钥与未知字段。原完整设置请求及其响应继续兼容。
+- 设置、主密钥、翻译密钥、订阅联动和 AI 运行态清理必须共用同一事务连接，清理成功后才提交；任一步失败回滚全部修改。草稿保存响应只返回 `{ settings, hasApiKey, hasTranslationApiKey }`，不得回传密钥明文或将密钥写入 `ui_settings`。
+- 事务接口校验错误使用不带 `settings.` 前缀的设置字段路径，密钥错误使用 `secrets.aiApiKey` 或 `secrets.translationApiKey`；回归覆盖同时保存、密钥写入失败与清理失败的回滚以及密钥明文隔离。
 - `PUT /api/settings` 完整替换当前用户设置，必须提交完整的 `general`、`ai`、`categories`、`rss`、`logging` 及其必填嵌套字段；所有对象拒绝未知字段，不允许将缺失字段补成默认值或强制转换类型。
 - 无效 JSON、非对象请求、缺失必填字段及非法类型、枚举、数值范围或 URL 必须返回 HTTP 400，使用 `validation_error` 和字段错误信息；请求校验必须先于读取旧设置、开启事务、保存设置、更新抓取间隔、裁剪文章及清理 AI 运行态。
 - 兼容旧配置的 `normalizePersistedSettings` 仅用于读取和迁移，包括读取旧设置进行变更比较；不得用于把未经校验的写请求或异常保存结果转换为默认配置。

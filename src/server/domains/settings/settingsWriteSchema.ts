@@ -79,3 +79,12 @@ export const settingsWriteSchema: z.ZodType<PersistedSettings> = z.strictObject(
     minLevel: z.enum(['info', 'warning', 'error']),
   }),
 });
+
+// 密钥不混入可缓存的设置对象：省略表示保留，null 表示删除，非空字符串表示替换。
+export const settingsDraftWriteSchema = z.strictObject({
+  settings: settingsWriteSchema,
+  secrets: z.strictObject({
+    aiApiKey: z.string().trim().min(1, '请输入非空 API 密钥，或使用删除密钥按钮。').nullable().optional(),
+    translationApiKey: z.string().trim().min(1, '请输入非空翻译 API 密钥，或使用删除密钥按钮。').nullable().optional(),
+  }),
+});

@@ -4,14 +4,11 @@ import { normalizePersistedSettings, defaultPersistedSettings } from '../feature
 import { validateSettingsDraft } from '../features/settings/utils/validateSettingsDraft';
 import type { GeneralSettings, PersistedSettings, UserSettings } from '../types';
 import {
-  deleteAiApiKey,
-  deleteTranslationApiKey,
+  ApiError,
+  putSettingsDraft,
   getAiApiKeyStatus,
   getSettings,
   getTranslationApiKeyStatus,
-  putAiApiKey,
-  putSettings,
-  putTranslationApiKey,
 } from '@/lib/api/apiClient';
 import { AUTH_ANONYMOUS_STORAGE_USER_ID, getCurrentStorageUserId } from './authStore';
 
@@ -42,6 +39,11 @@ export interface SaveDraftResult {
   ok: boolean;
   err?: unknown;
   shouldNotify?: boolean;
+  failure?: {
+    kind: 'validation' | 'network' | 'server' | 'authentication';
+    message: string;
+    outcome: 'unchanged' | 'unknown';
+  };
 }
 
 interface SettingsState {
@@ -267,48 +269,32 @@ export const useSettingsStore = create<SettingsState>()(
           const validation = validateSettingsDraft(submittedDraft);
           if (!validation.valid) {
             set({ validationErrors: validation.errors });
-            return { ok: false };
+            return {
+              ok: false,
+              failure: { kind: 'validation', message: '请修正标出的字段，修改后会自动保存。', outcome: 'unchanged' },
+            };
           }
 
           const nextPersistedSettings = ensureAiTranslationSettings(submittedDraft.persisted);
-          let settingsSaved = false;
 
           try {
-            const savedSettings = await putSettings(nextPersistedSettings, {
-              notifyOnError: false,
-            });
-            settingsSaved = true;
-            const shouldClearApiKey = submittedDraft.session.ai.clearApiKey;
-            const apiKey = submittedDraft.session.ai.apiKey.trim();
-            const shouldClearTranslationApiKey = submittedDraft.session.ai.clearTranslationApiKey ?? false;
-            const translationApiKey = (submittedDraft.session.ai.translationApiKey ?? '').trim();
-
-            let hasApiKey = submittedDraft.session.ai.hasApiKey;
-            let hasTranslationApiKey = submittedDraft.session.ai.hasTranslationApiKey ?? false;
-            let clearDraftApiKey = false;
-            let clearDraftTranslationApiKey = false;
-
-            if (shouldClearApiKey) {
-              const result = await deleteAiApiKey();
-              hasApiKey = result.hasApiKey;
-              clearDraftApiKey = true;
-            } else if (apiKey) {
-              const result = await putAiApiKey({ apiKey });
-              hasApiKey = result.hasApiKey;
-              clearDraftApiKey = true;
-            }
-
-            if (!nextPersistedSettings.ai.translation.useSharedAi) {
-              if (shouldClearTranslationApiKey) {
-                const result = await deleteTranslationApiKey();
-                hasTranslationApiKey = result.hasApiKey;
-                clearDraftTranslationApiKey = true;
-              } else if (translationApiKey) {
-                const result = await putTranslationApiKey({ apiKey: translationApiKey });
-                hasTranslationApiKey = result.hasApiKey;
-                clearDraftTranslationApiKey = true;
-              }
-            }
+            const submittedAi = submittedDraft.session.ai;
+            const apiKey = submittedAi.apiKey.trim();
+            const translationApiKey = (submittedAi.translationApiKey ?? '').trim();
+            const clearDraftApiKey = submittedAi.clearApiKey || Boolean(apiKey);
+            const clearDraftTranslationApiKey = !nextPersistedSettings.ai.translation.useSharedAi &&
+              (Boolean(submittedAi.clearTranslationApiKey) || Boolean(translationApiKey));
+            // 省略未编辑的密钥，删除用 null；全部修改通过同一个事务接口提交。
+            const result = await putSettingsDraft({
+              settings: nextPersistedSettings,
+              secrets: {
+                ...(clearDraftApiKey ? { aiApiKey: submittedAi.clearApiKey ? null : apiKey } : {}),
+                ...(clearDraftTranslationApiKey ? {
+                  translationApiKey: submittedAi.clearTranslationApiKey ? null : translationApiKey,
+                } : {}),
+              },
+            }, { notifyOnError: false, redirectOnUnauthorized: false });
+            const { settings: savedSettings, hasApiKey, hasTranslationApiKey } = result;
 
             const nextSessionSettings: SessionSettings = {
               ai: {
@@ -368,10 +354,38 @@ export const useSettingsStore = create<SettingsState>()(
             return { ok: true };
           } catch (err) {
             console.error(err);
+            const apiError = err instanceof ApiError ? err : null;
+            const isValidation = apiError?.code === 'validation_error';
+            // 仅给仍对应本次请求的草稿标错，旧失败不能污染后来输入的内容。
+            if (isValidation && apiError?.fields && generation === draftGeneration &&
+                state.draftVersion === get().draftVersion) {
+              const fields: Record<string, string> = {};
+              for (const field of Object.keys(apiError.fields)) {
+                const key = field === 'secrets.aiApiKey' ? 'ai.apiKey'
+                  : field === 'secrets.translationApiKey' ? 'ai.translation.apiKey' : field;
+                fields[key] = '填写内容无效，请检查该字段的格式和允许值后修改。';
+              }
+              set({ validationErrors: fields });
+            }
+            const networkFailure = apiError?.code === 'network_error' || apiError?.code === 'timeout';
+            const authenticationFailure = apiError?.status === 401 || apiError?.status === 403;
+            // 连接中断或响应无法解析时，服务端可能已提交，不能声称“未保存”。重试完整替换即可恢复。
+            const unknownOutcome = networkFailure || !apiError || apiError.code === 'invalid_response';
             return {
               ok: false,
               err,
-              shouldNotify: !settingsSaved,
+              shouldNotify: true,
+              failure: {
+                kind: isValidation ? 'validation' : networkFailure ? 'network'
+                  : authenticationFailure ? 'authentication' : 'server',
+                message: isValidation ? '设置内容未通过校验，请检查标出的字段后修改。'
+                  : authenticationFailure ? '登录已失效或没有保存权限，请重新登录后重试保存。'
+                  : networkFailure ? (apiError?.code === 'timeout'
+                    ? '保存请求超时，请检查网络连接后点击“重试保存”。'
+                    : '网络连接失败，请检查网络连接后点击“重试保存”。')
+                  : '服务暂时无法保存设置，请稍后点击“重试保存”。',
+                outcome: unknownOutcome ? 'unknown' : 'unchanged',
+              },
             };
           }
         });

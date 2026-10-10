@@ -13,6 +13,9 @@
 - 新增或调整 reader 快捷键时，同步更新快捷键帮助弹窗，并在 `src/test/features/reader/ReaderLayout.test.tsx` 覆盖至少一个正向触发和一个弹窗/输入焦点保护场景。
 - 文章视图相关契约先看 `src/features/articles/components/ArticleView.tsx`、`src/features/articles/hooks/useStreamingAiSummary.ts`、`src/features/articles/hooks/useImmersiveTranslation.ts`
 - 设置保存逻辑先看 `src/features/settings/hooks/useSettingsAutosave.ts`
+- 设置中心自动保存失败时保留当前草稿及上次成功保存的设置；密钥草稿只保留在内存，不写入 localStorage。关闭前明确提示放弃未保存草稿，用户选择继续编辑时保留内容。
+- 字段错误必须提供中文字段名称与修改提示，并通过 `aria-invalid`、`aria-describedby` 关联 AI 输入；修改后恢复自动保存。网络、超时或服务错误提供“重试保存”，允许不修改草稿直接重试；仅成功响应能推进已保存版本，旧请求不能覆盖新草稿或新错误。
+- 确认失败时说明本次修改未保存，网络中断、超时或响应无法解析时说明保存结果尚未确认；不可将未知结果描述为未保存。成功时确认本次设置及密钥修改全部保存，失败不能统一要求用户修正字段。
 - AI 设置中的 `summaryPrompt`、`translationPrompt`、`deepThinkingEnabled` 由设置中心维护；前端只负责编辑与保存，不在组件层拼接任务级 system prompt
 - `deepThinkingEnabled` 开启后，摘要卡片、智能解读等 AI 内容区域只展示最终回复；前端不应把中间思考文案、`<think>` 标签或推理过程暴露给用户
 - 中栏文章列表的已读/未读按钮按当前选中 `view` 记忆用户选择；该选择优先于全局 `defaultUnreadOnlyInAll`，刷新页面和切换订阅源后仍应保留。

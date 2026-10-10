@@ -280,8 +280,12 @@ describe('SettingsCenterModal', () => {
           const bodyText = await getFetchCallBodyText(input, init);
           lastSettingsPutBodyText = bodyText ?? null;
           const body = typeof bodyText === 'string' ? JSON.parse(bodyText) : {};
-          remoteSettings = body;
-          return new Response(JSON.stringify({ ok: true, data: remoteSettings }), {
+          remoteSettings = body.settings;
+          if (body.secrets.aiApiKey !== undefined) remoteHasApiKey = Boolean(body.secrets.aiApiKey);
+          if (body.secrets.translationApiKey !== undefined) remoteHasTranslationApiKey = Boolean(body.secrets.translationApiKey);
+          return new Response(JSON.stringify({ ok: true, data: {
+            settings: remoteSettings, hasApiKey: remoteHasApiKey, hasTranslationApiKey: remoteHasTranslationApiKey,
+          } }), {
             status: 200,
             headers: { 'content-type': 'application/json' },
           });
@@ -293,6 +297,20 @@ describe('SettingsCenterModal', () => {
         });
       }),
     );
+  });
+
+  it('API 地址错误说明修改方法，并与出错输入关联', async () => {
+    resetSettingsStore();
+    renderWithNotifications();
+    fireEvent.click(screen.getByLabelText('打开设置'));
+    await screen.findByTestId('settings-center-modal');
+    fireEvent.click(screen.getByTestId('settings-section-tab-ai'));
+    const input = screen.getByRole('textbox', { name: 'API 地址' });
+    fireEvent.change(input, { target: { value: 'ftp://invalid.example.com' } });
+    await waitFor(() => expect(input).toHaveAttribute('aria-invalid', 'true'));
+    expect(input).toHaveAccessibleDescription('API 地址必须是有效的 HTTP(S) 地址，例如 https://api.example.com/v1。');
+    expect(screen.getByText('请修正字段错误')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '重试保存' })).not.toBeInTheDocument();
   });
 
   it('renders settings in right drawer layout and removes footer save button', async () => {
@@ -719,9 +737,10 @@ describe('SettingsCenterModal', () => {
     }
   });
 
-  it('shows backend autosave error state without a toast', async () => {
+  it('网络失败后保留草稿，提供明确重试并确认全部保存', async () => {
     resetSettingsStore();
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    let allowSave = false;
 
     vi.stubGlobal(
       'fetch',
@@ -744,16 +763,11 @@ describe('SettingsCenterModal', () => {
         }
 
         if (url.includes('/api/settings') && method === 'PUT') {
-          return new Response(
-            JSON.stringify({
-              ok: false,
-              error: {
-                code: 'validation_error',
-                message: '设置保存失败，请稍后重试',
-              },
-            }),
-            { status: 400, headers: { 'content-type': 'application/json' } },
-          );
+          if (!allowSave) throw new TypeError('Failed to fetch');
+          const body = JSON.parse((await getFetchCallBodyText(input, init))!);
+          return new Response(JSON.stringify({ ok: true, data: {
+            settings: body.settings, hasApiKey: false, hasTranslationApiKey: false,
+          } }), { headers: { 'content-type': 'application/json' } });
         }
 
         if (url.includes('/api/settings')) {
@@ -776,8 +790,17 @@ describe('SettingsCenterModal', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '深色' }));
 
-    expect(await screen.findByText('修复错误以保存')).toBeInTheDocument();
-    expect(screen.queryByText('保存设置失败：设置保存失败，请稍后重试')).not.toBeInTheDocument();
+    expect(await screen.findByText('保存失败')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('检查网络连接');
+    expect(screen.getByRole('alert')).toHaveTextContent('尚未确认');
+    expect(useSettingsStore.getState().draft?.persisted.general.theme).toBe('dark');
+    expect(useSettingsStore.getState().persistedSettings.general.theme).toBe(defaultPersistedSettings.general.theme);
+    allowSave = true;
+    fireEvent.click(screen.getByRole('button', { name: '重试保存' }));
+    await waitFor(() => expect(screen.getByText('已保存')).toBeInTheDocument());
+    expect(screen.getByText('本次设置和密钥修改均已保存。')).toBeInTheDocument();
+    expect(useSettingsStore.getState().persistedSettings.general.theme).toBe('dark');
+    expect(screen.queryByRole('button', { name: '重试保存' })).not.toBeInTheDocument();
 
     consoleErrorSpy.mockRestore();
   });

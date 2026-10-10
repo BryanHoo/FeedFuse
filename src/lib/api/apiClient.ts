@@ -1293,6 +1293,21 @@ export async function putSettings(
   );
 }
 
+export async function putSettingsDraft(
+  input: {
+    settings: PersistedSettings;
+    secrets: { aiApiKey?: string | null; translationApiKey?: string | null };
+  },
+  options?: RequestApiOptions,
+): Promise<{ settings: PersistedSettings; hasApiKey: boolean; hasTranslationApiKey: boolean }> {
+  // 一次提交全部修改，由服务端事务确保地址、模型与密钥同时生效。
+  return requestApi('/api/settings', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  }, options);
+}
+
 export async function getSystemLogs(input: {
   keyword?: string;
   page?: number;

@@ -76,6 +76,8 @@ export default function AISettingsPanel({
             </Label>
             <Input
               id="ai-model"
+              aria-invalid={Boolean(errors["ai.model"])}
+              aria-describedby={errors["ai.model"] ? "ai-model-error" : undefined}
               name="ai-model"
               aria-labelledby={aiModelLabelId}
               autoComplete="off"
@@ -88,6 +90,9 @@ export default function AISettingsPanel({
               }
               placeholder="例如：gpt-4o-mini…"
             />
+            {errors["ai.model"] ? (
+              <p id="ai-model-error" className="mt-1.5 text-xs text-destructive">{errors["ai.model"]}</p>
+            ) : null}
           </div>
 
           <div className="px-4 py-3.5">
@@ -100,6 +105,8 @@ export default function AISettingsPanel({
             </Label>
             <Input
               id="ai-api-base-url"
+              aria-invalid={Boolean(errors["ai.apiBaseUrl"])}
+              aria-describedby={errors["ai.apiBaseUrl"] ? "ai-api-base-url-error" : undefined}
               name="ai-api-base-url"
               aria-labelledby={aiApiBaseUrlLabelId}
               type="url"
@@ -115,7 +122,7 @@ export default function AISettingsPanel({
               placeholder="例如：https://api.openai.com/v1…"
             />
             {errors["ai.apiBaseUrl"] ? (
-              <p className="mt-1.5 text-xs text-destructive">
+              <p id="ai-api-base-url-error" className="mt-1.5 text-xs text-destructive">
                 {errors["ai.apiBaseUrl"]}
               </p>
             ) : null}
@@ -134,6 +141,8 @@ export default function AISettingsPanel({
             </div>
             <Input
               id="ai-api-key"
+              aria-invalid={Boolean(errors["ai.apiKey"])}
+              aria-describedby={errors["ai.apiKey"] ? "ai-api-key-error" : undefined}
               name="ai-api-key"
               aria-labelledby={aiApiKeyLabelId}
               type="password"
@@ -154,6 +163,9 @@ export default function AISettingsPanel({
               }
               placeholder="例如：sk-…"
             />
+            {errors["ai.apiKey"] ? (
+              <p id="ai-api-key-error" className="mt-1.5 text-xs text-destructive">{errors["ai.apiKey"]}</p>
+            ) : null}
             <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
               {hasApiKey ? (
                 <Button
@@ -299,6 +311,8 @@ export default function AISettingsPanel({
                 </Label>
                 <Input
                   id="ai-translation-model"
+                  aria-invalid={Boolean(errors["ai.translation.model"])}
+                  aria-describedby={errors["ai.translation.model"] ? "ai-translation-model-error" : undefined}
                   name="ai-translation-model"
                   aria-labelledby={aiTranslationModelLabelId}
                   autoComplete="off"
@@ -312,6 +326,9 @@ export default function AISettingsPanel({
                   }
                   placeholder="例如：gpt-4o-mini…"
                 />
+                {errors["ai.translation.model"] ? (
+                  <p id="ai-translation-model-error" className="mt-1.5 text-xs text-destructive">{errors["ai.translation.model"]}</p>
+                ) : null}
               </div>
 
               <div className="px-4 py-3.5">
@@ -320,6 +337,8 @@ export default function AISettingsPanel({
                 </Label>
                 <Input
                   id="ai-translation-api-base-url"
+                  aria-invalid={Boolean(errors["ai.translation.apiBaseUrl"])}
+                  aria-describedby={errors["ai.translation.apiBaseUrl"] ? "ai-translation-api-base-url-error" : undefined}
                   name="ai-translation-api-base-url"
                   aria-labelledby={aiTranslationApiBaseUrlLabelId}
                   type="url"
@@ -336,7 +355,7 @@ export default function AISettingsPanel({
                   placeholder="例如：https://api.openai.com/v1…"
                 />
                 {errors["ai.translation.apiBaseUrl"] ? (
-                  <p className="mt-1.5 text-xs text-destructive">
+                  <p id="ai-translation-api-base-url-error" className="mt-1.5 text-xs text-destructive">
                     {errors["ai.translation.apiBaseUrl"]}
                   </p>
                 ) : null}
@@ -357,6 +376,8 @@ export default function AISettingsPanel({
                 </div>
                 <Input
                   id="ai-translation-api-key"
+                  aria-invalid={Boolean(errors["ai.translation.apiKey"])}
+                  aria-describedby={errors["ai.translation.apiKey"] ? "ai-translation-api-key-error" : undefined}
                   name="ai-translation-api-key"
                   aria-labelledby={aiTranslationApiKeyLabelId}
                   type="password"
@@ -382,6 +403,9 @@ export default function AISettingsPanel({
                   }
                   placeholder="例如：sk-…"
                 />
+                {errors["ai.translation.apiKey"] ? (
+                  <p id="ai-translation-api-key-error" className="mt-1.5 text-xs text-destructive">{errors["ai.translation.apiKey"]}</p>
+                ) : null}
                 <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
                   {hasTranslationApiKey ? (
                     <Button

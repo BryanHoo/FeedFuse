@@ -3,6 +3,33 @@ import { act, renderHook } from '@testing-library/react';
 import { useSettingsAutosave } from '../../../features/settings/hooks/useSettingsAutosave';
 
 describe('useSettingsAutosave', () => {
+  it('失败后可重试同一份草稿，只有成功才推进已保存版本', async () => {
+    vi.useFakeTimers();
+    try {
+      const saveDraft = vi.fn().mockResolvedValueOnce({ ok: false }).mockResolvedValue({ ok: true });
+      const { result } = renderHook(() => useSettingsAutosave({ draftVersion: 1, saveDraft, hasErrors: false }));
+      await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+      expect(result.current.status).toBe('error');
+      expect(result.current.lastSavedVersion).toBe(0);
+      act(() => { result.current.retry(); });
+      expect(result.current.status).toBe('saving');
+      await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+      expect(saveDraft).toHaveBeenCalledTimes(2);
+      expect(result.current.status).toBe('saved');
+      expect(result.current.lastSavedVersion).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('区分字段校验失败与请求失败，字段未修复时不重试', () => {
+    const saveDraft = vi.fn();
+    const { result } = renderHook(() => useSettingsAutosave({ draftVersion: 1, saveDraft, hasErrors: true }));
+    expect(result.current.status).toBe('invalid');
+    act(() => { result.current.retry(); });
+    expect(saveDraft).not.toHaveBeenCalled();
+  });
+
   it.each([true, false])('忽略较旧版本晚到的保存结果（成功：%s）', async (oldOk) => {
     vi.useFakeTimers();
     try {

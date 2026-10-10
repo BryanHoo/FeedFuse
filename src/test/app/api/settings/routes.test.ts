@@ -13,6 +13,8 @@ const requireApiSessionMock = vi.fn();
 const getUiSettingsMock = vi.fn();
 const updateUiSettingsMock = vi.fn();
 const getAiApiKeyMock = vi.fn();
+const setAiApiKeyMock = vi.fn();
+const setTranslationApiKeyMock = vi.fn();
 const getTranslationApiKeyMock = vi.fn();
 const updateAllFeedsFetchIntervalMinutesMock = vi.fn();
 const pruneAllFeedsArticlesToLimitMock = vi.fn();
@@ -38,12 +40,16 @@ vi.mock('@/server/domains/settings/repositories/settingsRepo', () => ({
   getUiSettings: (...args: unknown[]) => getUiSettingsMock(...args),
   updateUiSettings: (...args: unknown[]) => updateUiSettingsMock(...args),
   getAiApiKey: (...args: unknown[]) => getAiApiKeyMock(...args),
+  setAiApiKey: (...args: unknown[]) => setAiApiKeyMock(...args),
+  setTranslationApiKey: (...args: unknown[]) => setTranslationApiKeyMock(...args),
   getTranslationApiKey: (...args: unknown[]) => getTranslationApiKeyMock(...args),
 }));
 vi.mock('@/server/domains/settings/repositories/settingsRepo', () => ({
   getUiSettings: (...args: unknown[]) => getUiSettingsMock(...args),
   updateUiSettings: (...args: unknown[]) => updateUiSettingsMock(...args),
   getAiApiKey: (...args: unknown[]) => getAiApiKeyMock(...args),
+  setAiApiKey: (...args: unknown[]) => setAiApiKeyMock(...args),
+  setTranslationApiKey: (...args: unknown[]) => setTranslationApiKeyMock(...args),
   getTranslationApiKey: (...args: unknown[]) => getTranslationApiKeyMock(...args),
 }));
 
@@ -99,6 +105,8 @@ describe('/api/settings', () => {
     getUiSettingsMock.mockReset();
     updateUiSettingsMock.mockReset();
     getAiApiKeyMock.mockReset().mockResolvedValue('sk-shared');
+    setAiApiKeyMock.mockReset().mockImplementation(async (_client, _userId, key) => key);
+    setTranslationApiKeyMock.mockReset().mockImplementation(async (_client, _userId, key) => key);
     getTranslationApiKeyMock.mockReset().mockResolvedValue('sk-translation');
     updateAllFeedsFetchIntervalMinutesMock.mockReset();
     pruneAllFeedsArticlesToLimitMock.mockReset();
@@ -114,6 +122,70 @@ describe('/api/settings', () => {
     client.query.mockReset().mockResolvedValue({ rows: [] });
     client.release.mockReset();
     pool.connect.mockReset().mockResolvedValue(client);
+  });
+
+  it('通过同一事务提交设置、主密钥和翻译密钥，只返回密钥状态', async () => {
+    getUiSettingsMock.mockResolvedValue(defaultPersistedSettings);
+    updateUiSettingsMock.mockImplementation(async (_client, _userId, settings) => settings);
+    const settings = structuredClone(defaultPersistedSettings);
+    settings.ai.model = 'new-model';
+    const mod = await import('../../../../app/api/settings/route');
+    const res = await mod.PUT(new Request('http://localhost/api/settings', {
+      method: 'PUT', body: JSON.stringify({ settings, secrets: { aiApiKey: 'sk-new', translationApiKey: null } }),
+    }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, data: { settings, hasApiKey: true, hasTranslationApiKey: false } });
+    expect(setAiApiKeyMock).toHaveBeenCalledWith(client, '1', 'sk-new');
+    expect(setTranslationApiKeyMock).toHaveBeenCalledWith(client, '1', '');
+    expect(cleanupAiRuntimeStateMock).toHaveBeenCalledWith(expect.objectContaining({ pool: client }));
+    expect(client.query).toHaveBeenCalledWith('commit');
+  });
+
+  it.each(['key', 'cleanup'])('密钥写入或运行状态清理失败时回滚全部修改（%s）', async (failure) => {
+    getUiSettingsMock.mockResolvedValue(defaultPersistedSettings);
+    updateUiSettingsMock.mockImplementation(async (_client, _userId, settings) => settings);
+    if (failure === 'key') setAiApiKeyMock.mockRejectedValue(new Error('key write failed'));
+    else cleanupAiRuntimeStateMock.mockRejectedValue(new Error('cleanup failed'));
+    const mod = await import('../../../../app/api/settings/route');
+    const res = await mod.PUT(new Request('http://localhost/api/settings', {
+      method: 'PUT', body: JSON.stringify({ settings: defaultPersistedSettings, secrets: { aiApiKey: 'sk-new' } }),
+    }));
+    expect(res.status).toBe(500);
+    expect(updateUiSettingsMock).toHaveBeenCalled();
+    expect(client.query).toHaveBeenCalledWith('rollback');
+    expect(client.query).not.toHaveBeenCalledWith('commit');
+    expect(client.release).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    { aiApiKey: '   ' },
+    { translationApiKey: 123 },
+    { unknownKey: 'secret' },
+  ])('事务请求的非法密钥在任何写入前被拒绝（%j）', async (secrets) => {
+    const mod = await import('../../../../app/api/settings/route');
+    const res = await mod.PUT(new Request('http://localhost/api/settings', {
+      method: 'PUT', body: JSON.stringify({ settings: defaultPersistedSettings, secrets }),
+    }));
+    expect(res.status).toBe(400);
+    expect(pool.connect).not.toHaveBeenCalled();
+    expect(updateUiSettingsMock).not.toHaveBeenCalled();
+    expect(setAiApiKeyMock).not.toHaveBeenCalled();
+    expect(setTranslationApiKeyMock).not.toHaveBeenCalled();
+  });
+
+  it('省略密钥时保留已有密钥，重复提交同一草稿不重复清理运行态', async () => {
+    getUiSettingsMock.mockResolvedValue(defaultPersistedSettings);
+    updateUiSettingsMock.mockImplementation(async (_client, _userId, settings) => settings);
+    const mod = await import('../../../../app/api/settings/route');
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const res = await mod.PUT(new Request('http://localhost/api/settings', {
+        method: 'PUT', body: JSON.stringify({ settings: defaultPersistedSettings, secrets: {} }),
+      }));
+      expect(await res.json()).toMatchObject({ ok: true, data: { hasApiKey: true, hasTranslationApiKey: true } });
+    }
+    expect(setAiApiKeyMock).not.toHaveBeenCalled();
+    expect(setTranslationApiKeyMock).not.toHaveBeenCalled();
+    expect(cleanupAiRuntimeStateMock).not.toHaveBeenCalled();
   });
 
   it('GET returns normalized persisted settings', async () => {
@@ -525,7 +597,7 @@ describe('/api/settings', () => {
 
     expect(cleanupAiRuntimeStateMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        pool,
+        pool: client,
         userId: '1',
         scopes: {
           summary: true,
@@ -583,7 +655,7 @@ describe('/api/settings', () => {
 
     expect(cleanupAiRuntimeStateMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        pool,
+        pool: client,
         userId: '1',
         scopes: {
           summary: false,

@@ -2,7 +2,7 @@ import { requireApiSession } from '@/server/domains/auth/services/session';
 import { getPool } from '@/server/infra/db/pool';
 import { ok, fail } from '@/server/infra/http/apiResponse';
 import { ValidationError } from '@/server/infra/http/errors';
-import { settingsWriteSchema } from '@/server/domains/settings/settingsWriteSchema';
+import { settingsDraftWriteSchema, settingsWriteSchema } from '@/server/domains/settings/settingsWriteSchema';
 import { cleanupAiRuntimeState } from '@/server/integrations/ai/cleanupAiRuntimeState';
 import {
   hasAiCleanupScopes,
@@ -18,6 +18,8 @@ import {
   getAiApiKey,
   getTranslationApiKey,
   getUiSettings,
+  setAiApiKey,
+  setTranslationApiKey,
   updateUiSettings,
 } from '@/server/domains/settings/repositories/settingsRepo';
 import { updateAllFeedsFetchIntervalMinutes } from '@/server/domains/feeds/repositories/feedsRepo';
@@ -54,16 +56,22 @@ export async function PUT(request: Request) {
       throw new ValidationError('设置请求必须是有效的 JSON', { body: 'JSON 解析失败' });
     });
     // 在读取旧配置、开启事务及执行清理前校验完整请求，防止无效输入回退默认值后覆盖配置。
-    const parsed = settingsWriteSchema.safeParse(json);
+    const isDraftRequest = typeof json === 'object' && json !== null && 'settings' in json;
+    const parsed = isDraftRequest
+      ? settingsDraftWriteSchema.safeParse(json)
+      : settingsWriteSchema.safeParse(json);
     if (!parsed.success) {
       const fields: Record<string, string> = {};
       for (const issue of parsed.error.issues) {
-        const key = issue.path.join('.') || 'body';
+        const path = issue.path[0] === 'settings' ? issue.path.slice(1) : issue.path;
+        const key = path.join('.') || 'body';
         if (!fields[key]) fields[key] = issue.message;
       }
       throw new ValidationError('设置请求校验失败', fields);
     }
-    const next = parsed.data;
+    const draftInput = 'settings' in parsed.data ? parsed.data : null;
+    const next = 'settings' in parsed.data ? parsed.data.settings : parsed.data;
+    const secrets = draftInput?.secrets ?? {};
 
     const [prevRaw, aiApiKey, translationApiKey] = await Promise.all([
       getUiSettings(pool, session.userId),
@@ -78,6 +86,11 @@ export async function PUT(request: Request) {
       await client.query('begin');
       const saved = await updateUiSettings(client, session.userId, next);
       const validatedSaved = settingsWriteSchema.parse(saved);
+      // 设置、两种密钥及运行态清理共用同一连接；任一步失败都回滚，避免部分保存。
+      const nextAiApiKey = secrets.aiApiKey === undefined
+        ? aiApiKey : await setAiApiKey(client, session.userId, secrets.aiApiKey ?? '');
+      const nextTranslationApiKey = secrets.translationApiKey === undefined
+        ? translationApiKey : await setTranslationApiKey(client, session.userId, secrets.translationApiKey ?? '');
 
       if (prev.rss.fetchIntervalMinutes !== next.rss.fetchIntervalMinutes) {
         // 订阅抓取间隔属于当前用户的订阅集合，必须按 userId 限定更新范围。
@@ -137,7 +150,6 @@ export async function PUT(request: Request) {
         source: 'app/api/settings',
       });
 
-      await client.query('commit');
       const cleanupScopes = resolveAiCleanupScopesForInputs({
         previous: {
           settings: prev,
@@ -146,18 +158,24 @@ export async function PUT(request: Request) {
         },
         next: {
           settings: validatedSaved,
-          aiApiKey,
-          translationApiKey,
+          aiApiKey: nextAiApiKey,
+          translationApiKey: nextTranslationApiKey,
         },
       });
       if (hasAiCleanupScopes(cleanupScopes)) {
         await cleanupAiRuntimeState({
-          pool,
+          pool: client,
           userId: session.userId,
           scopes: cleanupScopes,
         });
       }
-      return ok(validatedSaved);
+      await client.query('commit');
+      // 响应只返回密钥是否存在，不向客户端回传任何密钥明文。
+      return ok(draftInput ? {
+        settings: validatedSaved,
+        hasApiKey: Boolean(nextAiApiKey.trim()),
+        hasTranslationApiKey: Boolean(nextTranslationApiKey.trim()),
+      } : validatedSaved);
     } catch (err) {
       await client.query('rollback');
       throw err;

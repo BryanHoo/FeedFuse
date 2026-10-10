@@ -1,5 +1,6 @@
 import { Bot, Flame, KeyRound, Palette, Rss, ScrollText, type LucideIcon } from 'lucide-react';
-import { startTransition, useCallback, useEffect, useRef, useState } from 'react';
+import { startTransition, useEffect, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -69,10 +70,30 @@ const autosaveStatusMeta = {
     toneClass: 'text-success',
   },
   error: {
-    label: '修复错误以保存',
+    label: '保存失败',
+    toneClass: 'text-error',
+  },
+  invalid: {
+    label: '请修正字段错误',
     toneClass: 'text-error',
   },
 } as const;
+
+function describeErrorField(field: string): string {
+  const labels: Record<string, string> = {
+    'ai.model': 'AI 模型',
+    'ai.apiBaseUrl': 'API 地址',
+    'ai.apiKey': 'API 密钥',
+    'ai.translation.model': '翻译模型',
+    'ai.translation.apiBaseUrl': '翻译 API 地址',
+    'ai.translation.apiKey': '翻译 API 密钥',
+  };
+  if (labels[field]) return labels[field];
+  const rssField = field.match(/^rss\.sources\.(\d+)\.(name|url)$/);
+  if (rssField) return `第 ${Number(rssField[1]) + 1} 个订阅源${rssField[2] === 'name' ? '名称' : '地址'}`;
+  const section = sectionItems.find((item) => field.startsWith(`${item.key}.`));
+  return section ? `${section.label}设置（${field}）` : `设置字段（${field}）`;
+}
 
 const settingsSectionTabClassName =
   'group relative min-w-[152px] justify-start rounded-xl border border-transparent bg-transparent px-3 py-2.5 text-left text-muted-foreground transition-[background-color,border-color,color,box-shadow,transform] duration-200 hover:-translate-y-px hover:border-border/70 hover:bg-background/55 hover:text-foreground dark:hover:border-white/[0.05] dark:hover:bg-[color-mix(in_oklab,var(--color-primary)_8%,var(--color-card)_92%)] data-[state=active]:border-border data-[state=active]:bg-[color-mix(in_oklab,var(--color-background)_84%,white_16%)] data-[state=active]:text-foreground dark:data-[state=active]:border-[rgba(94,106,210,0.14)] dark:data-[state=active]:bg-[color-mix(in_oklab,var(--color-primary)_10%,var(--color-card)_90%)] md:min-w-0 md:w-full md:px-3 md:py-3 md:pl-7 md:before:absolute md:before:inset-y-3 md:before:left-2 md:before:w-[3px] md:before:rounded-full md:before:content-[\'\'] md:data-[state=active]:before:bg-[linear-gradient(180deg,var(--color-primary),color-mix(in_oklab,var(--color-primary)_74%,white_26%))]';
@@ -93,11 +114,6 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
     useState<OpmlTransferResultSummary | null>(null);
   const lastAutosaveStatusRef = useRef<keyof typeof autosaveStatusMeta>('idle');
   const lastSavedNotifyAtRef = useRef(0);
-  const lastAutosaveResultRef = useRef<{
-    ok: boolean;
-    err?: unknown;
-    shouldNotify?: boolean;
-  } | null>(null);
   const rssSnapshotReloadPendingRef = useRef(false);
   const draft = useSettingsStore((state) => state.draft);
   const hydratePersistedSettings = useSettingsStore((state) => state.hydratePersistedSettings);
@@ -108,15 +124,9 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
   const validationErrors = useSettingsStore((state) => state.validationErrors);
   const validationErrorKeys = Object.keys(validationErrors);
   const hasErrors = validationErrorKeys.length > 0;
-  // 稳定保存回调，避免草稿响应或状态渲染反复重置防抖计时器。
-  const saveDraftWithResult = useCallback(async () => {
-    const result = await saveDraft();
-    lastAutosaveResultRef.current = result;
-    return result;
-  }, [saveDraft]);
   const autosave = useSettingsAutosave({
     draftVersion,
-    saveDraft: saveDraftWithResult,
+    saveDraft,
     hasErrors,
   });
 
@@ -141,7 +151,7 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
     }
 
     if (current === 'error' && previous !== 'error') {
-      const result = lastAutosaveResultRef.current;
+      const result = autosave.saveResult;
       if (result?.shouldNotify) {
         runImmediateFailure({
           actionKey: 'settings.save',
@@ -151,7 +161,7 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
     }
 
     lastAutosaveStatusRef.current = current;
-  }, [autosave.status]);
+  }, [autosave.status, autosave.saveResult]);
 
   useEffect(() => {
     void (async () => {
@@ -176,7 +186,7 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
       updater(nextDraft);
     });
     if (section === 'rss') {
-      // RSS filters and feed-level retention affect what the current snapshot should show.
+      // RSS 过滤与文章留存影响当前列表，仅在确认保存成功后重新加载快照。
       rssSnapshotReloadPendingRef.current = true;
     }
     setDraftVersion((value) => value + 1);
@@ -287,6 +297,37 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
               <SheetDescription className="sr-only">FeedFuse 设置中心</SheetDescription>
             </div>
 
+            {/* 错误文本与恢复操作持续显示，网络故障不要求用户修改正确的字段。 */}
+            {autosave.status === 'error' || autosave.status === 'invalid' ? (
+              <div className="border-b border-border/70 px-4 py-3 md:px-6">
+                <div role="alert" className="space-y-1 text-sm text-error">
+                  <p>{hasErrors
+                    ? '请修正以下字段，修改后会自动保存。'
+                    : autosave.saveResult?.failure?.message ?? '保存失败，请稍后点击“重试保存”。'}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {autosave.saveResult?.failure?.outcome === 'unchanged' || hasErrors
+                      ? '本次修改尚未保存；此前成功保存的内容不受影响。'
+                      : '本次设置和密钥的保存结果尚未确认；重试会重新提交完整草稿。'}
+                    {' '}草稿已保留，请保持设置窗口打开。
+                  </p>
+                  {hasErrors ? (
+                    <ul className="list-inside list-disc">
+                      {Object.entries(validationErrors).map(([field, message]) => (
+                        <li key={field}>{describeErrorField(field)}：{message}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+                {!hasErrors ? (
+                  <Button type="button" size="sm" variant="outline" className="mt-2" onClick={autosave.retry}>
+                    重试保存
+                  </Button>
+                ) : null}
+              </div>
+            ) : autosave.status === 'saved' ? (
+              <p className="px-4 pt-3 text-xs text-muted-foreground md:px-6">本次设置和密钥修改均已保存。</p>
+            ) : null}
+
             {draft ? (
               <Tabs
                 value={activeSection}
@@ -387,7 +428,8 @@ export default function SettingsCenterDrawer({ onClose }: SettingsCenterDrawerPr
             <AlertDialogDescription>关闭后会丢失未成功保存的修改</AlertDialogDescription>
           </AlertDialogHeader>
           <p className="text-sm text-muted-foreground">
-            请先修复错误，或确认放弃这些修改。
+            {hasErrors ? '请继续编辑并修正字段错误，或确认放弃未保存的草稿。'
+              : '请继续编辑并重试保存，或确认放弃未确认保存的草稿。'}
           </p>
           <AlertDialogFooter>
             <AlertDialogCancel>继续编辑</AlertDialogCancel>

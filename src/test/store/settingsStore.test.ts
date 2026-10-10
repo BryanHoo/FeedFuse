@@ -29,9 +29,6 @@ async function getFetchCallBodyText(input: RequestInfo | URL, init?: RequestInit
 describe('settingsStore', () => {
   let remoteHasApiKey = false;
   let remoteHasTranslationApiKey = false;
-  let lastAiApiKeyPutBodyText: string | null = null;
-  let lastTranslationApiKeyPutBodyText: string | null = null;
-  let lastAiApiKeyDeleteCalled = false;
   let lastSettingsPutBodyText: string | null = null;
   let pendingSettingsPuts: Array<{
     body: PersistedSettings;
@@ -41,9 +38,6 @@ describe('settingsStore', () => {
   beforeEach(() => {
     remoteHasApiKey = false;
     remoteHasTranslationApiKey = false;
-    lastAiApiKeyPutBodyText = null;
-    lastTranslationApiKeyPutBodyText = null;
-    lastAiApiKeyDeleteCalled = false;
     lastSettingsPutBodyText = null;
     pendingSettingsPuts = null;
 
@@ -72,7 +66,6 @@ describe('settingsStore', () => {
           const bodyText = await getFetchCallBodyText(_input, init);
           const body = typeof bodyText === 'string' ? JSON.parse(bodyText) : {};
           if (url.includes('/api/settings/ai/api-key')) {
-            lastAiApiKeyPutBodyText = bodyText ?? null;
             remoteHasApiKey = Boolean(body.apiKey);
             return new Response(JSON.stringify({ ok: true, data: { hasApiKey: Boolean(body.apiKey) } }), {
               status: 200,
@@ -80,7 +73,6 @@ describe('settingsStore', () => {
             });
           }
           if (url.includes('/api/settings/translation/api-key')) {
-            lastTranslationApiKeyPutBodyText = bodyText ?? null;
             remoteHasTranslationApiKey = Boolean(body.apiKey);
             return new Response(JSON.stringify({ ok: true, data: { hasApiKey: Boolean(body.apiKey) } }), {
               status: 200,
@@ -89,13 +81,19 @@ describe('settingsStore', () => {
           }
           if (url.includes('/api/settings')) {
             lastSettingsPutBodyText = bodyText ?? null;
+            // 模拟事务：仅成功响应时同时确认普通设置与密钥，失败不消费密钥草稿。
+            const commit = () => {
+              if (body.secrets?.aiApiKey !== undefined) remoteHasApiKey = Boolean(body.secrets.aiApiKey);
+              if (body.secrets?.translationApiKey !== undefined) remoteHasTranslationApiKey = Boolean(body.secrets.translationApiKey);
+              return { settings: body.settings, hasApiKey: remoteHasApiKey, hasTranslationApiKey: remoteHasTranslationApiKey };
+            };
             // 手动释放响应，确定性地模拟请求期间继续编辑和多个保存排队。
             if (pendingSettingsPuts) {
               return new Promise<Response>((resolve) => {
                 pendingSettingsPuts!.push({
-                  body,
+                  body: body.settings,
                   respond: (ok = true) => resolve(new Response(JSON.stringify(
-                    ok ? { ok: true, data: body } : {
+                    ok ? { ok: true, data: commit() } : {
                       ok: false,
                       error: { code: 'save_failed', message: '保存失败' },
                     },
@@ -106,7 +104,7 @@ describe('settingsStore', () => {
                 });
               });
             }
-            return new Response(JSON.stringify({ ok: true, data: body }), {
+            return new Response(JSON.stringify({ ok: true, data: commit() }), {
               status: 200,
               headers: { 'content-type': 'application/json' },
             });
@@ -118,7 +116,6 @@ describe('settingsStore', () => {
         }
 
         if (method === 'DELETE' && url.includes('/api/settings/ai/api-key')) {
-          lastAiApiKeyDeleteCalled = true;
           remoteHasApiKey = false;
           return new Response(JSON.stringify({ ok: true, data: { hasApiKey: false } }), {
             status: 200,
@@ -297,6 +294,52 @@ describe('settingsStore', () => {
     expect(useSettingsStore.getState().persistedSettings.general.fontSize).toBe('small');
   });
 
+  it('事务失败时保留地址、模型和密钥草稿以及上次成功设置，可原样重试', async () => {
+    pendingSettingsPuts = [];
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    useSettingsStore.getState().loadDraft();
+    useSettingsStore.getState().updateDraft((draft) => {
+      draft.persisted.ai.model = 'new-model';
+      draft.persisted.ai.apiBaseUrl = 'https://new.example.com/v1';
+      draft.session.ai.apiKey = 'sk-retry';
+    });
+    const saving = useSettingsStore.getState().saveDraft();
+    await vi.waitFor(() => expect(pendingSettingsPuts).toHaveLength(1));
+    const originalRequest = lastSettingsPutBodyText;
+    pendingSettingsPuts[0].respond(false);
+    expect((await saving).failure?.outcome).toBe('unchanged');
+    expect(useSettingsStore.getState().persistedSettings).toEqual(defaultPersistedSettings);
+    expect(useSettingsStore.getState().draft?.session.ai.apiKey).toBe('sk-retry');
+    const retry = useSettingsStore.getState().saveDraft();
+    await vi.waitFor(() => expect(pendingSettingsPuts).toHaveLength(2));
+    expect(lastSettingsPutBodyText).toBe(originalRequest);
+    pendingSettingsPuts[1].respond();
+    expect((await retry).ok).toBe(true);
+    expect(useSettingsStore.getState().persistedSettings.ai.model).toBe('new-model');
+    expect(useSettingsStore.getState().draft?.session.ai.apiKey).toBe('');
+    expect(window.localStorage.getItem('feedfuse-settings:anonymous')).not.toContain('sk-retry');
+  });
+
+  it.each([false, true])('服务端字段错误只标记对应请求的草稿（请求期间修改：%s）', async (editDuringRequest) => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    let respond!: (value: Response) => void;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>((resolve) => { respond = resolve; })));
+    useSettingsStore.getState().loadDraft();
+    useSettingsStore.getState().updateDraft((draft) => { draft.session.ai.apiKey = 'sk-draft'; });
+    const saving = useSettingsStore.getState().saveDraft();
+    await vi.waitFor(() => expect(respond).toBeDefined());
+    if (editDuringRequest) {
+      useSettingsStore.getState().updateDraft((draft) => { draft.session.ai.apiKey = 'sk-new-draft'; });
+    }
+    respond(new Response(JSON.stringify({ ok: false, error: {
+      code: 'validation_error', message: '密钥无效', fields: { 'secrets.aiApiKey': 'Invalid key' },
+    } }), { status: 400, headers: { 'content-type': 'application/json' } }));
+    expect((await saving).failure).toMatchObject({ kind: 'validation', outcome: 'unchanged' });
+    if (editDuringRequest) expect(useSettingsStore.getState().validationErrors).toEqual({});
+    else expect(useSettingsStore.getState().validationErrors['ai.apiKey']).toContain('请检查');
+    expect(useSettingsStore.getState().draft?.session.ai.apiKey).toBe(editDuringRequest ? 'sk-new-draft' : 'sk-draft');
+  });
+
   it('saves apiKey to backend without persisting it to localStorage', async () => {
     useSettingsStore.getState().loadDraft();
     useSettingsStore.getState().updateDraft((draft) => {
@@ -307,7 +350,8 @@ describe('settingsStore', () => {
     const raw = window.localStorage.getItem('feedfuse-settings:anonymous');
     expect(raw).not.toContain('sk-test');
 
-    expect(lastAiApiKeyPutBodyText).toContain('sk-test');
+    expect(JSON.parse(lastSettingsPutBodyText!).secrets.aiApiKey).toBe('sk-test');
+    expect(vi.mocked(fetch).mock.calls.filter(([input, init]) => getFetchCallMethod(input, init) === 'PUT')).toHaveLength(1);
   });
 
   it('saves dedicated translation apiKey when translation uses dedicated config', async () => {
@@ -321,7 +365,7 @@ describe('settingsStore', () => {
 
     await useSettingsStore.getState().saveDraft();
 
-    expect(lastTranslationApiKeyPutBodyText).toContain('sk-translation-test');
+    expect(JSON.parse(lastSettingsPutBodyText!).secrets.translationApiKey).toBe('sk-translation-test');
   });
 
   it('saves draft with rss sources without requiring per-row verification state', async () => {
@@ -415,7 +459,7 @@ describe('settingsStore', () => {
 
     await useSettingsStore.getState().saveDraft();
 
-    expect(lastAiApiKeyDeleteCalled).toBe(true);
+    expect(JSON.parse(lastSettingsPutBodyText!).secrets.aiApiKey).toBeNull();
   });
 
   it('migrates legacy appearance settings to general', async () => {
