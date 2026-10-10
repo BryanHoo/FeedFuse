@@ -160,6 +160,8 @@ interface AppState {
   showUnreadOnly: boolean;
   unreadOnlyByView: Record<string, boolean>;
   snapshotLoading: boolean;
+  newArticlesAvailable: boolean;
+  newArticlesLoading: boolean;
   articleListNextCursor: string | null;
   articleListHasMore: boolean;
   articleListTotalCount: number;
@@ -185,7 +187,8 @@ interface AppState {
     hasAiSummary: boolean;
     hasAiTranslation: boolean;
   }>;
-  loadSnapshot: (input?: { view?: ViewType }) => Promise<void>;
+  checkForNewArticles: () => Promise<void>;
+  loadSnapshot: (input?: { view?: ViewType; preserveArticles?: boolean }) => Promise<void>;
   loadMoreSnapshot: () => Promise<void>;
   toggleSidebar: () => void;
   markAsRead: (articleId: string) => void;
@@ -557,12 +560,18 @@ function mergeArticleIntoCollections(
 }
 
 let snapshotRequestId = 0;
+// 视图或筛选变化会开启新的阅读会话，旧检查即使返回同名视图也不能写入提示。
+let readerSessionVersion = 0;
+let newArticlesCheckInFlight = false;
 const latestSnapshotRequestIdByView = new Map<string, number>();
+const snapshotHeadBoundaryByView = new Map<string, { id: string; publishedAt: string | null }>();
 const ADD_FEED_SNAPSHOT_POLL_MAX_ATTEMPTS = 20;
 const ADD_FEED_SNAPSHOT_POLL_INTERVAL_MS = 750;
 // Tracks how the next selected view/article URL sync should write browser history.
 let pendingReaderSelectionHistoryMode: ReaderSelectionHistoryMode = 'replace';
 const INITIAL_ARTICLE_LIST_SESSION = {
+  newArticlesAvailable: false,
+  newArticlesLoading: false,
   articleListNextCursor: null as string | null,
   articleListHasMore: false,
   articleListTotalCount: 0,
@@ -745,6 +754,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   ...INITIAL_ARTICLE_LIST_SESSION,
 
   setSelectedView: (view, options) => {
+    readerSessionVersion += 1;
     queueReaderSelectionHistoryMode(options?.history ?? 'replace');
     set(() => {
       const state = get();
@@ -807,6 +817,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     get().setSelectedArticle(articleId, { history: articleHistory });
   },
   toggleShowUnreadOnly: () => {
+    readerSessionVersion += 1;
     set((state) => {
       const nextShowUnreadOnly = !state.showUnreadOnly;
       const nextUnreadOnlyByView = shouldUseDefaultUnreadOnly(state.selectedView)
@@ -836,21 +847,29 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Reload the current snapshot so pagination and server-side unread filtering stay in sync.
     void get().loadSnapshot({ view });
   },
-  rehydrateUserScopedLocalState: () =>
+  rehydrateUserScopedLocalState: () => {
+    readerSessionVersion += 1;
+    snapshotHeadBoundaryByView.clear();
     set((state) => {
       const unreadOnlyByView = readUnreadOnlyByViewFromStorage();
       return {
         unreadOnlyByView,
         showUnreadOnly: resolveUnreadOnlyForView(state.selectedView, unreadOnlyByView),
+        newArticlesAvailable: false,
+        newArticlesLoading: false,
       };
-    }),
-  toggleShowFilteredForFeed: (feedId) =>
+    });
+  },
+  toggleShowFilteredForFeed: (feedId) => {
+    readerSessionVersion += 1;
     set((state) => ({
+      newArticlesAvailable: false,
       showFilteredByFeedId: {
         ...state.showFilteredByFeedId,
         [feedId]: !state.showFilteredByFeedId[feedId],
       },
-    })),
+    }));
+  },
   refreshArticle: async (articleId) => {
     const requestVersion = articleMutationVersion;
     try {
@@ -869,14 +888,60 @@ export const useAppStore = create<AppState>((set, get) => ({
       return { hasFulltext: false, hasFulltextError: false, hasAiSummary: false, hasAiTranslation: false };
     }
   },
+  checkForNewArticles: async () => {
+    const state = get();
+    if (newArticlesCheckInFlight || state.snapshotLoading || state.newArticlesLoading || state.articleListLoadingMore) return;
+    newArticlesCheckInFlight = true;
+    const sessionVersion = readerSessionVersion;
+    const userId = getCurrentStorageUserId();
+    const view = state.selectedView;
+    const requestId = snapshotRequestId;
+
+    try {
+      // 等待本地已读/收藏写入，避免将未读分页补位误判为后台新增。
+      await waitForArticleWrites();
+      if (sessionVersion !== readerSessionVersion || requestId !== snapshotRequestId) return;
+      const requestVersion = articleMutationVersion;
+      const snapshot = await getReaderSnapshot(buildSnapshotRequestInput(get(), view), { notifyOnError: false });
+      if (
+        sessionVersion !== readerSessionVersion || requestId !== snapshotRequestId ||
+        requestVersion !== articleMutationVersion || userId !== getCurrentStorageUserId()
+      ) return;
+
+      const current = get();
+      const knownIds = new Set(current.articles.map(article => article.id));
+      const boundary = snapshotHeadBoundaryByView.get(view);
+      const totalIncreased = getSnapshotTotalCount(snapshot, current.articleListTotalCount) > current.articleListTotalCount;
+      // 发布日期较早的新入库文章可能不在首页，总数增长仍应让用户知道列表有更新。
+      const newArticlesAvailable = totalIncreased || snapshot.articles.items.some(article => {
+        if (knownIds.has(article.id)) return false;
+        if (!boundary) return true;
+        // 首页末尾之后的旧文章可能只是已读操作后的补位；同一发布时间按服务端 ID 倒序判定。
+        const timeDifference = Date.parse(article.publishedAt ?? '1970-01-01') - Date.parse(boundary.publishedAt ?? '1970-01-01');
+        if (timeDifference !== 0) return timeDifference > 0;
+        return /^\d+$/.test(article.id) && /^\d+$/.test(boundary.id)
+          ? BigInt(article.id) > BigInt(boundary.id)
+          : article.id > boundary.id;
+      });
+      // 后台只更新提示，不覆盖列表、详情、分页或订阅统计，阅读位置因此保持稳定。
+      set({ newArticlesAvailable });
+    } catch {
+      // 自动检查失败保留已有提示，下一次前台检查重试，不打断正在阅读的用户。
+    } finally {
+      newArticlesCheckInFlight = false;
+    }
+  },
   loadSnapshot: async (input) => {
     const view = input?.view ?? get().selectedView;
+    const preserveArticles = input?.preserveArticles === true;
+    if (preserveArticles && (get().newArticlesLoading || get().snapshotLoading)) return;
     const requestId = snapshotRequestId + 1;
     snapshotRequestId = requestId;
     latestSnapshotRequestIdByView.set(view, requestId);
 
     if (get().selectedView === view) {
-      set({
+      set(preserveArticles ? { newArticlesLoading: true, articleListLoadingMore: false } : {
+        newArticlesLoading: false,
         snapshotLoading: true,
         articleListInitialLoading: true,
         articleListLoadingMore: false,
@@ -896,9 +961,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (latestSnapshotRequestIdByView.get(view) !== requestId) return;
       // 请求期间发生了新操作，整份快照（含未读数）已过期，等待写入后重新读取。
       if (requestVersion !== articleMutationVersion) {
-        await get().loadSnapshot({ view });
+        if (preserveArticles) set({ newArticlesLoading: false });
+        await get().loadSnapshot({ view, preserveArticles });
         return;
       }
+
+      const headBoundary = snapshot.articles.items.at(-1);
+      if (headBoundary) snapshotHeadBoundaryByView.set(view, headBoundary);
+      else snapshotHeadBoundaryByView.delete(view);
 
       set((state) => {
         const expandedById = new Map(
@@ -933,14 +1003,16 @@ export const useAppStore = create<AppState>((set, get) => ({
         const existingArticleById = new Map(
           existingArticles.map((article) => [article.id, article]),
         );
-        const articles = preserveSelectedArticleInVisibleSnapshot(
-          snapshot.articles.items.map((item) =>
-            mergeSnapshotArticleWithExistingDetails(
-              mapSnapshotArticleItem(item),
-              existingArticleById.get(item.id),
-              articleDetailCache[item.id],
-            ),
+        const incomingArticles = snapshot.articles.items.map((item) =>
+          mergeSnapshotArticleWithExistingDetails(
+            mapSnapshotArticleItem(item),
+            existingArticleById.get(item.id),
+            articleDetailCache[item.id],
           ),
+        );
+        // 手动接受新文章时保留已加载的旧分页，供虚拟列表继续以原来的文章作为滚动锚点。
+        const articles = preserveSelectedArticleInVisibleSnapshot(
+          preserveArticles ? mergeSnapshotPage(existingArticles, incomingArticles, articleDetailCache) : incomingArticles,
           isVisibleView ? preservedSelectedArticle : undefined,
         );
         const synchronized = synchronizeSnapshotFlags({ ...state, articleDetailCache }, articles);
@@ -958,6 +1030,8 @@ export const useAppStore = create<AppState>((set, get) => ({
           articleDetailCache: synchronized.articleDetailCache,
           articleSnapshotCache,
           snapshotLoading: isVisibleView ? false : state.snapshotLoading,
+          newArticlesAvailable: isVisibleView ? false : state.newArticlesAvailable,
+          newArticlesLoading: isVisibleView ? false : state.newArticlesLoading,
           articleListNextCursor: isVisibleView ? nextCursor : state.articleListNextCursor,
           articleListHasMore: isVisibleView ? nextCursor !== null : state.articleListHasMore,
           articleListTotalCount: isVisibleView ? totalCount : state.articleListTotalCount,
@@ -988,6 +1062,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       ) {
         set({
           snapshotLoading: false,
+          newArticlesLoading: false,
           articleListInitialLoading: false,
         });
       }
@@ -998,7 +1073,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const view = state.selectedView;
     const cursor = state.articleListNextCursor;
 
-    if (!cursor || !state.articleListHasMore || state.articleListLoadingMore) {
+    if (!cursor || !state.articleListHasMore || state.articleListLoadingMore || state.newArticlesLoading) {
       return;
     }
 

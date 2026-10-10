@@ -24,6 +24,7 @@ import { useRenderTimeSnapshot } from "../../../hooks";
 import { READER_PANE_HOVER_BACKGROUND_CLASS_NAME } from "@/lib/ui/designSystem";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   AI_DIGEST_VIEW_ID,
   isAggregateView as isAggregateReaderView,
@@ -176,6 +177,8 @@ export default function ArticleList({
   const showUnreadOnly = useAppStore((state) => state.showUnreadOnly);
   const toggleShowUnreadOnly = useAppStore((state) => state.toggleShowUnreadOnly);
   const loadSnapshot = useAppStore((state) => state.loadSnapshot);
+  const newArticlesAvailable = useAppStore((state) => state.newArticlesAvailable);
+  const newArticlesLoading = useAppStore((state) => state.newArticlesLoading);
   const loadMoreSnapshot = useAppStore((state) => state.loadMoreSnapshot);
   const articleListHasMore = useAppStore((state) => state.articleListHasMore);
   const articleListTotalCount = useAppStore((state) => state.articleListTotalCount);
@@ -404,7 +407,7 @@ export default function ArticleList({
       });
 
       if (nextScrollTop !== null && Math.abs(nextScrollTop - container.scrollTop) > 0.5) {
-        // Keep the same anchor row under the viewport when refreshed data prepends new items.
+        // 新文章插入到顶部时补偿行高变化，保持原来可见文章与视口之间的相对位置。
         container.scrollTop = nextScrollTop;
         setScrollTop(nextScrollTop);
       }
@@ -1214,23 +1217,41 @@ export default function ArticleList({
         </div>
       </div>
 
-      <div
-        ref={scrollContainerRef}
-        onScroll={handleScroll}
-        className="flex-1 overflow-y-auto pb-3 pt-1"
-      >
-        {articleSections.length === 0 ? (
-          <div className="flex min-h-full items-center justify-center px-6 py-10">
-            <p className="text-center text-muted-foreground">{emptyStateMessage}</p>
+      {/* 提示浮在列表上方，不占滚动布局空间，出现或消失都不会挤动当前阅读位置。 */}
+      <div className="relative min-h-0 flex-1">
+        {newArticlesAvailable && (
+          <div role="status" aria-live="polite" className="pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center px-4">
+            <Button
+              size="sm"
+              className="pointer-events-auto rounded-full shadow-sm"
+              aria-label={newArticlesLoading ? "正在加载新文章" : "有新文章，点击加载"}
+              disabled={newArticlesLoading}
+              onClick={() => { void loadSnapshot({ view: selectedView, preserveArticles: true }); }}
+            >
+              <RefreshCw className={cn("h-3.5 w-3.5", newArticlesLoading && "animate-spin")} />
+              {newArticlesLoading ? "正在加载…" : "有新文章"}
+            </Button>
           </div>
-        ) : (
-          <>
-            <div aria-hidden="true" style={{ height: virtualWindow.topSpacerHeight }} />
-            {visibleRows.map(renderVirtualRow)}
-            <div aria-hidden="true" style={{ height: virtualWindow.bottomSpacerHeight }} />
-            {renderLoadMoreFooter()}
-          </>
         )}
+        <div
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
+          // 虚拟列表已自行补偿滚动锚点；关闭浏览器原生锚定，避免新文章插入时重复补偿。
+          className="h-full overflow-y-auto pb-3 pt-1 [overflow-anchor:none]"
+        >
+          {articleSections.length === 0 ? (
+            <div className="flex min-h-full items-center justify-center px-6 py-10">
+              <p className="text-center text-muted-foreground">{emptyStateMessage}</p>
+            </div>
+          ) : (
+            <>
+              <div aria-hidden="true" style={{ height: virtualWindow.topSpacerHeight }} />
+              {visibleRows.map(renderVirtualRow)}
+              <div aria-hidden="true" style={{ height: virtualWindow.bottomSpacerHeight }} />
+              {renderLoadMoreFooter()}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

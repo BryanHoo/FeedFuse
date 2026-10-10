@@ -12,7 +12,7 @@ import type { CurrentUser } from '../../lib/api/apiClient';
 import { useAuthStore } from '../../store/authStore';
 import type { ViewType } from '../../types';
 
-const AUTO_SNAPSHOT_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+const NEW_ARTICLES_CHECK_INTERVAL_MS = 60 * 1000;
 
 interface ReaderAppProps {
   renderedAt?: string;
@@ -32,7 +32,7 @@ export default function ReaderApp({
   const hydratePersistedSettings = useSettingsStore((state) => state.hydratePersistedSettings);
   const currentUserId = useAuthStore((state) => state.currentUser?.id);
   const setCurrentUser = useAuthStore((state) => state.setCurrentUser);
-  const lastAutoSnapshotAtRef = useRef<number | null>(null);
+  const lastNewArticlesCheckAtRef = useRef<number | null>(null);
   const userScopedStateReadyRef = useRef(false);
   const [userScopedStateReady, setUserScopedStateReady] = useState(false);
 
@@ -81,7 +81,7 @@ export default function ReaderApp({
   }, [loadSnapshot, selectedView, userScopedStateReady]);
 
   useEffect(() => {
-    const handleVisibilityChange = () => {
+    const checkForUpdates = () => {
       if (!userScopedStateReadyRef.current) {
         return;
       }
@@ -92,20 +92,23 @@ export default function ReaderApp({
 
       const now = Date.now();
       if (
-        lastAutoSnapshotAtRef.current !== null &&
-        now - lastAutoSnapshotAtRef.current < AUTO_SNAPSHOT_REFRESH_INTERVAL_MS
+        lastNewArticlesCheckAtRef.current !== null &&
+        now - lastNewArticlesCheckAtRef.current < NEW_ARTICLES_CHECK_INTERVAL_MS
       ) {
         return;
       }
 
-      lastAutoSnapshotAtRef.current = now;
-      const { selectedView: currentView, loadSnapshot: reloadSnapshot } = useAppStore.getState();
-      void reloadSnapshot({ view: currentView });
+      lastNewArticlesCheckAtRef.current = now;
+      // 自动检查只产生新文章提示；用户点击后才合并快照，避免打断当前阅读。
+      void useAppStore.getState().checkForNewArticles();
     };
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    // 前台持续停留也会检查；后台标签页暂停请求，返回时按相同间隔节流。
+    const interval = window.setInterval(checkForUpdates, NEW_ARTICLES_CHECK_INTERVAL_MS);
+    document.addEventListener('visibilitychange', checkForUpdates);
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', checkForUpdates);
     };
   }, []);
 

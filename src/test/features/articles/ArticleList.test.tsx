@@ -608,6 +608,39 @@ describe('ArticleList', () => {
     expectLoadMoreFooterCentered(hint.parentElement as HTMLElement);
   });
 
+  it('shows new articles without moving the list and loads them only on click', async () => {
+    useAppStore.setState({
+      selectedView: 'feed-1',
+      showUnreadOnly: false,
+      selectedArticleId: 'article-30',
+      articles: createSeedArticles(80),
+      newArticlesAvailable: false,
+    });
+    const { container } = renderWithNotifications();
+    const scrollContainer = getScrollContainer(container);
+    Object.defineProperty(scrollContainer, 'clientHeight', { configurable: true, value: 520 });
+    Object.defineProperty(scrollContainer, 'scrollHeight', { configurable: true, value: 12000 });
+    scrollContainer.scrollTop = 1600;
+    fireEvent.scroll(scrollContainer);
+    const loadSnapshot = vi.spyOn(useAppStore.getState(), 'loadSnapshot').mockImplementation(async () => {
+      useAppStore.setState(state => ({
+        articles: [{ ...state.articles[0], id: 'new-article', title: '新文章', publishedAt: '2026-03-01T00:00:00.000Z' }, ...state.articles],
+        newArticlesAvailable: false,
+      }));
+    });
+
+    act(() => { useAppStore.setState({ newArticlesAvailable: true }); });
+    const button = screen.getByRole('button', { name: '有新文章，点击加载' });
+    expect(scrollContainer.scrollTop).toBe(1600);
+    expect(loadSnapshot).not.toHaveBeenCalled();
+    fireEvent.click(button);
+
+    await waitFor(() => { expect(scrollContainer.scrollTop).toBeGreaterThan(1600); });
+    expect(loadSnapshot).toHaveBeenCalledWith({ view: 'feed-1', preserveArticles: true });
+    expect(useAppStore.getState().selectedArticleId).toBe('article-30');
+    expect(screen.queryByRole('button', { name: '有新文章，点击加载' })).not.toBeInTheDocument();
+  });
+
   it('keeps viewport stable when refreshed data prepends newer articles', async () => {
     useAppStore.setState({
       selectedView: 'feed-1',

@@ -152,6 +152,112 @@ beforeEach(async () => {
 });
 
 describe('appStore api integration', () => {
+  it('detects new articles without replacing the reading session', async () => {
+    const oldArticle = createSnapshotArticle('100', 'feed-1', '旧文章');
+    const newArticle = { ...createSnapshotArticle('101', 'feed-1', '新文章'), publishedAt: '2026-03-10T10:00:00.000Z' };
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, data: createSnapshotPage({ items: [oldArticle] }) }));
+    await useAppStore.getState().loadSnapshot();
+    useAppStore.setState({ selectedArticleId: '100' });
+    const previous = useAppStore.getState();
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, data: createSnapshotPage({ items: [newArticle, oldArticle] }) }));
+
+    await useAppStore.getState().checkForNewArticles();
+
+    const state = useAppStore.getState();
+    expect(state.newArticlesAvailable).toBe(true);
+    expect(state.articles).toBe(previous.articles);
+    expect(state.feeds).toBe(previous.feeds);
+    expect(state.articleDetailCache).toBe(previous.articleDetailCache);
+    expect(state.selectedArticleId).toBe('100');
+    expect(state.articleListNextCursor).toBe(previous.articleListNextCursor);
+    expect(state.snapshotLoading).toBe(false);
+  });
+
+  it('does not mistake older unread pagination rows for new articles', async () => {
+    const oldArticle = createSnapshotArticle('100', 'feed-1', '旧文章');
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, data: createSnapshotPage({ items: [oldArticle], totalCount: 10, nextCursor: 'page-2' }) }));
+    await useAppStore.getState().loadSnapshot();
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, data: createSnapshotPage({
+      items: [{ ...createSnapshotArticle('99', 'feed-1', '更早的文章'), publishedAt: '2026-03-08T10:00:00.000Z' }],
+      totalCount: 9,
+    }) }));
+
+    await useAppStore.getState().checkForNewArticles();
+
+    expect(useAppStore.getState().newArticlesAvailable).toBe(false);
+  });
+
+  it('detects backdated arrivals outside the first page from the matching total', async () => {
+    const article = createSnapshotArticle('100', 'feed-1', '首页文章');
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, data: createSnapshotPage({ items: [article], totalCount: 100, nextCursor: 'page-2' }) }));
+    await useAppStore.getState().loadSnapshot();
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, data: createSnapshotPage({ items: [article], totalCount: 101, nextCursor: 'page-2' }) }));
+    await useAppStore.getState().checkForNewArticles();
+    expect(useAppStore.getState().newArticlesAvailable).toBe(true);
+  });
+
+  it('does not overlap background checks and retains the prompt after a failed check', async () => {
+    useAppStore.setState({ newArticlesAvailable: true });
+    const deferred = createDeferred<Response>();
+    fetchMock.mockReturnValueOnce(deferred.promise);
+    const checking = useAppStore.getState().checkForNewArticles();
+    await flushPromises();
+    await useAppStore.getState().checkForNewArticles();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    deferred.reject(new Error('offline'));
+    await checking;
+    expect(useAppStore.getState().newArticlesAvailable).toBe(true);
+  });
+
+  it('ignores a background check after leaving and returning to the same view', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, data: createSnapshotPage({ items: [] }) }));
+    await useAppStore.getState().loadSnapshot();
+    const deferred = createDeferred<Response>();
+    fetchMock.mockReturnValueOnce(deferred.promise);
+    const checking = useAppStore.getState().checkForNewArticles();
+    await flushPromises();
+    useAppStore.getState().setSelectedView('feed-1');
+    useAppStore.getState().setSelectedView('all');
+    deferred.resolve(jsonResponse({ ok: true, data: createSnapshotPage({ items: [createSnapshotArticle('101', 'feed-1', '新文章')] }) }));
+    await checking;
+
+    expect(useAppStore.getState().newArticlesAvailable).toBe(false);
+  });
+
+  it('merges new articles while keeping loaded pages, current details and unread retention', async () => {
+    const first = createSnapshotArticle('100', 'feed-1', '第一页');
+    const second = { ...createSnapshotArticle('99', 'feed-1', '第二页'), publishedAt: '2026-03-08T10:00:00.000Z' };
+    const incoming = { ...createSnapshotArticle('101', 'feed-1', '新文章'), publishedAt: '2026-03-10T10:00:00.000Z' };
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, data: createSnapshotPage({ items: [first], nextCursor: 'page-2', totalCount: 2 }) }));
+    await useAppStore.getState().loadSnapshot();
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, data: createSnapshotPage({ items: [second], totalCount: 2 }) }));
+    await useAppStore.getState().loadMoreSnapshot();
+    const detail = { ...useAppStore.getState().articles[0], content: '<p>正在阅读的正文</p>', isRead: true };
+    useAppStore.setState({ selectedArticleId: '100', articleDetailCache: { '100': detail }, newArticlesAvailable: true });
+    const loadingStates: boolean[] = [];
+    const unsubscribe = useAppStore.subscribe(state => loadingStates.push(state.snapshotLoading));
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, data: createSnapshotPage({ items: [incoming, first], totalCount: 3 }) }));
+
+    await useAppStore.getState().loadSnapshot({ preserveArticles: true });
+    unsubscribe();
+
+    const state = useAppStore.getState();
+    expect(state.articles.map(article => article.id)).toEqual(['101', '100', '99']);
+    expect(state.selectedArticleId).toBe('100');
+    expect(state.articleDetailCache['100'].content).toBe(detail.content);
+    expect(state.newArticlesAvailable).toBe(false);
+    expect(state.newArticlesLoading).toBe(false);
+    expect(loadingStates.every(value => !value)).toBe(true);
+  });
+
+  it('keeps the new articles prompt available when loading fails', async () => {
+    useAppStore.setState({ newArticlesAvailable: true });
+    fetchMock.mockRejectedValueOnce(new Error('offline'));
+    await useAppStore.getState().loadSnapshot({ preserveArticles: true });
+    expect(useAppStore.getState().newArticlesAvailable).toBe(true);
+    expect(useAppStore.getState().newArticlesLoading).toBe(false);
+  });
+
   // 使用可控制完成顺序的请求，验证失败恢复和连续操作，而非依赖真实网络时序。
   async function seedArticleMutationState() {
     const { mapFeedDto, mapSnapshotArticleItem } = await import('@/lib/api/apiClient');

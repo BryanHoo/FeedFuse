@@ -19,6 +19,8 @@
 - AI 设置中的 `summaryPrompt`、`translationPrompt`、`deepThinkingEnabled` 由设置中心维护；前端只负责编辑与保存，不在组件层拼接任务级 system prompt
 - `deepThinkingEnabled` 开启后，摘要卡片、智能解读等 AI 内容区域只展示最终回复；前端不应把中间思考文案、`<think>` 标签或推理过程暴露给用户
 - 中栏文章列表的已读/未读按钮按当前选中 `view` 记忆用户选择；该选择优先于全局 `defaultUnreadOnlyInAll`，刷新页面和切换订阅源后仍应保留。
+- 阅读器在前台持续停留和切回页面时都检查后台更新；自动检查只显示“有新文章”提示，不替换当前列表、详情或分页。隐藏页面暂停检查，同一时间只能进行一次检查，切换视图、筛选或用户后的旧响应必须丢弃。
+- 用户点击新文章提示后合并更新，保留当前文章、已加载分页、未读列表中暂时保留的已读文章和列表滚动锚点。提示浮层不占列表布局空间；虚拟列表手动补偿锚点时关闭浏览器原生滚动锚定，避免重复补偿。检查失败保持静默，加载失败保留提示供重试。`ReaderApp`、`ArticleList` 和 `appStore` 的测试共同覆盖这些行为，真实 Chrome 检查新文章插入前后同一锚点的屏幕坐标及正文滚动位置。
 - 多用户登录后，前端本地状态必须按 `userId` 命名空间隔离；设置缓存使用 `feedfuse-settings:${userId}`，阅读器未读筛选使用 `feedfuse.reader.unreadOnlyByView.v1:${userId}`。
 - ReaderApp 获取当前用户后必须重新读取该用户命名空间的本地设置和阅读器本地状态，避免从 anonymous 或上一个账号继承状态。
 - 旧单用户 localStorage key 只允许作为默认管理员或 anonymous 的迁移兼容来源，不能让普通成员读取旧全局缓存。

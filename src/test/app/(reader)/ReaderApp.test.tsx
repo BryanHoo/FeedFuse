@@ -67,6 +67,8 @@ describe('ReaderApp', () => {
       articleListNextCursor: null,
       articleListHasMore: false,
       articleListTotalCount: 0,
+      newArticlesAvailable: false,
+      newArticlesLoading: false,
     });
     installVisibilityStateGetter();
     vi.stubGlobal(
@@ -321,7 +323,7 @@ describe('ReaderApp', () => {
     expect(useAppStore.getState().unreadOnlyByView).toEqual({ all: false });
   });
 
-  it('limits automatic visible refreshes to once every five minutes', async () => {
+  it('throttles repeated visibility checks to once per minute', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-03-09T10:00:00.000Z'));
 
@@ -354,7 +356,7 @@ describe('ReaderApp', () => {
     expect(snapshotRequests).toBe(2);
 
     await act(async () => {
-      vi.advanceTimersByTime(5 * 60 * 1000);
+      await vi.advanceTimersByTimeAsync(60 * 1000);
     });
 
     documentVisibilityState = 'hidden';
@@ -366,6 +368,25 @@ describe('ReaderApp', () => {
       await Promise.resolve();
     });
 
+    expect(snapshotRequests).toBe(3);
+  });
+
+  it('checks for new articles while staying visible and pauses checks when hidden', async () => {
+    vi.useFakeTimers();
+    await act(async () => { render(<ReaderApp />); });
+    expect(snapshotRequests).toBe(1);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(60 * 1000); });
+    expect(snapshotRequests).toBe(2);
+    expect(refreshRequests).toBe(0);
+
+    documentVisibilityState = 'hidden';
+    fireEvent(document, new Event('visibilitychange'));
+    await act(async () => { await vi.advanceTimersByTimeAsync(60 * 1000); });
+    expect(snapshotRequests).toBe(2);
+
+    documentVisibilityState = 'visible';
+    await act(async () => { fireEvent(document, new Event('visibilitychange')); });
     expect(snapshotRequests).toBe(3);
   });
 
