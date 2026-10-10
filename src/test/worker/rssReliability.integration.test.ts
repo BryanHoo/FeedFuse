@@ -2,11 +2,13 @@ import { randomBytes } from 'node:crypto';
 import { Pool } from 'pg';
 import { PgBoss } from 'pg-boss';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchAndIngestFeed } from '@/worker/index';
+import { createFeedFetchHandler, fetchAndIngestFeed } from '@/worker/index';
+import { registerWorkers } from '@/worker/workerRegistry';
 import { runArticleFilterRecovery } from '@/worker/articleFilterRecovery';
 import { insertArticleIgnoreDuplicate, insertArticleMediaAttachments } from '@/server/domains/articles/repositories/articlesRepo';
 import { listPendingArticleFilterIds } from '@/server/domains/articles/repositories/articleFilterRecoveryRepo';
-import { JOB_ARTICLE_FILTER } from '@/server/infra/queue/jobs';
+import { JOB_ARTICLE_FILTER, JOB_FEED_FETCH } from '@/server/infra/queue/jobs';
+import { getQueueCreateOptions } from '@/server/infra/queue/contracts';
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -26,11 +28,15 @@ describe.skipIf(!databaseUrl)('RSS reliability (isolated PostgreSQL and pg-boss)
     }
     await boss.start();
     await boss.createQueue(JOB_ARTICLE_FILTER);
+    await boss.createQueue('dlq.feed.fetch');
+    await boss.createQueue(JOB_FEED_FETCH, getQueueCreateOptions(JOB_FEED_FETCH));
   }, 20000);
 
   beforeEach(async () => {
     await pool.query('truncate articles, article_media_attachments, feeds restart identity');
     await boss.deleteAllJobs(JOB_ARTICLE_FILTER);
+    await boss.deleteAllJobs(JOB_FEED_FETCH);
+    await boss.deleteAllJobs('dlq.feed.fetch');
     const { rows } = await pool.query(`
       insert into feeds(user_id, title, url, etag, last_modified)
       values (1, 'Test', 'https://example.com/rss', 'old-etag', 'old-modified') returning id::text
@@ -67,13 +73,57 @@ describe.skipIf(!databaseUrl)('RSS reliability (isolated PostgreSQL and pg-boss)
     return (await pool.query('select etag, last_modified from feeds where id = $1', [feedId])).rows[0];
   }
 
+  it.each(['recover', 'exhaust'])('retries actual Worker callbacks and settles only the final %s outcome', async (outcome) => {
+    const deps = ingestionDeps();
+    const failure = new Error('timeout');
+    if (outcome === 'recover') deps.fetchFeedXml.mockRejectedValueOnce(failure);
+    else deps.fetchFeedXml.mockRejectedValue(failure);
+    const complete = vi.fn();
+    const handler = createFeedFetchHandler(boss, { deps: {
+      getPool: () => pool,
+      fetchAndIngestFeed: (queue, id, input) => fetchAndIngestFeed(queue, id, { ...input, deps }),
+      markFeedRefreshRunItemRunning: vi.fn(),
+      completeFeedRefreshRunItem: complete,
+    } });
+    await registerWorkers(boss, { [JOB_FEED_FETCH]: handler });
+    try {
+      // 队列契约允许四次重试，当前任务覆盖为一次；终态必须服从真实任务元数据。
+      const id = await boss.send(JOB_FEED_FETCH, { feedId, userId: '1', runId: 'test-run' }, {
+        retryLimit: 1, retryDelay: 1, retryBackoff: true,
+      });
+      await vi.waitFor(async () => {
+        expect((await boss.getJobById(JOB_FEED_FETCH, id!))?.state).toBe('retry');
+      }, { timeout: 10000, interval: 20 });
+      expect(complete).not.toHaveBeenCalled();
+      const pendingFeed = (await pool.query('select last_fetched_at, last_fetch_error from feeds where id = $1', [feedId])).rows[0];
+      expect(pendingFeed).toEqual({ last_fetched_at: null, last_fetch_error: null });
+
+      const state = outcome === 'recover' ? 'completed' : 'failed';
+      await vi.waitFor(async () => {
+        const job = await boss.getJobById(JOB_FEED_FETCH, id!);
+        expect(job).toMatchObject({ state, retryCount: 1, retryLimit: 1 });
+      }, { timeout: 10000, interval: 20 });
+      expect(deps.fetchFeedXml).toHaveBeenCalledTimes(2);
+      expect(complete).toHaveBeenCalledOnce();
+      expect(complete).toHaveBeenCalledWith(pool, expect.objectContaining({
+        status: outcome === 'recover' ? 'succeeded' : 'failed',
+      }));
+      expect(await boss.findJobs('dlq.feed.fetch')).toHaveLength(outcome === 'recover' ? 0 : 1);
+      const feed = (await pool.query('select last_fetched_at, last_fetch_error from feeds where id = $1', [feedId])).rows[0];
+      expect(feed.last_fetched_at).toBeInstanceOf(Date);
+      expect(feed.last_fetch_error).toBe(outcome === 'recover' ? null : '更新失败：请求超时，请稍后重试');
+    } finally {
+      await boss.offWork(JOB_FEED_FETCH);
+    }
+  }, 25000);
+
   it('rolls back both article and actual pg-boss job after enqueue SQL, then successfully retries', async () => {
     const deps = ingestionDeps();
     const failingBoss = { send: async (...args: Parameters<PgBoss['send']>) => {
       await boss.send(...args);
       throw new Error('Injected failure after queue insert');
     } };
-    expect((await fetchAndIngestFeed(failingBoss as PgBoss, feedId, { deps })).errorMessage).toBeTruthy();
+    await expect(fetchAndIngestFeed(failingBoss as PgBoss, feedId, { deps })).rejects.toThrow('Injected failure after queue insert');
     expect((await pool.query('select count(*)::int as count from articles')).rows[0].count).toBe(0);
     expect(await boss.findJobs(JOB_ARTICLE_FILTER)).toHaveLength(0);
     expect(await validators()).toEqual({ etag: 'old-etag', last_modified: 'old-modified' });

@@ -44,3 +44,32 @@ export function mapFeedFetchError(
 
   return result('unknown_error', '更新失败：暂时无法获取订阅内容');
 }
+
+export function shouldRetryFeedFetchError(err: unknown): boolean {
+  const message = getErrorText(err);
+  if (isFeedAccessBlockedError(err)) return false;
+  // 地址安全、响应大小和重定向限制不会因短暂等待恢复；超时/网络异常默认重试。
+  if (['Unsafe URL', 'Response too large', 'Too many redirects'].includes(message)) return false;
+  const httpStatus = /^HTTP\s+(\d+)$/.exec(message);
+  if (httpStatus) {
+    const status = Number(httpStatus[1]);
+    return [408, 425, 429].includes(status) || status >= 500;
+  }
+  // 数据库、队列及未分类基础设施错误保留有限重试机会，避免被误报为完成。
+  return true;
+}
+
+export class RetryableFeedFetchError extends Error {
+  readonly mapped: ReturnType<typeof mapFeedFetchError>;
+
+  constructor(
+    cause: unknown,
+    readonly userId: string,
+    readonly status: number | null,
+    mapped = mapFeedFetchError(cause),
+  ) {
+    super(getErrorText(cause) || 'RSS fetch failed', { cause });
+    this.name = 'RetryableFeedFetchError';
+    this.mapped = mapped;
+  }
+}

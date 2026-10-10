@@ -57,7 +57,11 @@ import {
   JOB_SYSTEM_LOG_CLEANUP,
 } from '@/server/infra/queue/jobs';
 import { sampleQueueStats } from '@/server/infra/queue/observability';
-import { mapFeedFetchError } from '@/server/domains/feeds/tasks/feedFetchErrorMapping';
+import {
+  mapFeedFetchError,
+  RetryableFeedFetchError,
+  shouldRetryFeedFetchError,
+} from '@/server/domains/feeds/tasks/feedFetchErrorMapping';
 import { normalizePersistedSettings } from '@/features/settings/settingsSchema';
 import { registerWorkers } from '@/worker/workerRegistry';
 import { createWorkerLifecycle } from '@/worker/lifecycle';
@@ -267,9 +271,16 @@ export async function fetchAndIngestFeed(
   const urlSafety = await deps.getExternalUrlSafety(feed.url);
   if (!urlSafety.safe) {
     const mapped = {
+      errorCode: 'ssrf_blocked',
       errorMessage: `更新失败：${formatExternalUrlSafetyMessage(urlSafety, 'source')}`,
       rawErrorMessage: 'Unsafe URL',
     };
+    // DNS 暂时不可用属于网络故障；其他地址校验失败保持永久阻断。
+    if (urlSafety.reason === 'unresolved_hostname') {
+      throw new RetryableFeedFetchError(new Error('Hostname did not resolve'), feed.userId, null, {
+        ...mapped, errorCode: 'fetch_dns_error', rawErrorMessage: 'Hostname did not resolve',
+      });
+    }
     await deps.recordFeedFetchResult(pool, feedId, {
       userId: feed.userId,
       status: null,
@@ -290,6 +301,8 @@ export async function fetchAndIngestFeed(
   let error: string | null = null;
   let rawError: string | null = null;
   let inserted = 0;
+  let parsing = false;
+  let deferFailure = false;
 
   try {
     const res = await deps.fetchFeedXml(feed.url, {
@@ -309,16 +322,16 @@ export async function fetchAndIngestFeed(
     }
 
     if (status < 200 || status >= 300) {
-      const mapped = mapFeedFetchError(`HTTP ${status}`);
-      error = mapped.errorMessage;
-      rawError = mapped.rawErrorMessage;
-      return { inserted: 0, errorMessage: mapped.errorMessage };
+      throw new Error(`HTTP ${status}`);
     }
 
     // 只有 304 可以不含正文；空响应不能作为已成功处理的 RSS 推进缓存标记。
     if (!res.xml) throw new Error('Empty RSS response');
 
+    // 解析阶段的格式错误属于永久业务失败，不能靠关键词误判后续入库错误。
+    parsing = true;
     const parsed = await deps.parseFeed(res.xml, fetchedAt);
+    parsing = false;
     const isPodcastSource = parsed.items.some((item) => item.mediaAttachments.length > 0);
     for (const item of parsed.items) {
       const baseUrl = item.link ?? parsed.link ?? feed.url;
@@ -406,20 +419,83 @@ export async function fetchAndIngestFeed(
     processedSuccessfully = true;
     return { inserted, errorMessage: null };
   } catch (err) {
+    if (!parsing && shouldRetryFeedFetchError(err)) {
+      // 重试期间不推进 last_fetched_at、不发布用户可见失败，由 Worker 在耗尽预算后结算。
+      deferFailure = true;
+      throw new RetryableFeedFetchError(err, feed.userId, status);
+    }
     const mapped = mapFeedFetchError(err);
     error = mapped.errorMessage;
     rawError = mapped.rawErrorMessage;
     return { inserted: 0, errorMessage: mapped.errorMessage };
   } finally {
-    await deps.recordFeedFetchResult(pool, feedId, {
-      userId: feed?.userId ?? input?.userId,
-      status,
-      // 失败仍记录状态和错误，但保留上次成功处理的缓存标记供下次重试。
-      ...(processedSuccessfully ? { etag, lastModified } : {}),
-      error,
-      rawError,
-    });
+    if (!deferFailure) {
+      await deps.recordFeedFetchResult(pool, feedId, {
+        userId: feed.userId,
+        status,
+        // 成功或永久失败才能结算；失败保留上次成功处理的缓存标记。
+        ...(processedSuccessfully ? { etag, lastModified } : {}),
+        error,
+        rawError,
+      });
+    }
   }
+}
+
+type FeedFetchWorkerDeps = {
+  getPool: typeof getPool;
+  fetchAndIngestFeed: typeof fetchAndIngestFeed;
+  recordFeedFetchResult: typeof recordFeedFetchResult;
+  markFeedRefreshRunItemRunning: typeof markFeedRefreshRunItemRunning;
+  completeFeedRefreshRunItem: typeof completeFeedRefreshRunItem;
+};
+
+export function createFeedFetchHandler(boss: PgBoss, input?: { deps?: Partial<FeedFetchWorkerDeps> }) {
+  const deps = {
+    getPool, fetchAndIngestFeed, recordFeedFetchResult,
+    markFeedRefreshRunItemRunning, completeFeedRefreshRunItem,
+    ...input?.deps,
+  };
+  return async (jobs: unknown[]) => {
+    for (const job of jobs) {
+      const data = getJobData(job);
+      const feedId = readStringField(data, 'feedId');
+      if (!feedId) throw new Error('Missing feedId');
+      const runId = readStringField(data, 'runId');
+      const userId = readStringField(data, 'userId') ?? undefined;
+      // includeMetadata 提供 pg-boss 12.13.0 的实际预算，首次 retryCount 为 0。
+      const { retryCount, retryLimit } = job as { retryCount: number; retryLimit: number };
+      const pool = deps.getPool();
+      try {
+        if (runId) await deps.markFeedRefreshRunItemRunning(pool, { runId, userId, feedId });
+        const result = await deps.fetchAndIngestFeed(boss, feedId, {
+          userId,
+          // 当前任务的后续尝试必须执行抓取，不能被刷新间隔或其他任务推进的时间跳过。
+          force: (readBooleanField(data, 'force') ?? false) || retryCount > 0,
+        });
+        if (runId) await deps.completeFeedRefreshRunItem(pool, {
+          runId, userId, feedId,
+          status: result.errorMessage ? 'failed' : 'succeeded',
+          errorMessage: result.errorMessage,
+        });
+      } catch (err) {
+        if (retryCount >= retryLimit) {
+          const mapped = err instanceof RetryableFeedFetchError ? err.mapped : mapFeedFetchError(err);
+          await deps.recordFeedFetchResult(pool, feedId, {
+            userId: err instanceof RetryableFeedFetchError ? err.userId : userId,
+            status: err instanceof RetryableFeedFetchError ? err.status : null,
+            error: mapped.errorMessage,
+            rawError: mapped.rawErrorMessage,
+          });
+          if (runId) await deps.completeFeedRefreshRunItem(pool, {
+            runId, userId, feedId, status: 'failed', errorMessage: mapped.errorMessage,
+          });
+        }
+        // 最后一次失败也必须拒绝回调，让 pg-boss 标记 failed 并转入死信队列。
+        throw err;
+      }
+    }
+  };
 }
 
 async function main() {
@@ -447,50 +523,7 @@ async function main() {
     }
   };
 
-  const feedFetchHandler = async (jobs: unknown[]) => {
-    for (const job of jobs) {
-      const data =
-        typeof job === 'object' && job !== null && 'data' in job
-          ? (job as { data?: unknown }).data
-          : null;
-
-      const feedId =
-        readStringField(data, 'feedId');
-
-      if (!feedId) throw new Error('Missing feedId');
-
-      const force =
-        typeof data === 'object' &&
-        data !== null &&
-        'force' in data &&
-        typeof (data as { force?: unknown }).force === 'boolean'
-          ? (data as { force: boolean }).force
-          : false;
-      const runId =
-        readStringField(data, 'runId');
-      const userId = readStringField(data, 'userId');
-
-      if (runId) {
-        await markFeedRefreshRunItemRunning(getPool(), {
-          runId,
-          userId: userId ?? undefined,
-          feedId,
-        });
-      }
-
-      const result = await fetchAndIngestFeed(boss, feedId, { userId: userId ?? undefined, force });
-
-      if (runId) {
-        await completeFeedRefreshRunItem(getPool(), {
-          runId,
-          userId: userId ?? undefined,
-          feedId,
-          status: result.errorMessage ? 'failed' : 'succeeded',
-          errorMessage: result.errorMessage,
-        });
-      }
-    }
-  };
+  const feedFetchHandler = createFeedFetchHandler(boss);
 
   const fulltextHandler = async (jobs: unknown[]) => {
     const pool = getPool();

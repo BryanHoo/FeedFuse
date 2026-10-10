@@ -39,11 +39,14 @@
 
 ## RSS 入库与过滤补偿契约
 
-- RSS 新响应的 `ETag` / `Last-Modified` 只能在解析、文章入库、过滤任务创建及本轮裁剪成功后保存；任何处理失败都只记录抓取状态与错误，保留上次成功处理的缓存标记。304 可作为成功响应，但其他无正文响应必须报错。
+- RSS 新响应的 `ETag` / `Last-Modified` 只能在解析、文章入库、过滤任务创建及本轮裁剪成功后保存；失败始终保留上次成功处理的缓存标记。304 可作为成功响应，但其他无正文响应必须报错。
+- `feed.fetch` 的超时、临时网络/DNS 故障、HTTP 408/425/429/5xx、空响应和入库/入队等基础设施异常必须拒绝 Worker 回调，由 pg-boss 退避重试；地址安全阻断、源站安全验证页面、响应限制、其他 HTTP 错误及 RSS 格式错误直接结算为永久失败。
+- RSS Worker 必须启用 `includeMetadata`，根据任务实际 `retryCount` / `retryLimit`（包含发送时覆盖值）判断重试是否耗尽。重试期间不写订阅抓取终态或推进 `last_fetched_at`，刷新 run item 保持未完成；重试尝试必须绕过刷新间隔检查，避免被其他抓取推进的时间跳过。
+- 仅在成功、永久失败或临时错误耗尽预算时结算订阅与刷新 run 的用户可见状态。最后一次临时失败仍必须抛出异常，让 pg-boss 标记任务 `failed` 并转入 `dlq.feed.fetch`；`retryLimit: 0` 在首次失败时结算。
 - 单篇文章写入、媒体附件写入和 `article.filter` 任务创建必须共用同一 PostgreSQL 事务连接，通过 pg-boss 的 `db.executeSql` 适配器入队；入队抛错或新文章的任务 ID 为空时回滚，不能遗留无任务的 `pending` 文章。
 - `article.filter_recover` 在 Worker 启动时执行一次，此后每分钟扫描活跃用户的本地文本 RSS `pending` 文章；补偿不依赖订阅抓取是否到期、去重结果或上游是否返回 304。已入库文章的补偿不以订阅是否启用为条件，Fever、非 RSS 和有媒体附件的文章不进入扫描。
 - 补偿按文章主键分页，在事务内锁定并重新检查文章的用户归属与 `pending` 状态；存在 `created` / `retry` / `active` 过滤任务时跳过，历史终态任务不阻止补发。使用当前用户的过滤设置与订阅自动处理开关，保留队列去重；时间窗冲突返回空 ID 时留待后续扫描重试。
-- 回归验证位于 `src/test/worker/feedIngestionReliability.test.ts`、`src/test/worker/articleFilterRecovery.test.ts`；配置 `DATABASE_URL` 后运行 `src/test/worker/rssReliability.integration.test.ts`，使用随机隔离 schema 与真实 pg-boss 验证双写回滚、缓存重试、304 后补偿、并发扫描与用户隔离，结束后清理隔离 schema。
+- 回归验证位于 `src/test/worker/feedIngestionReliability.test.ts`、`src/test/worker/workerRegistry.test.ts`、`src/test/worker/articleFilterRecovery.test.ts`；配置 `DATABASE_URL` 后运行 `src/test/worker/rssReliability.integration.test.ts`，使用随机隔离 schema 与真实 pg-boss 验证回调失败后的重试恢复、耗尽预算转入死信、终态延迟结算、双写回滚、缓存重试、304 后补偿、并发扫描与用户隔离，结束后清理隔离 schema。
 
 ## 数据与迁移
 

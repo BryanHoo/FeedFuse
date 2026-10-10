@@ -13,6 +13,7 @@ export interface WorkerOptions {
   localConcurrency: number;
   batchSize: number;
   pollingIntervalSeconds?: number;
+  includeMetadata?: boolean;
 }
 
 type SendContext = {
@@ -40,7 +41,8 @@ export const QUEUE_CONTRACTS: Record<string, QueueContract> = {
       deadLetter: 'dlq.feed.fetch',
       warningQueueSize: 200,
     },
-    worker: { localConcurrency: 3, batchSize: 1 },
+    // RSS 终态结算需要任务实际重试预算，包含 send() 的单任务覆盖值。
+    worker: { localConcurrency: 3, batchSize: 1, includeMetadata: true },
     send: (ctx) =>
       ctx.runId && ctx.feedId
         ? { singletonKey: [ctx.userId, ctx.runId, ctx.feedId].filter(Boolean).join(':'), singletonSeconds: 3600 }
