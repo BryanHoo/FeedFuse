@@ -46,6 +46,7 @@ import {
 } from "../utils";
 import ArticleScrollAssist from "./ArticleScrollAssist";
 import ArticleImagePreview from "./ArticleImagePreview";
+import AiSummaryInlineText from "./AiSummaryInlineText";
 import ReaderToolbarIconButton from "../../reader/components/ReaderToolbarIconButton";
 import { READER_RESIZE_DESKTOP_MIN_WIDTH } from "../../reader/utils";
 import { highlightHtmlByQuery } from "../../reader/utils";
@@ -1171,7 +1172,9 @@ export default function ArticleView({
                       )}
                     >
                       {aiSummaryLines.map((line, index) => (
-                        <p key={`${article.id}-ai-summary-${index}`}>{line}</p>
+                        <p key={`${article.id}-ai-summary-${index}`}>
+                          <AiSummaryInlineText text={line} />
+                        </p>
                       ))}
                     </div>
                   ) : (
@@ -1183,7 +1186,7 @@ export default function ArticleView({
                         fontFamilyClass,
                       )}
                     >
-                      {aiSummaryTldrText || aiSummaryText}
+                      <AiSummaryInlineText text={aiSummaryTldrText || aiSummaryText} />
                     </p>
                   )}
                 </div>

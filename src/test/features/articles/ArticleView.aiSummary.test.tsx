@@ -947,6 +947,87 @@ describe('ArticleView ai summary', () => {
     expect(starredIcon).toHaveAttribute('fill', 'currentColor');
   });
 
+  it('折叠与展开摘要均将加粗标记渲染为加粗文字，并兼容标记内空格', async () => {
+    await seedArticleViewState({
+      article: {
+        aiSummary: '总体关注**住房政策**。\n- **住房与经济： **购房贴息。\n- **国际局势：**收益率走高。',
+      },
+    });
+
+    await act(async () => {
+      render(<ArticleView />);
+    });
+
+    const card = screen.getByLabelText('AI 摘要');
+    expect(Array.from(card.querySelectorAll('strong'), (node) => node.textContent)).toEqual([
+      '住房政策', '住房与经济： ',
+    ]);
+    expect(card.textContent).not.toContain('**');
+
+    fireEvent.click(screen.getByRole('button', { name: '展开摘要' }));
+    expect(Array.from(card.querySelectorAll('strong'), (node) => node.textContent)).toEqual([
+      '住房政策', '住房与经济： ', '国际局势：',
+    ]);
+    expect(card.textContent).not.toContain('**');
+    expect(card.textContent).toContain('购房贴息。');
+  });
+
+  it('摘要里的 HTML 保持为文本，普通星号与未闭合加粗标记不会丢失', async () => {
+    await seedArticleViewState({
+      article: {
+        aiSummary: '**重点** <img src=x onerror=alert(1)> 2 * 3，**未完成',
+      },
+    });
+
+    await act(async () => {
+      render(<ArticleView />);
+    });
+
+    const card = screen.getByLabelText('AI 摘要');
+    expect(card.querySelector('strong')).toHaveTextContent('重点');
+    expect(card.querySelector('img')).toBeNull();
+    expect(card.textContent).toContain('<img src=x onerror=alert(1)> 2 * 3，**未完成');
+  });
+
+  it('流式摘要在加粗标记闭合后显示加粗文字', async () => {
+    await seedArticleViewState({
+      article: {
+        aiSummarySession: {
+          id: 'session-2',
+          status: 'running',
+          draftText: '关注**住房',
+          finalText: null,
+          errorCode: null,
+          errorMessage: null,
+          startedAt: '2026-03-09T00:00:00.000Z',
+          finishedAt: null,
+          updatedAt: '2026-03-09T00:00:10.000Z',
+        },
+      },
+    });
+
+    render(<ArticleView />);
+    await waitFor(() => {
+      expect(createArticleAiSummaryEventSourceMock).toHaveBeenCalledWith('article-1');
+    });
+
+    const card = screen.getByLabelText('AI 摘要');
+    expect(card.textContent).toContain('关注**住房');
+    expect(card.querySelector('strong')).toBeNull();
+
+    // 模拟 SSE 分块补齐结束标记，等待打字动画后验证实际展示内容。
+    vi.useFakeTimers();
+    await act(async () => {
+      fakeEventSource.emit('summary.delta', { deltaText: '政策**。' });
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400);
+    });
+
+    expect(card.querySelector('strong')).toHaveTextContent('住房政策');
+    expect(card.textContent).not.toContain('**');
+  });
+
   it('点击 AI 摘要区域任意位置可展开和收起', async () => {
     useAppStore.setState({
       feeds: [
