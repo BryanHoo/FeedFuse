@@ -256,3 +256,24 @@ export async function getFeedRefreshRunById(
 
   return rows[0] ?? null;
 }
+
+export async function lockFeedRefreshRunById(
+  client: PoolClient,
+  runId: string,
+  userId?: string,
+): Promise<FeedRefreshRunRow | null> {
+  // 必须在事务连接上调用，锁保持到提交或回滚；同一 run 的汇总先取得此锁再读取明细。
+  // 汇总不修改主键，使用较弱的写锁，允许明细插入时对父 run 执行外键 KEY SHARE 检查。
+  const { rows } = await client.query<FeedRefreshRunRow>(
+    `
+      select ${selectFeedRefreshRunFields()}
+      from feed_refresh_runs
+      where id = $1::bigint
+        and user_id = $2
+      for no key update
+    `,
+    [runId, normalizeUserId(userId)],
+  );
+
+  return rows[0] ?? null;
+}

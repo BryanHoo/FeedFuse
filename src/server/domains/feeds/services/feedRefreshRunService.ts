@@ -3,6 +3,7 @@ import {
   createFeedRefreshRun,
   getFeedRefreshRunById,
   listFeedRefreshRunItemsByRunId,
+  lockFeedRefreshRunById,
   type FeedRefreshRunItemRow,
   type FeedRefreshRunRow,
   type FeedRefreshRunScope,
@@ -83,7 +84,9 @@ async function persistAggregate(
   try {
     await client.query('begin');
 
-    const run = await getFeedRefreshRunById(client as never, runId, scopedUserId);
+    // 先串行化同一 run 的汇总，再读取明细；仅开启事务仍可能让旧统计晚写入并覆盖终态。
+    // READ COMMITTED 下，等待锁结束后的明细查询会取得新快照，纳入其他源已提交的结果。
+    const run = await lockFeedRefreshRunById(client, runId, scopedUserId);
     if (!run) {
       await client.query('rollback');
       return null;

@@ -43,6 +43,8 @@
 - `feed.fetch` 的超时、临时网络/DNS 故障、HTTP 408/425/429/5xx、空响应和入库/入队等基础设施异常必须拒绝 Worker 回调，由 pg-boss 退避重试；地址安全阻断、源站安全验证页面、响应限制、其他 HTTP 错误及 RSS 格式错误直接结算为永久失败。
 - RSS Worker 必须启用 `includeMetadata`，根据任务实际 `retryCount` / `retryLimit`（包含发送时覆盖值）判断重试是否耗尽。重试期间不写订阅抓取终态或推进 `last_fetched_at`，刷新 run item 保持未完成；重试尝试必须绕过刷新间隔检查，避免被其他抓取推进的时间跳过。
 - 仅在成功、永久失败或临时错误耗尽预算时结算订阅与刷新 run 的用户可见状态。最后一次临时失败仍必须抛出异常，让 pg-boss 标记任务 `failed` 并转入 `dlq.feed.fetch`；`retryLimit: 0` 在首次失败时结算。
+- 同一刷新 run 的汇总必须在事务内先按 `id`、`user_id` 锁定父运行记录，再读取明细并更新汇总；单纯开启事务不能阻止旧统计晚写入导致终态、计数与完成时间倒退。使用 `FOR NO KEY UPDATE` 串行化汇总，兼容明细写入的父行外键检查；在 READ COMMITTED 下取得锁后另行查询明细，以读取等待期间其他源已提交的结果。
+- 配置 `DATABASE_URL` 后运行 `src/test/server/services/feedRefreshRunService.integration.test.ts`，在随机隔离 schema 中用真实 PostgreSQL 行锁与查询屏障验证并发成功、并发失败不被旧汇总覆盖，以及汇总异常回滚后释放锁；测试结束删除隔离 schema。
 - 单篇文章写入、媒体附件写入和 `article.filter` 任务创建必须共用同一 PostgreSQL 事务连接，通过 pg-boss 的 `db.executeSql` 适配器入队；入队抛错或新文章的任务 ID 为空时回滚，不能遗留无任务的 `pending` 文章。
 - `article.filter_recover` 在 Worker 启动时执行一次，此后每分钟扫描活跃用户的本地文本 RSS `pending` 文章；补偿不依赖订阅抓取是否到期、去重结果或上游是否返回 304。已入库文章的补偿不以订阅是否启用为条件，Fever、非 RSS 和有媒体附件的文章不进入扫描。
 - 补偿按文章主键分页，在事务内锁定并重新检查文章的用户归属与 `pending` 状态；存在 `created` / `retry` / `active` 过滤任务时跳过，历史终态任务不阻止补发。使用当前用户的过滤设置与订阅自动处理开关，保留队列去重；时间窗冲突返回空 ID 时留待后续扫描重试。
