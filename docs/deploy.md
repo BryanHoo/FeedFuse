@@ -4,7 +4,7 @@
 
 如果你是要本地改代码或调试实现，请改看 [开发指南](./development.md)。
 
-当前版本为 [`v0.4.4`](https://github.com/BryanHoo/FeedFuse/releases/tag/v0.4.4)，支持 `linux/amd64` 与 `linux/arm64`。Release 提供 `compose.yaml`、`.env.example` 和 `feedfuse-deploy-0.4.4.tar.gz` 部署附件。
+当前版本为 [`v0.5.0`](https://github.com/BryanHoo/FeedFuse/releases/tag/v0.5.0)，支持 `linux/amd64` 与 `linux/arm64`。Release 提供 `compose.yaml`、`.env.example` 和 `feedfuse-deploy-0.5.0.tar.gz` 部署附件。
 
 ## 推荐方式
 
@@ -111,7 +111,7 @@ docker compose logs --tail=100 web worker
 curl -fsS http://127.0.0.1:9559/api/health
 ```
 
-最后一条命令在服务器上执行，端口应与 `WEB_PORT` 一致。`/api/health` 只确认 Web 能响应请求，不检查数据库连接或 Worker 状态；还需要确认能够登录、添加订阅并完成刷新。
+最后一条命令在服务器上执行，端口应与 `WEB_PORT` 一致。`/api/health` 会检查数据库连接与 Worker 心跳，只有数据库可用且至少一个 Worker 心跳有效时才返回 HTTP 200，否则返回 503。Worker 完成初始化前可能短暂返回 503；健康检查通过后，还需要确认能够登录、添加订阅并完成刷新。
 
 ## 4. 首次使用
 
@@ -158,12 +158,20 @@ docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB"' 
 
 如需从宿主机连接数据库，应另行配置仅绑定 `127.0.0.1` 的端口；本地源码开发可使用 [开发指南](./development.md#2-准备-postgresql) 中的覆盖文件。
 
+从 `0.4.4` 或更早版本升级到 `0.5.0` 时，还需按新版发布文件合并以下配置：
+
+- Worker 的 `healthcheck`：运行 `src/worker/healthcheck.ts`，检查本容器实例的数据库心跳。
+- Worker 的 `stop_grace_period: 75s`：为在途任务和连接清理预留退出时间。
+- Web 的 `AUTH_TRUST_PROXY: ${AUTH_TRUST_PROXY:-false}` 环境变量映射：默认保持 `false`；只有满足前述可信代理条件时才在 `.env` 中启用。
+
+本版新增 `0038_worker_heartbeats.sql` 与 `0039_fever_batch_read.sql` 迁移，分别保存 Worker 心跳和 Fever 批量已读任务；Compose 启动时自动执行。请同时升级 Web 与 Worker，避免新健康接口因旧 Worker 不上报心跳而持续返回 503。
+
 如果需要固定版本，把 `compose.yaml` 中两个镜像同时改为同一个已发布版本：
 
-- `ghcr.io/bryanhoo/feedfuse-web:0.4.4`
-- `ghcr.io/bryanhoo/feedfuse-worker:0.4.4`
+- `ghcr.io/bryanhoo/feedfuse-web:0.5.0`
+- `ghcr.io/bryanhoo/feedfuse-worker:0.5.0`
 
-默认的 `latest` 通道会跟随正式版本更新；固定版本时两个镜像都使用不带 `v` 的 `0.4.4` 标签。升级会自动应用数据库迁移；仅换回旧镜像不会撤销迁移，回退时需要同时评估数据库备份恢复。
+默认的 `latest` 通道会跟随正式版本更新；固定版本时两个镜像都使用不带 `v` 的 `0.5.0` 标签。升级会自动应用数据库迁移；仅换回旧镜像不会撤销迁移，回退时需要同时评估数据库备份恢复。
 
 完成配置修改后，拉取镜像并重建服务：
 
@@ -172,7 +180,7 @@ docker compose pull
 docker compose up -d
 ```
 
-升级后执行 `docker compose ps`，检查 `db`、`web`、`worker` 状态和日志，再确认能够登录、刷新订阅并连续加载文章列表。
+升级后执行 `docker compose ps`，检查 `db`、`web`、`worker` 状态和日志，并请求 `/api/health` 确认返回 HTTP 200。再确认能够登录、刷新订阅、加载新文章，以及保存设置；使用 Fever 时检查批量已读进度和失败项重试。
 
 从旧版本升级到多用户版本后，原有单用户数据会归属到初始用户。升级完成后先使用原 `admin` 登录，再到 `设置中心` -> `账号与安全` 检查账号资料。
 
@@ -208,6 +216,8 @@ Worker 启动时及每小时会按用户清理流事件：成功或失败超过 
 | 提示数据库尚未就绪 | 查看 `docker compose logs --tail=100 db web worker`，核对数据库账号和密码 |
 | 修改数据库密码后连接失败 | 已初始化的数据卷不会随 `POSTGRES_PASSWORD` 自动改密，需要同步修改数据库中的实际密码 |
 | RSS 或 AI 任务一直等待 | 检查 Worker 日志、网络连通性以及当前用户的 AI 配置 |
+| `/api/health` 返回 503 或容器显示 `unhealthy` | 查看响应中的 `data.checks`，核对数据库连接、迁移和 Worker 心跳；只运行 Web 不满足健康条件 |
+| Fever 批量已读出现失败项 | 在右下角查看失败原因，检查远端账号、网络与 Worker 状态，任务结束后点击 `重试失败项` |
 | fake-ip 或内网 RSS 抓取失败 | 检查前述 `RSS_NETWORK_MODE` 与 `RSS_ALLOWED_CIDRS`，并确认容器能访问目标地址 |
 | 提示源站返回安全验证页面 | 系统已尝试符合条件的 `www` / 裸域变体；仍受阻时稍后重试或使用源站提供的其他订阅地址，调整 `RSS_NETWORK_MODE` 无法解除源站验证 |
 

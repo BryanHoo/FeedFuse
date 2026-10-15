@@ -63,3 +63,14 @@
 - `pnpm audit --prod`：0 条告警。
 - `pnpm lint`、`pnpm type-check`、`pnpm build`：通过，生成 standalone 产物。
 - `pnpm test:unit`：230 个测试文件通过，1195 项测试通过；未配置独立测试数据库，4 项数据库集成测试跳过。
+
+## 0.5.0 发布前复查
+
+2026-10-15 使用 Node.js `24.19.0` 和 pnpm `10.30.3` 对当前锁文件重新检查，未修改依赖版本、审计忽略项或版本覆盖配置。
+
+- `pnpm install --frozen-lockfile`：通过，锁文件与依赖声明一致。
+- `pnpm audit --prod`：无已知漏洞。
+- `pnpm lint`、`pnpm type-check`、`pnpm build`：通过，生成 standalone 产物。
+- `pnpm test:unit`：246 个测试文件通过，1497 项测试通过；未配置独立测试数据库，7 个文件中的 28 项数据库集成测试跳过，涉及基础仓储、AI 流事件清理、Worker 心跳迁移、RSS 可靠性、摘要会话、刷新汇总和 Fever 批量已读。
+
+这次复查仅确认当前生产依赖的审计结果和上述本地检查，不扩大前述安全结论的适用范围，也不代表已验证真实数据库迁移、线上配置或容器系统库。
