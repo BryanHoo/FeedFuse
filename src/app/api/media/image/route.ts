@@ -1,7 +1,8 @@
 import { requireApiSession } from '@/server/domains/auth/services/session';
 import { z } from 'zod';
 import sharp from 'sharp';
-import { Readable } from 'node:stream';
+import { pipeline, Readable } from 'node:stream';
+import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import { getServerEnv } from '@/server/infra/env';
 import { fetchImageStream } from '@/server/infra/http/externalHttpClient';
 import {
@@ -40,11 +41,12 @@ function createTransformedImageResponse(input: {
     })
     .webp({ quality: input.quality ?? 75, effort: 4 });
 
-  // 使用流式转换限制内存峰值，避免高分辨率源图先完整缓冲到 Node.js 堆中。
-  const transformedBody = Readable.from(
-    input.upstream.body as unknown as AsyncIterable<Uint8Array>,
-  )
-    .pipe(transformer);
+  // pipeline 会双向传递错误和销毁：上游断流时及时结束响应，客户端取消时终止上游下载。
+  // 普通 pipe 不转发源流错误，会导致未捕获异常；fromWeb 则确保取消能传递到 Web Stream。
+  const source = Readable.fromWeb(input.upstream.body as NodeReadableStream<Uint8Array>);
+  const transformedBody = pipeline(source, transformer, () => {
+    // 错误已传递给输出流，由下方 Readable.toWeb 通知 Response 消费者，避免重复抛到进程级。
+  });
   const headers = new Headers({
     'content-type': 'image/webp',
     'cache-control': 'public, max-age=86400, stale-while-revalidate=604800',

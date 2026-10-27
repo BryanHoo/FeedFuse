@@ -17,3 +17,5 @@ export {
   getArticleVirtualWindow,
 } from './articleVirtualWindow';
 export { buildImmersiveHtml } from './immersiveRender';
+export { normalizeArticleHtml } from './normalizeArticleHtml';
+export { setupArticleImageRetries } from './articleImageRetry';

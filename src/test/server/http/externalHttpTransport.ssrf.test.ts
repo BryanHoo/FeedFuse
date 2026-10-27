@@ -1,5 +1,6 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { globalAgent } from 'node:http';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('node:dns/promises', () => ({ lookup: vi.fn() }));
@@ -8,6 +9,7 @@ import { lookup } from 'node:dns/promises';
 import { fetchHtml, fetchImageStream, fetchRssXml } from '@/server/infra/http/externalHttpClient';
 import { fetchTextWithValidatedRedirects } from '@/server/infra/http/fetchExternalText';
 import { isSafeExternalUrl } from '@/server/integrations/rss/ssrfGuard';
+import { externalHttpTransport } from '@/server/infra/http/externalHttpTransport';
 
 describe('external HTTP connection SSRF protection', () => {
   const lookupMock = vi.mocked(lookup);
@@ -92,6 +94,25 @@ describe('external HTTP connection SSRF protection', () => {
     expect(result.status).toBe(200);
     expect(hits).toEqual(['/feed']);
     expect(hosts).toEqual([new URL(url).host]);
+  });
+
+  it('gives real outbound sockets sufficient time per address and reuses successful connections', async () => {
+    vi.stubEnv('RSS_NETWORK_MODE', 'custom');
+    vi.stubEnv('RSS_ALLOWED_CIDRS', '127.0.0.1/32');
+    lookupMock.mockResolvedValue([{ address: '127.0.0.1', family: 4 }]);
+    const agent = externalHttpTransport.defaults.options.agent.http ?? globalAgent;
+    const createConnection = vi.spyOn(agent, 'createConnection');
+
+    await externalHttpTransport(url);
+    await externalHttpTransport(url);
+
+    expect(hits).toHaveLength(2);
+    expect(createConnection).toHaveBeenCalledTimes(1);
+    // 验证传给实际 socket 的连接策略，避免参数只写在配置中却没有进入 HTTP Agent。
+    expect(createConnection.mock.calls[0][0]).toEqual(expect.objectContaining({
+      autoSelectFamily: true,
+      autoSelectFamilyAttemptTimeout: 1500,
+    }));
   });
 
   it('revalidates DNS for a redirected connection', async () => {

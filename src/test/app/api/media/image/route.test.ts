@@ -152,4 +152,42 @@ describe('/api/media/image', () => {
     expect(metadata.height).toBe(208);
     expect(proxiedBytes.byteLength).toBeLessThan(sourceImage.byteLength);
   });
+
+  it('rejects the thumbnail response when the upstream stream is interrupted', async () => {
+    let upstreamController: ReadableStreamDefaultController<Uint8Array>;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) { upstreamController = controller; },
+    });
+    fetchImageStreamMock.mockResolvedValue({
+      kind: 'ok', status: 200, contentType: 'image/jpeg', cacheControl: 'no-store', body,
+    });
+    const proxied = buildImageProxyUrl({
+      sourceUrl: 'https://img.example.com/a.jpg', secret: 'test-image-proxy-secret', width: 192,
+    });
+    const { GET } = await import('../../../../../app/api/media/image/route');
+    const response = await GET(new Request(`http://localhost${proxied}`));
+    const reading = response.arrayBuffer();
+    upstreamController!.error(new Error('upstream connection reset'));
+
+    await expect(Promise.race([
+      reading,
+      new Promise((resolve) => setTimeout(() => resolve('response stalled'), 200)),
+    ])).rejects.toThrow('upstream connection reset');
+  });
+
+  it('cancels the upstream download when the thumbnail response is cancelled', async () => {
+    const cancelled = vi.fn();
+    const body = new ReadableStream<Uint8Array>({ cancel: cancelled });
+    fetchImageStreamMock.mockResolvedValue({
+      kind: 'ok', status: 200, contentType: 'image/jpeg', cacheControl: 'no-store', body,
+    });
+    const proxied = buildImageProxyUrl({
+      sourceUrl: 'https://img.example.com/a.jpg', secret: 'test-image-proxy-secret', width: 192,
+    });
+    const { GET } = await import('../../../../../app/api/media/image/route');
+    const response = await GET(new Request(`http://localhost${proxied}`));
+    await response.body!.cancel();
+
+    await vi.waitFor(() => expect(cancelled).toHaveBeenCalled(), { timeout: 200 });
+  });
 });

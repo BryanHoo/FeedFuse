@@ -131,6 +131,7 @@
 - `src/server/integrations/rss/ssrfGuard.ts` 是 RSS 外链安全判定的统一入口；`route.ts`、worker 和抓取流程不要各自散落一套网络地址规则。
 - `RSS_NETWORK_MODE=public` 不得默认豁免本机或 Docker 宿主机地址；`localhost`、`host.docker.internal` 与 IP 字面量必须按实际 IP 判断，回环地址仅能由部署管理员在 `custom` 模式下通过 `RSS_ALLOWED_CIDRS` 显式放行。网络例外对所有账号的 RSS、正文与媒体请求生效。
 - URL 预检不能替代连接时 DNS 校验；外部 HTTP 连接必须校验此次解析的全部候选地址并直接使用已校验结果，重定向和备用主机同样受限。未解析主机名的预检兼容不能绕过连接校验。回归测试需覆盖 DNS 从公网变成回环、混合公网/私网结果及管理员 CIDR 例外，测试入口为 `src/test/server/http/externalHttpTransport.ssrf.test.ts`。
+- 外部 HTTP 的专用 HTTP/HTTPS Agent 保持连接复用、双栈地址回退，并将每个候选地址的连接尝试时限设为 1500 毫秒；调用方的请求总超时继续独立生效。跨境源站的 IPv4 握手超过 Node 默认的 250 毫秒且 IPv6 不可达时，全部候选地址可能远早于请求总超时就失败。回归需要检查实际 socket 收到的策略、连接复用及既有 DNS 安全校验。
 - RSS 链接在发起抓取前要校验原始 URL，抓取完成后如果拿到了重定向后的 `finalUrl`，还必须再次按相同策略校验，避免通过公网入口跳转到内网或 fake-ip 地址绕过限制。
 - RSS 和 fulltext 这类外部 HTTP 抓取不能依赖客户端自动跟随重定向；必须在每一跳 `Location` 发起请求前先按同一安全策略校验目标 URL。
 - Docker/host fallback 只能用于网络类失败；`Unsafe URL`、响应体超限和重定向次数超限这类确定性错误必须保留原始错误。
@@ -147,6 +148,8 @@
 - 图片、视频、音频等媒体代理的 SSRF 防护必须统一复用 `src/server/integrations/media/mediaProxyGuard.ts`，不要在具体 route 或抓取函数里重复实现网络地址规则。
 - 媒体代理必须完全复用 RSS 网络模式语义；`RSS_NETWORK_MODE=fake-ip` 时允许 `198.18.0.0/15` fake-ip 解析结果，`lan` 时允许 RFC1918 地址，`custom` 时按 `RSS_ALLOWED_CIDRS` 放行，`.local`、localhost、本机回环地址和 `host.docker.internal` 这类本机目标也必须交给 RSS guard 统一判定，不能在媒体代理内额外收紧。
 - 修改媒体代理签名、网络安全策略或 HTML 媒体改写时，至少覆盖 `src/test/app/api/media/image/route.test.ts`、`src/test/server/media/mediaProxyGuard.test.ts` 和 `src/test/server/media/rewriteHtmlImages.test.ts` 的相关用例。
+- 图片流成功结束、失败或关闭时必须清理超时；缩略图转换使用能双向传播错误和取消的流管线，保证上游断流及时结束响应、客户端取消及时停止下载。对应回归位于 `src/test/server/http/externalHttpClient.images.test.ts` 与图片 route 测试。
+- 图片请求的底层错误写入进程日志，记录失败阶段、错误码、耗时及候选 IPv4/IPv6 地址的聚合错误；日志去除 URL 查询参数中的访问令牌，HTTP 响应继续使用既有错误语义。
 
 ## 阅读快照契约
 

@@ -38,7 +38,7 @@ import {
   useStreamingAiSummary,
 } from "../hooks";
 import { getFilteredReasonLabel } from "../utils";
-import { buildImmersiveHtml } from "../utils";
+import { buildImmersiveHtml, normalizeArticleHtml, setupArticleImageRetries } from "../utils";
 import {
   buildArticleMarkdownDocument,
   sanitizeArticleMarkdownFilename,
@@ -99,6 +99,7 @@ type ImagePreviewState = {
   previewId: number;
   src: string;
   alt: string;
+  sourceImage: HTMLImageElement;
 };
 
 export default function ArticleView({
@@ -698,6 +699,7 @@ export default function ArticleView({
         previewId: imagePreviewSequenceRef.current,
         src,
         alt: image.getAttribute("alt")?.trim() || "文章图片",
+        sourceImage: image,
       });
     },
     [currentArticleId],
@@ -767,14 +769,22 @@ export default function ArticleView({
           article?.content ||
           ""
         : article?.content || "";
+  const normalizedBodyHtml = useMemo(() => normalizeArticleHtml(bodyHtml), [bodyHtml]);
   const highlightedBodyHtml = useMemo(
-    () => highlightHtmlByQuery(bodyHtml, highlightQuery),
-    [bodyHtml, highlightQuery],
+    // 先补齐正文加粗，再应用搜索高亮，防止 mark 节点把成对星号拆开。
+    () => highlightHtmlByQuery(normalizedBodyHtml, highlightQuery),
+    [normalizedBodyHtml, highlightQuery],
   );
   const articleBodyMarkup = useMemo(
     () => ({ __html: highlightedBodyHtml }),
     [highlightedBodyHtml],
   );
+
+  useEffect(() => {
+    const container = articleContentRef.current;
+    if (!container) return;
+    return setupArticleImageRetries(container);
+  }, [currentArticleId, highlightedBodyHtml]);
 
   useEffect(() => {
     const container = articleContentRef.current;
@@ -1382,6 +1392,14 @@ export default function ArticleView({
           key={activeImagePreview?.previewId ?? "empty"}
           image={activeImagePreview}
           open={Boolean(activeImagePreview)}
+          onImageLoad={() => {
+            const sourceImage = activeImagePreview?.sourceImage;
+            if (!sourceImage || !articleContentRef.current?.contains(sourceImage)) return;
+            if (sourceImage.naturalWidth > 0) return;
+            // 预览成功说明图片已可用；让失败的正文图片复用同一成功地址与浏览器缓存。
+            sourceImage.removeAttribute("srcset");
+            sourceImage.setAttribute("src", activeImagePreview.src);
+          }}
           onOpenChange={(open) => {
             if (!open) setImagePreview(null);
           }}

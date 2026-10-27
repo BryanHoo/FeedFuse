@@ -78,7 +78,7 @@ function setupResizeObserverMock() {
   };
 }
 
-async function renderArticleViewWithContent(content: string) {
+async function renderArticleViewWithContent(content: string, highlightQuery = '') {
   useAppStore.setState({
     feeds: [
       {
@@ -117,7 +117,7 @@ async function renderArticleViewWithContent(content: string) {
     }),
   });
 
-  const view = render(<ArticleView />);
+  const view = render(<ArticleView highlightQuery={highlightQuery} />);
 
   await act(async () => {
     await Promise.resolve();
@@ -154,7 +154,53 @@ describe('ArticleView image preview', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     resizeObserver.restore();
+  });
+
+  it('renders residual bold markers before applying search highlights', async () => {
+    await renderArticleViewWithContent(
+      '<p>**解码溯源绑定机制挡住隐写注入。**MCP智能体读取工具输出。</p>',
+      '溯源绑定',
+    );
+    const content = screen.getByTestId('article-html-content');
+
+    expect(content.querySelector('strong')?.textContent).toBe('解码溯源绑定机制挡住隐写注入。');
+    expect(content.querySelector('strong mark')?.textContent).toBe('溯源绑定');
+    expect(content.textContent).not.toContain('**');
+  });
+
+  it('automatically retries a failed body image and cancels retries when content changes', async () => {
+    await renderArticleViewWithContent(
+      '<img src="/api/media/image?url=https%3A%2F%2Fexample.com%2Fa.jpg&amp;sig=signed" alt="配图">',
+    );
+    vi.useFakeTimers();
+    const image = screen.getByTestId('article-html-content').querySelector('img')!;
+    fireEvent.error(image);
+    act(() => vi.advanceTimersByTime(1000));
+    expect(new URL(image.src).searchParams.get('_retry')).toBe('1');
+
+    fireEvent.error(image);
+    act(() => {
+      useAppStore.setState((state) => ({
+        articles: state.articles.map((article) => ({ ...article, content: '<p>新正文</p>' })),
+      }));
+    });
+    act(() => vi.advanceTimersByTime(2000));
+    expect(new URL(image.src).searchParams.get('_retry')).toBe('1');
+    expect(screen.getByTestId('article-html-content')).toHaveTextContent('新正文');
+  });
+
+  it('restores the failed body image when its preview loads successfully', async () => {
+    await renderArticleViewWithContent('<img src="https://example.com/recovered.jpg" alt="恢复图片">');
+    const image = screen.getByTestId('article-html-content').querySelector('img')!;
+    fireEvent.click(image);
+    const dialog = await screen.findByRole('dialog', { name: '图片预览' });
+    const setAttribute = vi.spyOn(image, 'setAttribute');
+
+    fireEvent.load(within(dialog).getByRole('img', { name: '恢复图片' }));
+
+    expect(setAttribute).toHaveBeenCalledWith('src', 'https://example.com/recovered.jpg');
   });
 
   it('opens a preview dialog when clicking an article image', async () => {

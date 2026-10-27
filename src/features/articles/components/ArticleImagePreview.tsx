@@ -5,12 +5,14 @@ type ArticleImagePreviewProps = {
   image: { src: string; alt: string } | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onImageLoad?: () => void;
 };
 
 export default function ArticleImagePreview({
   image,
   open,
   onOpenChange,
+  onImageLoad,
 }: ArticleImagePreviewProps) {
   const [hasLoadError, setHasLoadError] = useState(false);
 
@@ -34,6 +36,7 @@ export default function ArticleImagePreview({
                 src={image.src}
                 alt={image.alt}
                 onError={() => setHasLoadError(true)}
+                onLoad={onImageLoad}
                 className="max-h-[80vh] w-auto max-w-full object-contain"
               />
             )}

@@ -3,6 +3,7 @@ import { fetchTextWithValidatedRedirects, isTerminalFetchError, type SafeUrlChec
 import { fetchRssTextWithRecovery } from '@/server/integrations/rss/feedAccessRecovery';
 import { isFeedAccessBlockedError } from '@/server/integrations/rss/feedAccessError';
 import { Readable } from 'node:stream';
+import { RequestError } from 'got';
 import { getPool } from '@/server/infra/db/pool';
 import { writeSystemLog } from '@/server/infra/logging/systemLogger';
 import { getFetchUrlCandidates } from '@/server/integrations/rss/fetchUrlCandidates';
@@ -295,6 +296,28 @@ async function fetchImageStreamHop(
 ): Promise<FetchImageStreamHopResult> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs);
+  const startedAt = Date.now();
+  let phase: 'headers' | 'body' = 'headers';
+  const reportFailure = (error: unknown) => {
+    const target = new URL(url);
+    const source = `${target.origin}${target.pathname}`;
+    // 媒体错误必须记录在进程日志中，不能只吞成 502；去除查询参数以免泄漏签名或访问令牌。
+    console.warn('[media.image.fetch_failed]', {
+      source,
+      phase,
+      code: error instanceof Error && 'code' in error ? error.code : null,
+      message: error instanceof Error ? error.message.replaceAll(url, source) : 'Unknown image error',
+      timedOut: controller.signal.aborted,
+      durationMs: Date.now() - startedAt,
+      timings: error instanceof RequestError ? error.timings?.phases : undefined,
+      // 双栈地址全部失败时 Node 只给顶层空消息，必须展开候选地址错误才能区分连接超时与 IPv6 不可达。
+      connectionAttempts: error instanceof Error && error.cause instanceof AggregateError
+        ? error.cause.errors.map((attempt: NodeJS.ErrnoException & { address?: string; port?: number }) => ({
+          code: attempt.code, address: attempt.address, port: attempt.port,
+        }))
+        : undefined,
+    });
+  };
 
   try {
     const sourceUrl = new URL(url);
@@ -320,12 +343,18 @@ async function fetchImageStreamHop(
       };
 
       req.on('close', cleanup);
-      req.on('error', () => {
+      req.on('error', (error) => {
         cleanup();
+        // response 已返回后的断流同样需要日志，否则只能看到浏览器图片损坏，无法定位阶段。
+        reportFailure(error);
         safeResolve({ kind: 'bad_gateway' });
       });
 
+      // got 的正常下载只保证发出 end，不保证 close；成功后必须释放超时，避免事后误触发 abort。
+      req.on('end', cleanup);
+
       req.on('response', (res) => {
+        phase = 'body';
         const status = res.statusCode;
 
         if ([301, 302, 303, 307, 308].includes(status)) {
@@ -359,8 +388,9 @@ async function fetchImageStreamHop(
         }));
       });
     });
-  } catch {
+  } catch (error) {
     clearTimeout(timeout);
+    reportFailure(error);
     return { kind: 'bad_gateway' };
   }
 }
