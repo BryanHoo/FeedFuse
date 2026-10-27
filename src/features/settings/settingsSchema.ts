@@ -22,6 +22,7 @@ const defaultGeneralSettings: GeneralSettings = {
   fontSize: 'medium',
   fontFamily: 'sans',
   lineHeight: 'normal',
+  noImageMode: false,
   autoMarkReadEnabled: true,
   autoMarkReadDelayMs: 2000,
   defaultUnreadOnlyInAll: false,
@@ -109,6 +110,8 @@ function normalizeGeneralSettings(input: Record<string, unknown>): GeneralSettin
       defaultGeneralSettings.lineHeight
     ),
     autoMarkReadEnabled: readBoolean(generalInput.autoMarkReadEnabled, defaultGeneralSettings.autoMarkReadEnabled),
+    // 旧配置没有此字段时保持自动加载；不将字符串等非法值误判为开启。
+    noImageMode: readBoolean(generalInput.noImageMode, defaultGeneralSettings.noImageMode),
     autoMarkReadDelayMs: readNumberEnum(
       generalInput.autoMarkReadDelayMs,
       [0, 2000, 5000] as const,

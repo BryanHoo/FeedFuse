@@ -13,6 +13,7 @@
 - 新增或调整 reader 快捷键时，同步更新快捷键帮助弹窗，并在 `src/test/features/reader/ReaderLayout.test.tsx` 覆盖至少一个正向触发和一个弹窗/输入焦点保护场景。
 - 文章视图相关契约先看 `src/features/articles/components/ArticleView.tsx`、`src/features/articles/hooks/useStreamingAiSummary.ts`、`src/features/articles/hooks/useImmersiveTranslation.ts`
 - 设置保存逻辑先看 `src/features/settings/hooks/useSettingsAutosave.ts`
+- 通用设置的 `noImageMode` 默认关闭并按用户持久化。开启后原文、全文及翻译正文的图片仅显示紧凑占位；必须在翻译、加粗、高亮等正文 HTML 处理之前将图片及响应式候选转为惰性内容，避免占位出现前已发起请求。点击、Enter 或空格只加载目标图片，首次操作不触发外层链接或大图预览；加载后恢复原有预览、链接和失败重试行为。回归覆盖 `ArticleView.imagePreview.test.tsx`、`ArticleView.aiTranslate.test.tsx`、设置中心和设置 API 测试。
 - 设置中心自动保存失败时保留当前草稿及上次成功保存的设置；密钥草稿只保留在内存，不写入 localStorage。关闭前明确提示放弃未保存草稿，用户选择继续编辑时保留内容。
 - 字段错误必须提供中文字段名称与修改提示，并通过 `aria-invalid`、`aria-describedby` 关联 AI 输入；修改后恢复自动保存。网络、超时或服务错误提供“重试保存”，允许不修改草稿直接重试；仅成功响应能推进已保存版本，旧请求不能覆盖新草稿或新错误。
 - 确认失败时说明本次修改未保存，网络中断、超时或响应无法解析时说明保存结果尚未确认；不可将未知结果描述为未保存。成功时确认本次设置及密钥修改全部保存，失败不能统一要求用户修正字段。

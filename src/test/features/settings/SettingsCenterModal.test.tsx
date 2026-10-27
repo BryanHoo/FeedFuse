@@ -598,6 +598,22 @@ describe('SettingsCenterModal', () => {
     ).not.toHaveClass('rounded-lg');
   });
 
+  it('automatically saves no-image mode from general settings', async () => {
+    resetSettingsStore();
+    renderWithNotifications();
+    fireEvent.click(screen.getByLabelText('打开设置'));
+    const toggle = await screen.findByRole('switch', { name: '无图片模式' });
+    expect(toggle).not.toBeChecked();
+
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(useSettingsStore.getState().persistedSettings.general.noImageMode).toBe(true);
+      expect(JSON.parse(lastSettingsPutBodyText!).settings.general.noImageMode).toBe(true);
+    });
+    expect(toggle).toBeChecked();
+  });
+
 
   it('saves global keyword filter from rss settings and refreshes snapshot', async () => {
     resetSettingsStore();

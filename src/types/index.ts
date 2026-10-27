@@ -110,6 +110,8 @@ export interface GeneralSettings {
   fontSize: 'small' | 'medium' | 'large';
   fontFamily: 'sans' | 'serif';
   lineHeight: 'compact' | 'normal' | 'relaxed';
+  /** 开启后正文图片仅显示占位，由用户逐张点击加载。 */
+  noImageMode: boolean;
   autoMarkReadEnabled: boolean;
   autoMarkReadDelayMs: 0 | 2000 | 5000;
   defaultUnreadOnlyInAll: boolean;

@@ -2,6 +2,7 @@
 
 import { Monitor, Moon, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { SettingsDraft } from '../../../store/settingsStore';
 import type { GeneralSettings } from '../../../types';
@@ -48,6 +49,23 @@ export default function GeneralSettingsPanel({ draft, onChange }: GeneralSetting
     <section>
       <div className="overflow-hidden rounded-lg border border-border bg-background">
         <div className="flex flex-col divide-y divide-border">
+          <div className="flex items-center justify-between gap-4 px-4 py-3.5">
+            <SettingTooltipLabel
+              label="无图片模式"
+              description="文章正文图片仅显示小占位，点击后加载"
+              className="text-sm font-medium text-foreground"
+            />
+            <Switch
+              aria-label="无图片模式"
+              checked={general.noImageMode}
+              onCheckedChange={(checked) =>
+                onChange((nextDraft) => {
+                  nextDraft.persisted.general.noImageMode = checked;
+                })
+              }
+            />
+          </div>
+
           <div className="flex items-center justify-between gap-4 px-4 py-3.5">
             <div>
               <SettingTooltipLabel

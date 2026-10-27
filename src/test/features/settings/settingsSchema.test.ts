@@ -8,6 +8,13 @@ import {
 import { normalizePersistedSettings } from '../../../features/settings/settingsSchema';
 
 describe('settingsSchema normalize', () => {
+  it('defaults no-image mode to false and preserves explicit boolean values', () => {
+    expect(normalizePersistedSettings({}).general.noImageMode).toBe(false);
+    expect(normalizePersistedSettings({ general: { noImageMode: 'true' } }).general.noImageMode).toBe(false);
+    expect(normalizePersistedSettings({ general: { noImageMode: true } }).general.noImageMode).toBe(true);
+    expect(normalizePersistedSettings({ general: { noImageMode: false } }).general.noImageMode).toBe(false);
+  });
+
   it('maps legacy flat settings to general namespace and omits shortcuts settings', () => {
     const normalized = normalizePersistedSettings({
       theme: 'dark',

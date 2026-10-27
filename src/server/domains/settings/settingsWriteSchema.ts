@@ -19,6 +19,7 @@ export const settingsWriteSchema: z.ZodType<PersistedSettings> = z.strictObject(
     fontSize: z.enum(['small', 'medium', 'large']),
     fontFamily: z.enum(['sans', 'serif']),
     lineHeight: z.enum(['compact', 'normal', 'relaxed']),
+    noImageMode: z.boolean(),
     autoMarkReadEnabled: z.boolean(),
     autoMarkReadDelayMs: z.union([z.literal(0), z.literal(2000), z.literal(5000)]),
     defaultUnreadOnlyInAll: z.boolean(),

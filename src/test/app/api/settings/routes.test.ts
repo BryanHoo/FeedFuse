@@ -96,6 +96,37 @@ vi.mock('@/server/integrations/ai/cleanupAiRuntimeState', () => ({
 }));
 
 describe('/api/settings', () => {
+  it('saves and reads the no-image mode preference', async () => {
+    const settings = {
+      ...structuredClone(defaultPersistedSettings),
+      general: { ...defaultPersistedSettings.general, noImageMode: true },
+    };
+    getUiSettingsMock.mockResolvedValue(defaultPersistedSettings);
+    updateUiSettingsMock.mockImplementation(async (_client, _userId, value) => value);
+    const mod = await import('../../../../app/api/settings/route');
+    const response = await mod.PUT(new Request('http://localhost/api/settings', {
+      method: 'PUT', body: JSON.stringify({ settings, secrets: {} }),
+    }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ data: { settings: { general: { noImageMode: true } } } });
+    expect(updateUiSettingsMock).toHaveBeenCalledWith(client, '1', settings);
+
+    getUiSettingsMock.mockResolvedValue(settings);
+    expect(await (await mod.GET()).json()).toMatchObject({ data: { general: { noImageMode: true } } });
+  });
+
+  it('rejects a non-boolean no-image mode before writing settings', async () => {
+    const mod = await import('../../../../app/api/settings/route');
+    const response = await mod.PUT(new Request('http://localhost/api/settings', {
+      method: 'PUT', body: JSON.stringify({
+        ...defaultPersistedSettings,
+        general: { ...defaultPersistedSettings.general, noImageMode: 'true' },
+      }),
+    }));
+    expect(response.status).toBe(400);
+    expect(updateUiSettingsMock).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     requireApiSessionMock.mockReset().mockResolvedValue({
       userId: '1',

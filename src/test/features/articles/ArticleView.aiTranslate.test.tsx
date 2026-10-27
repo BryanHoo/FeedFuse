@@ -245,6 +245,36 @@ describe('ArticleView ai translate', () => {
     expect(screen.getByText('甲')).toBeInTheDocument();
   });
 
+  it('keeps images deferred when translated paragraphs stream into no-image mode', async () => {
+    const { useSettingsStore } = await import('../../../store/settingsStore');
+    useSettingsStore.setState((state) => ({
+      persistedSettings: {
+        ...state.persistedSettings,
+        general: { ...state.persistedSettings.general, noImageMode: true },
+      },
+    }));
+    await seedArticleViewState({
+      content: '<article><p>A</p><img src="https://img.example/a.jpg" alt="cover"><p>B</p></article>',
+    });
+    const { default: ArticleView } = await import('../../../features/articles/components/ArticleView');
+    render(<ArticleView />);
+    fireEvent.click(screen.getByRole('button', { name: '翻译' }));
+    await screen.findAllByText('正在翻译这段…');
+    await act(async () => {
+      fakeEventSource.emit('segment.succeeded', {
+        segmentIndex: 0, status: 'succeeded', translatedText: '甲',
+      });
+    });
+
+    expect(screen.getByText('甲')).toBeInTheDocument();
+    const content = screen.getByTestId('article-html-content');
+    expect(content.querySelector('img')).toBeNull();
+    const placeholder = screen.getByRole('button', { name: '加载图片：cover' });
+    expect(placeholder.previousElementSibling).toHaveTextContent('甲');
+    fireEvent.click(placeholder);
+    expect(content.querySelector('img')).toHaveAttribute('src', 'https://img.example/a.jpg');
+  });
+
   it('keeps image in translation mode at original position', async () => {
     await seedArticleViewState({
       content: '<article><p>A</p><img src="https://img.example/a.jpg" alt="cover" /><p>B</p></article>',

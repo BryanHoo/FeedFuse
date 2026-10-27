@@ -46,6 +46,11 @@ import {
 } from "../utils";
 import ArticleScrollAssist from "./ArticleScrollAssist";
 import ArticleImagePreview from "./ArticleImagePreview";
+import {
+  deferArticleImages,
+  loadArticleImagePlaceholder,
+  prepareArticleImagePreview,
+} from "../utils/articleImageLoading";
 import AiSummaryInlineText from "./AiSummaryInlineText";
 import ReaderToolbarIconButton from "../../reader/components/ReaderToolbarIconButton";
 import { READER_RESIZE_DESKTOP_MIN_WIDTH } from "../../reader/utils";
@@ -718,6 +723,13 @@ export default function ArticleView({
       const eventTarget = event.target;
       if (!(eventTarget instanceof Element)) return;
 
+      // 首次点击仅加载目标图片；阻止外层链接跳转，并留待下次点击打开大图。
+      if (loadArticleImagePlaceholder(eventTarget)) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
       const retryTarget = eventTarget.closest('[data-action="retry-segment"]');
       if (retryTarget) {
         const rawSegmentIndex = retryTarget.getAttribute("data-segment-index");
@@ -746,6 +758,12 @@ export default function ArticleView({
       const target = event.target;
       if (!(target instanceof Element)) return;
 
+      if (loadArticleImagePlaceholder(target)) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
       const image = getPreviewableArticleImage(target);
       if (!image) return;
 
@@ -755,20 +773,24 @@ export default function ArticleView({
     [getPreviewableArticleImage, openImagePreview],
   );
 
-  const immersiveHtml = useMemo(
-    () =>
-      buildImmersiveHtml(article?.content ?? "", immersiveTranslation.segments),
-    [article?.content, immersiveTranslation.segments],
+  const sourceBodyHtml =
+    aiTranslationViewing && !hasImmersiveSegments && hasLegacyAiTranslationContent
+      ? article?.aiTranslationBilingualHtml?.trim() ||
+        article?.aiTranslationZhHtml?.trim() ||
+        article?.content ||
+        ""
+      : article?.content || "";
+  const imageSafeBodyHtml = useMemo(
+    // 必须先处理图片，再进入翻译、加粗和高亮的 HTML 解析，避免中间文档提前加载资源。
+    () => general.noImageMode ? deferArticleImages(sourceBodyHtml) : sourceBodyHtml,
+    [sourceBodyHtml, general.noImageMode],
   );
-  const bodyHtml =
-    aiTranslationViewing && hasImmersiveSegments
-      ? immersiveHtml
-      : aiTranslationViewing && hasLegacyAiTranslationContent
-        ? article?.aiTranslationBilingualHtml?.trim() ||
-          article?.aiTranslationZhHtml?.trim() ||
-          article?.content ||
-          ""
-        : article?.content || "";
+  const bodyHtml = useMemo(
+    () => aiTranslationViewing && hasImmersiveSegments
+      ? buildImmersiveHtml(imageSafeBodyHtml, immersiveTranslation.segments)
+      : imageSafeBodyHtml,
+    [aiTranslationViewing, hasImmersiveSegments, imageSafeBodyHtml, immersiveTranslation.segments],
+  );
   const normalizedBodyHtml = useMemo(() => normalizeArticleHtml(bodyHtml), [bodyHtml]);
   const highlightedBodyHtml = useMemo(
     // 先补齐正文加粗，再应用搜索高亮，防止 mark 节点把成对星号拆开。
@@ -784,7 +806,7 @@ export default function ArticleView({
     const container = articleContentRef.current;
     if (!container) return;
     return setupArticleImageRetries(container);
-  }, [currentArticleId, highlightedBodyHtml]);
+  }, [currentArticleId, articleBodyMarkup]);
 
   useEffect(() => {
     const container = articleContentRef.current;
@@ -792,14 +814,7 @@ export default function ArticleView({
 
     for (const node of container.querySelectorAll("img")) {
       if (!(node instanceof HTMLImageElement)) continue;
-      if (node.closest("a[href]")) continue;
-
-      const alt = node.alt?.trim();
-      const label = alt ? `查看大图：${alt}` : "查看大图";
-      node.tabIndex = 0;
-      node.setAttribute("role", "button");
-      node.setAttribute("aria-label", label);
-      node.classList.add("cursor-zoom-in");
+      prepareArticleImagePreview(node);
     }
 
     for (const node of container.querySelectorAll("video")) {
@@ -808,7 +823,7 @@ export default function ArticleView({
       // 文章正文视频来自已清洗 HTML，这里只补齐阅读器内的响应式呈现样式。
       node.classList.add("my-5", "w-full", "max-w-full", "rounded-lg", "bg-black");
     }
-  }, [highlightedBodyHtml]);
+  }, [currentArticleId, articleBodyMarkup]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -1307,6 +1322,8 @@ export default function ArticleView({
             ) : null}
 
             <div
+              // 不同文章即使正文相同也要重建占位，避免继承上一文章的图片加载状态。
+              key={currentArticleId}
               ref={articleContentRef}
               className={cn(
                 // Tighten article typography contrast without making the surrounding UI feel heavier.
