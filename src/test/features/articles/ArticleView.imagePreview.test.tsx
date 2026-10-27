@@ -186,6 +186,8 @@ describe('ArticleView image preview', () => {
     expect(image).toHaveAttribute('src', 'https://example.com/a.jpg');
     expect(image).toHaveAttribute('srcset', 'https://example.com/a@2x.jpg 2x');
     expect(image).toHaveAttribute('width', '1200');
+    expect(image.closest('[aria-busy="true"]')).not.toBeNull();
+    expect(within(content).getByText('图片加载中…')).toBeInTheDocument();
     expect(content.querySelectorAll('img')).toHaveLength(1);
     expect(within(content).getByRole('button', { name: '加载图片：配图二' })).toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: '图片预览' })).not.toBeInTheDocument();

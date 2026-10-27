@@ -54,6 +54,52 @@ describe('setupArticleImageRetries', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it('shows loading feedback until the image succeeds', () => {
+    const image = root.querySelector('img')!;
+    expect(root.querySelector('[aria-busy="true"]')).not.toBeNull();
+    expect(root.textContent).toContain('图片加载中');
+    expect(root.querySelector('.article-image-skeleton')).toHaveAttribute('aria-hidden', 'true');
+    image.tabIndex = 0;
+    image.focus();
+    image.dispatchEvent(new Event('load'));
+    expect(root.querySelector('[aria-busy]')).toBeNull();
+    expect(root.textContent).not.toContain('图片加载中');
+    expect(root.querySelector('img')).toBe(image);
+    expect(document.activeElement).toBe(image);
+  });
+
+  it('keeps loading feedback during retries and reports final failure', () => {
+    const image = root.querySelector('img')!;
+    for (const delay of [1000, 2000, 4000]) {
+      image.dispatchEvent(new Event('error'));
+      expect(root.querySelector('[aria-busy="true"]')).not.toBeNull();
+      vi.advanceTimersByTime(delay);
+    }
+    image.dispatchEvent(new Event('error'));
+    expect(root.querySelector('[aria-busy="true"]')).toBeNull();
+    expect(root.textContent).toContain('图片加载失败');
+    image.dispatchEvent(new Event('load'));
+    expect(root.textContent).not.toContain('图片加载失败');
+  });
+
+  it('does not show a skeleton for cached images and removes feedback on cleanup', () => {
+    cleanup();
+    const image = root.querySelector('img')!;
+    Object.defineProperties(image, {
+      complete: { configurable: true, value: true },
+      naturalWidth: { configurable: true, value: 1200 },
+    });
+    cleanup = setupArticleImageRetries(root);
+    expect(root.querySelector('[aria-busy]')).toBeNull();
+    Object.defineProperty(image, 'complete', { configurable: true, value: false });
+    cleanup();
+    cleanup = setupArticleImageRetries(root);
+    expect(root.querySelector('[aria-busy="true"]')).not.toBeNull();
+    cleanup();
+    expect(root.querySelector('[aria-busy]')).toBeNull();
+    expect(root.querySelector('img')).toBe(image);
+  });
+
   it('cancels scheduled retries when the image loads or the article unmounts', () => {
     const image = root.querySelector('img')!;
     const original = image.src;

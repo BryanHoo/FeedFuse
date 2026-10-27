@@ -1,4 +1,51 @@
 const PLACEHOLDER_ATTRIBUTE = 'data-article-image-placeholder';
+const LOADING_ATTRIBUTE = 'data-article-image-loading';
+
+/** 在原图片（或 picture）外显示状态层，保留响应式候选、链接和预览事件目标。 */
+export function showArticleImageLoading(image: HTMLImageElement, failed = false): void {
+  let frame = image.closest<HTMLElement>(`[${LOADING_ATTRIBUTE}]`);
+  if (!frame) {
+    const original = image.closest('picture') ?? image;
+    if (!original.parentNode) return;
+    frame = document.createElement('span');
+    frame.setAttribute(LOADING_ATTRIBUTE, '');
+    frame.className = 'article-image-loading';
+    // 有尺寸时按原比例预留区域；未知尺寸时由样式提供占位，避免下载期间高度塌陷。
+    const width = Number(image.getAttribute('width'));
+    const height = Number(image.getAttribute('height'));
+    if (width > 0 && Number.isFinite(width)) {
+      frame.style.setProperty('--article-image-width', `${width}px`);
+      if (height > 0 && Number.isFinite(height)) {
+        frame.style.aspectRatio = `${width} / ${height}`;
+      }
+    }
+    original.replaceWith(frame);
+    const status = document.createElement('span');
+    status.className = 'article-image-loading-status';
+    status.setAttribute('role', 'status');
+    // 图形仅承担视觉反馈，读屏继续通过独立的状态文字了解加载进度。
+    const skeleton = document.createElement('span');
+    skeleton.className = 'article-image-skeleton';
+    skeleton.setAttribute('aria-hidden', 'true');
+    frame.append(original, skeleton, status);
+  }
+  frame.setAttribute('aria-busy', String(!failed));
+  frame.dataset.state = failed ? 'error' : 'loading';
+  const status = frame.querySelector('.article-image-loading-status');
+  if (status) status.textContent = failed ? '图片加载失败' : '图片加载中…';
+}
+
+/** 成功或卸载时移除临时布局，完整恢复原图的尺寸、样式及 picture 结构。 */
+export function clearArticleImageLoading(image: HTMLImageElement): void {
+  const frame = image.closest(`[${LOADING_ATTRIBUTE}]`);
+  const original = image.closest('picture') ?? image;
+  if (!frame) return;
+  const focused = document.activeElement;
+  const restoreFocus = focused instanceof HTMLElement && original.contains(focused);
+  frame.replaceWith(original);
+  // 移动 DOM 会丢失焦点，恢复键盘阅读位置且不触发额外滚动。
+  if (restoreFocus) focused.focus({ preventScroll: true });
+}
 
 /** 统一补齐正文图片的预览入口；带链接的图片继续使用原链接。 */
 export function prepareArticleImagePreview(image: HTMLImageElement): void {
@@ -54,7 +101,10 @@ export function loadArticleImagePlaceholder(target: Element): boolean {
   const restoreFocus = document.activeElement === placeholder;
   for (const image of images) image.loading = 'eager';
   placeholder.replaceWith(savedImage.content);
-  for (const image of images) prepareArticleImagePreview(image);
+  for (const image of images) {
+    prepareArticleImagePreview(image);
+    if (!image.complete || image.naturalWidth === 0) showArticleImageLoading(image);
+  }
   // 键盘加载后焦点移交给图片预览入口或原链接，避免占位移除后丢失阅读位置。
   if (restoreFocus) {
     const focusTarget = images[0]?.closest<HTMLElement>('a[href]') ?? images[0];

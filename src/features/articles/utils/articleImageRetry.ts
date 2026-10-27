@@ -1,3 +1,5 @@
+import { clearArticleImageLoading, showArticleImageLoading } from './articleImageLoading';
+
 const RETRY_DELAYS_MS = [1000, 2000, 4000];
 
 function getRetrySource(source: string, attempt: number): string {
@@ -24,6 +26,8 @@ export function setupArticleImageRetries(container: HTMLElement): () => void {
   const scheduleRetry = (image: HTMLImageElement) => {
     const attempt = attempts.get(image) ?? 0;
     const source = image.currentSrc || image.getAttribute('src');
+    // 重试等待期间继续显示骨架；仅在没有可请求地址或重试耗尽时展示失败状态。
+    showArticleImageLoading(image, !source || attempt >= RETRY_DELAYS_MS.length);
     if (!source || attempt >= RETRY_DELAYS_MS.length || timers.has(image)) return;
 
     const timer = window.setTimeout(() => {
@@ -42,13 +46,17 @@ export function setupArticleImageRetries(container: HTMLElement): () => void {
     if (event.target instanceof HTMLImageElement) scheduleRetry(event.target);
   };
   const onLoad = (event: Event) => {
-    if (event.target instanceof HTMLImageElement) cancelRetry(event.target);
+    if (event.target instanceof HTMLImageElement) {
+      cancelRetry(event.target);
+      clearArticleImageLoading(event.target);
+    }
   };
 
   // img 的 load/error 不冒泡，使用捕获监听覆盖正文中的所有图片（包括被链接包裹的图片）。
   container.addEventListener('error', onError, true);
   container.addEventListener('load', onLoad, true);
   for (const image of container.querySelectorAll('img')) {
+    if (!image.complete) showArticleImageLoading(image);
     // 缓存命中或快速失败可能早于 React effect，安装监听时补查已失败的图片。
     if (image.complete && image.naturalWidth === 0) scheduleRetry(image);
   }
@@ -57,5 +65,6 @@ export function setupArticleImageRetries(container: HTMLElement): () => void {
     container.removeEventListener('error', onError, true);
     container.removeEventListener('load', onLoad, true);
     for (const image of timers.keys()) cancelRetry(image);
+    for (const image of container.querySelectorAll('img')) clearArticleImageLoading(image);
   };
 }

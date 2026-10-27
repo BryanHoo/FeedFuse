@@ -3,6 +3,119 @@
 @plugin "@tailwindcss/typography";
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* 正文图片未解码时提供主题自适应骨架；状态层不拦截链接、预览和键盘操作。 */
+.article-image-loading {
+  --article-image-shimmer-color: color-mix(in oklab, var(--color-background) 92%, transparent);
+  position: relative;
+  display: inline-block;
+  width: min(100%, var(--article-image-width, 40rem));
+  max-width: 100%;
+  min-height: 10rem;
+  overflow: hidden;
+  vertical-align: middle;
+  border-radius: 0.5rem;
+  background: color-mix(in oklab, var(--color-muted) 72%, var(--color-border));
+}
+
+.article-image-loading[style*="aspect-ratio"] {
+  min-height: 0;
+}
+
+.article-image-loading > img,
+.article-image-loading > picture > img {
+  /* 保持图片可聚焦和可点击，下载完成后会移除整个临时容器。 */
+  opacity: 0;
+  margin: 0;
+}
+
+.article-image-loading-status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  color: var(--color-muted-foreground);
+  font: 400 0.8125rem / 1.5 var(--font-sans, sans-serif);
+}
+
+/* 加载时不显示文字，让图片轮廓与连续扫光承担反馈；文字仍可被读屏读取。 */
+.article-image-loading[data-state="loading"] .article-image-loading-status {
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.article-image-skeleton {
+  position: absolute;
+  inset: 0;
+  width: min(56%, 16rem);
+  max-height: 70%;
+  aspect-ratio: 3 / 2;
+  margin: auto;
+  pointer-events: none;
+  animation: article-image-breathe 2.4s ease-in-out infinite;
+}
+
+/* 用柔和的日轮与山形勾勒待加载图片，避免大面积空白像一个尚未渲染的色块。 */
+.article-image-skeleton::before,
+.article-image-skeleton::after {
+  content: "";
+  position: absolute;
+  background: color-mix(in oklab, var(--color-muted-foreground) 12%, transparent);
+}
+
+.article-image-skeleton::before {
+  top: 8%;
+  left: 18%;
+  width: 14%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+}
+
+.article-image-skeleton::after {
+  inset: 24% 0 0;
+  clip-path: polygon(0 100%, 0 80%, 24% 34%, 43% 66%, 67% 8%, 100% 72%, 100% 100%);
+  border-radius: 0 0 0.5rem 0.5rem;
+}
+
+.article-image-loading[data-state="error"] .article-image-skeleton {
+  display: none;
+}
+
+.article-image-loading[data-state="loading"]::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 70%;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 5%, var(--article-image-shimmer-color) 50%, transparent 95%);
+  animation: article-image-shimmer 1.8s linear infinite;
+}
+
+/* 暗色主题仍使用亮色扫光，避免背景色混合后出现一条暗带。 */
+.dark .article-image-loading {
+  --article-image-shimmer-color: color-mix(in oklab, var(--color-muted-foreground) 26%, transparent);
+}
+
+@keyframes article-image-shimmer {
+  from { transform: translateX(-145%); }
+  to { transform: translateX(245%); }
+}
+
+@keyframes article-image-breathe {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .article-image-loading[data-state="loading"]::after,
+  .article-image-skeleton { animation: none; }
+}
+
 @layer theme {
   @theme default {
     --color-background: hsl(210 20% 98%);

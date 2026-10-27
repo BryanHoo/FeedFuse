@@ -802,7 +802,7 @@ export default function ArticleView({
     [highlightedBodyHtml],
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const container = articleContentRef.current;
     if (!container) return;
     return setupArticleImageRetries(container);
