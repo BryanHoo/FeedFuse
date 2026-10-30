@@ -13,6 +13,7 @@
 - 新增或调整 reader 快捷键时，同步更新快捷键帮助弹窗，并在 `src/test/features/reader/ReaderLayout.test.tsx` 覆盖至少一个正向触发和一个弹窗/输入焦点保护场景。
 - 文章视图相关契约先看 `src/features/articles/components/ArticleView.tsx`、`src/features/articles/hooks/useStreamingAiSummary.ts`、`src/features/articles/hooks/useImmersiveTranslation.ts`
 - 正文图片下载时在图片区域显示带持续扫光和明暗呼吸的图片轮廓骨架，不显示居中的加载文字；中文加载状态仅供读屏读取，有原始尺寸时按比例占位。自动重试期间保持加载反馈，重试耗尽后显示失败提示，成功后恢复原图布局。缓存命中的成功图片不显示骨架，无图模式手动加载也遵守此契约；保留 picture 候选、链接和键盘预览能力，并尊重减少动态效果偏好。回归覆盖 `articleImageRetry.test.ts` 与 `ArticleView.imagePreview.test.tsx`。
+- 图片加载占位使用独立的中性灰主题 token：浅色为浅灰、暗色为深灰，避免继承主色或带色相的 muted/border。响应式图片重试须同步更新 `picture source[srcset]` 中实际选中的失败地址，保留其余候选、描述符与 media/type；真实浏览器请求中的 `_retry` 必须逐次递增，且不改变签名覆盖的参数。
 - 设置保存逻辑先看 `src/features/settings/hooks/useSettingsAutosave.ts`
 - 通用设置的 `noImageMode` 默认关闭并按用户持久化。开启后原文、全文及翻译正文的图片仅显示紧凑占位；必须在翻译、加粗、高亮等正文 HTML 处理之前将图片及响应式候选转为惰性内容，避免占位出现前已发起请求。点击、Enter 或空格只加载目标图片，首次操作不触发外层链接或大图预览；加载后恢复原有预览、链接和失败重试行为。回归覆盖 `ArticleView.imagePreview.test.tsx`、`ArticleView.aiTranslate.test.tsx`、设置中心和设置 API 测试。
 - 设置中心自动保存失败时保留当前草稿及上次成功保存的设置；密钥草稿只保留在内存，不写入 localStorage。关闭前明确提示放弃未保存草稿，用户选择继续编辑时保留内容。

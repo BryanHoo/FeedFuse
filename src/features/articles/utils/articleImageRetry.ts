@@ -34,10 +34,26 @@ export function setupArticleImageRetries(container: HTMLElement): () => void {
       timers.delete(image);
       if (!container.contains(image)) return;
       attempts.set(image, attempt + 1);
+      const retrySource = getRetrySource(source, attempt + 1);
+      const selectedSource = new URL(source, window.location.href).href;
+      // picture 的 source 比 img.src 优先，必须同步替换已选候选，否则缓存区分参数不会生效。
+      // 仅改写当前失败地址，保留其他候选、尺寸描述符及 media/type，供浏览器继续响应式选择。
+      for (const candidate of image.closest('picture')?.querySelectorAll('source[srcset]') ?? []) {
+        const srcset = candidate.getAttribute('srcset')!;
+        const retried = srcset.replace(/(^|,\s*)([^\s,]+)/g, (entry, prefix: string, url: string) => {
+          try {
+            return new URL(url, window.location.href).href === selectedSource ? `${prefix}${retrySource}` : entry;
+          } catch {
+            // 非法候选交由浏览器忽略，不能让单个错误地址中断图片重试。
+            return entry;
+          }
+        });
+        if (retried !== srcset) candidate.setAttribute('srcset', retried);
+      }
       // srcset 优先级高于 src；失败后使用浏览器已选中的地址，避免重试一直命中旧候选。
       image.removeAttribute('srcset');
       image.removeAttribute('src');
-      image.setAttribute('src', getRetrySource(source, attempt + 1));
+      image.setAttribute('src', retrySource);
     }, RETRY_DELAYS_MS[attempt]);
     timers.set(image, timer);
   };

@@ -14,7 +14,8 @@
   overflow: hidden;
   vertical-align: middle;
   border-radius: 0.5rem;
-  background: color-mix(in oklab, var(--color-muted) 72%, var(--color-border));
+  /* 使用独立中性灰 token，避免主题中的蓝紫色调染到大面积图片占位。 */
+  background: var(--color-image-placeholder);
 }
 
 .article-image-loading[style*="aspect-ratio"] {
@@ -135,6 +136,7 @@
 
     --color-muted: hsl(210 36% 96%);
     --color-muted-foreground: hsl(215 16% 47%);
+    --color-image-placeholder: hsl(0 0% 94%);
 
     --color-accent: hsl(214 100% 96%);
     --color-accent-foreground: hsl(222 47% 16%);
@@ -222,6 +224,7 @@
 
     --color-muted: hsl(240 8% 12%);
     --color-muted-foreground: hsl(226 8% 58%);
+    --color-image-placeholder: hsl(0 0% 15%);
 
     --color-accent: hsl(239 12% 16%);
     --color-accent-foreground: hsl(240 14% 95%);

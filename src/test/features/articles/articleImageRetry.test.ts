@@ -141,4 +141,30 @@ describe('setupArticleImageRetries', () => {
 
     expect(new URL(image.src).searchParams.get('_retry')).toBe('1');
   });
+
+  it('retries the selected picture candidate while preserving other candidates and descriptors', () => {
+    cleanup();
+    const selected = '/api/media/image?url=https%3A%2F%2Fexample.com%2Fwide.jpg&sig=signed';
+    root.innerHTML = `<picture><source media="(min-width: 800px)" srcset="/small.jpg 640w, ${selected} 1280w"><source media="(max-width: 799px)" srcset="/mobile.jpg"><img src="/fallback.jpg" alt="响应式图片"></picture>`;
+    const image = root.querySelector('img')!;
+    const sources = root.querySelectorAll('source');
+    let currentSrc = new URL(selected, window.location.href).href;
+    Object.defineProperty(image, 'currentSrc', { configurable: true, get: () => currentSrc });
+    cleanup = setupArticleImageRetries(root);
+
+    for (const [index, delay] of [1000, 2000, 4000].entries()) {
+      image.dispatchEvent(new Event('error'));
+      vi.advanceTimersByTime(delay);
+      const retrySource = image.getAttribute('src')!;
+      expect(new URL(image.src).searchParams.get('_retry')).toBe(String(index + 1));
+      expect(sources[0].getAttribute('srcset')).toBe(`/small.jpg 640w, ${retrySource} 1280w`);
+      expect(sources[0]).toHaveAttribute('media', '(min-width: 800px)');
+      expect(sources[1]).toHaveAttribute('srcset', '/mobile.jpg');
+      currentSrc = image.src;
+    }
+
+    image.dispatchEvent(new Event('load'));
+    expect(root.querySelector('[data-article-image-loading]')).toBeNull();
+    expect(root.querySelector('picture source')).toBe(sources[0]);
+  });
 });
