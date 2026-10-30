@@ -167,7 +167,9 @@ pnpm test:unit src/test/server/db/pool.test.ts
 
 Vitest 配置见 [vitest.config.ts](../config/vitest/vitest.config.ts)，包含 `node` 和 `jsdom` 两个测试项目。真实数据库集成测试需要进程环境中的 `DATABASE_URL`；未设置时会跳过这部分测试。需要执行时使用独立测试数据库，并先阅读 [集成测试](../src/test/server/repositories/repositories.integration.test.ts) 的数据准备与清理逻辑。
 
-发布 `0.5.0` 时，还需关注 RSS 入库与过滤补偿、AI 摘要会话、刷新运行汇总及 Fever 批量已读的数据库集成测试。先向独立测试库应用全部迁移，再执行测试；部分测试使用随机 schema 隔离，但基础仓储测试会操作默认 schema，不能指向正在使用的实例数据库。未执行真实数据库测试时，应在发布验证记录中说明跳过范围。
+发布时，还需关注 RSS 入库与过滤补偿、AI 摘要会话、刷新运行汇总及 Fever 批量已读的数据库集成测试。先向独立测试库应用全部迁移，再执行测试；部分测试使用随机 schema 隔离，但基础仓储测试会操作默认 schema，不能指向正在使用的实例数据库。未执行真实数据库测试时，应在发布验证记录中说明跳过范围。
+
+`0.6.0` 的图片回归重点包括：无图片模式在点击前不请求 `img/srcset/picture` 资源、原文与翻译视图的逐张加载、1/2/4 秒退避重试、加载骨架与最终失败状态、切换文章时的清理，以及代理断流和取消传播。相关测试集中在 `src/test/features/articles`、`src/test/features/settings`、`src/test/server/http` 和 `src/test/app/api/media/image`；真实浏览器中的资源请求、焦点和布局仍需人工联调确认。
 
 本地联调健康探测时，Web 与 Worker 必须连接同一数据库，且已应用 `0038_worker_heartbeats.sql` 和 `0039_fever_batch_read.sql`。`GET /api/health` 仅在数据库可用且至少一个 Worker 心跳有效时返回 200；只运行 Web 会返回 503。Worker 初始化完成后每 15 秒更新心跳，超过 60 秒未更新即失活。
 

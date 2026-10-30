@@ -4,7 +4,7 @@
 
 如果你是要本地改代码或调试实现，请改看 [开发指南](./development.md)。
 
-当前版本为 [`v0.5.0`](https://github.com/BryanHoo/FeedFuse/releases/tag/v0.5.0)，支持 `linux/amd64` 与 `linux/arm64`。Release 提供 `compose.yaml`、`.env.example` 和 `feedfuse-deploy-0.5.0.tar.gz` 部署附件。
+当前版本为 [`v0.6.0`](https://github.com/BryanHoo/FeedFuse/releases/tag/v0.6.0)，支持 `linux/amd64` 与 `linux/arm64`。Release 提供 `compose.yaml`、`.env.example` 和 `feedfuse-deploy-0.6.0.tar.gz` 部署附件。
 
 ## 推荐方式
 
@@ -158,20 +158,22 @@ docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB"' 
 
 如需从宿主机连接数据库，应另行配置仅绑定 `127.0.0.1` 的端口；本地源码开发可使用 [开发指南](./development.md#2-准备-postgresql) 中的覆盖文件。
 
-从 `0.4.4` 或更早版本升级到 `0.5.0` 时，还需按新版发布文件合并以下配置：
+从 `0.4.4` 或更早版本升级时，还需合并自 `0.5.0` 起的以下配置：
 
 - Worker 的 `healthcheck`：运行 `src/worker/healthcheck.ts`，检查本容器实例的数据库心跳。
 - Worker 的 `stop_grace_period: 75s`：为在途任务和连接清理预留退出时间。
 - Web 的 `AUTH_TRUST_PROXY: ${AUTH_TRUST_PROXY:-false}` 环境变量映射：默认保持 `false`；只有满足前述可信代理条件时才在 `.env` 中启用。
 
-本版新增 `0038_worker_heartbeats.sql` 与 `0039_fever_batch_read.sql` 迁移，分别保存 Worker 心跳和 Fever 批量已读任务；Compose 启动时自动执行。请同时升级 Web 与 Worker，避免新健康接口因旧 Worker 不上报心跳而持续返回 503。
+`0.5.0` 新增的 `0038_worker_heartbeats.sql` 与 `0039_fever_batch_read.sql` 迁移分别保存 Worker 心跳和 Fever 批量已读任务；Compose 启动时自动执行。请同时升级 Web 与 Worker，避免新健康接口因旧 Worker 不上报心跳而持续返回 503。
+
+从 `0.5.0` 升级到 `0.6.0` 没有新增数据库迁移或环境变量，保留现有配置即可。新增的 `无图片模式` 默认关闭，由各用户在 `设置中心 -> 通用` 中按需开启，详见 [正文图片与按需加载](./user-guide.md#11-正文图片与按需加载)。
 
 如果需要固定版本，把 `compose.yaml` 中两个镜像同时改为同一个已发布版本：
 
-- `ghcr.io/bryanhoo/feedfuse-web:0.5.0`
-- `ghcr.io/bryanhoo/feedfuse-worker:0.5.0`
+- `ghcr.io/bryanhoo/feedfuse-web:0.6.0`
+- `ghcr.io/bryanhoo/feedfuse-worker:0.6.0`
 
-默认的 `latest` 通道会跟随正式版本更新；固定版本时两个镜像都使用不带 `v` 的 `0.5.0` 标签。升级会自动应用数据库迁移；仅换回旧镜像不会撤销迁移，回退时需要同时评估数据库备份恢复。
+默认的 `latest` 通道会跟随正式版本更新；固定版本时两个镜像都使用不带 `v` 的 `0.6.0` 标签。升级会自动应用数据库迁移；仅换回旧镜像不会撤销迁移，回退时需要同时评估数据库备份恢复。
 
 完成配置修改后，拉取镜像并重建服务：
 
@@ -181,6 +183,8 @@ docker compose up -d
 ```
 
 升级后执行 `docker compose ps`，检查 `db`、`web`、`worker` 状态和日志，并请求 `/api/health` 确认返回 HTTP 200。再确认能够登录、刷新订阅、加载新文章，以及保存设置；使用 Fever 时检查批量已读进度和失败项重试。
+
+升级到 `0.6.0` 后，再检查正文图片自动加载、无图片模式逐张加载，以及失败重试的状态反馈。
 
 从旧版本升级到多用户版本后，原有单用户数据会归属到初始用户。升级完成后先使用原 `admin` 登录，再到 `设置中心` -> `账号与安全` 检查账号资料。
 
@@ -220,6 +224,9 @@ Worker 启动时及每小时会按用户清理流事件：成功或失败超过 
 | Fever 批量已读出现失败项 | 在右下角查看失败原因，检查远端账号、网络与 Worker 状态，任务结束后点击 `重试失败项` |
 | fake-ip 或内网 RSS 抓取失败 | 检查前述 `RSS_NETWORK_MODE` 与 `RSS_ALLOWED_CIDRS`，并确认容器能访问目标地址 |
 | 提示源站返回安全验证页面 | 系统已尝试符合条件的 `www` / 裸域变体；仍受阻时稍后重试或使用源站提供的其他订阅地址，调整 `RSS_NETWORK_MODE` 无法解除源站验证 |
+| 正文图片持续显示加载失败 | 查看 `docker compose logs --tail=100 web` 中的 `[media.image.fetch_failed]`，结合 `phase`、`code`、`timedOut`、`durationMs` 和 `connectionAttempts` 判断连接、下载或超时问题；核对容器网络、源站状态与 RSS 网络访问配置 |
+
+图片失败日志中的 `source` 不包含源地址的查询参数，便于避免将签名或访问令牌写入日志。图片代理沿用部署级 RSS 网络访问策略；正文的自动重试不会绕过该策略。
 
 `docker compose stop` 可停止服务；`docker compose down` 会移除容器和网络，但保留数据库卷。`docker compose down -v` 会删除数据库卷及其中的数据，不要用于普通升级。
 

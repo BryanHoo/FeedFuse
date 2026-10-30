@@ -66,7 +66,7 @@ FeedFuse 不替你决定看什么。订阅源由你决定，阅读节奏由你�
 
 ## 快速开始
 
-当前版本：[`v0.5.0`](https://github.com/BryanHoo/FeedFuse/releases/tag/v0.5.0)。本版新增文章更新提示、设置保存失败重试和 Fever 批量已读进度，并强化登录保护与后台任务可靠性。完整变更见 [更新日志](./CHANGELOG.md#050---2026-10-15)，已有部署请先查看 [升级说明](./docs/deploy.md#7-升级)。
+当前版本：[`v0.6.0`](https://github.com/BryanHoo/FeedFuse/releases/tag/v0.6.0)。本版新增正文图片按需加载、加载骨架与自动重试，修复响应式图片重试和媒体代理断流处理，并支持正文中的加粗标记。完整变更见 [更新日志](./CHANGELOG.md#060---2026-10-30)，已有部署请先查看 [升级说明](./docs/deploy.md#7-升级)。
 
 1. 按 [部署指南](./docs/deploy.md) 启动服务
 2. 使用 `admin` 和 `.env` 里的 `AUTH_INITIAL_PASSWORD` 首次登录

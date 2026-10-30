@@ -74,3 +74,27 @@
 - `pnpm test:unit`：246 个测试文件通过，1497 项测试通过；未配置独立测试数据库，7 个文件中的 28 项数据库集成测试跳过，涉及基础仓储、AI 流事件清理、Worker 心跳迁移、RSS 可靠性、摘要会话、刷新汇总和 Fever 批量已读。
 
 这次复查仅确认当前生产依赖的审计结果和上述本地检查，不扩大前述安全结论的适用范围，也不代表已验证真实数据库迁移、线上配置或容器系统库。
+
+## 0.6.0 发布前复查
+
+2026-10-30 使用 Node.js `24.19.0` 和 pnpm `10.30.3` 重新审计旧锁文件，发现 14 项告警：2 critical、6 high、5 moderate、1 low。本次针对受影响的依赖更新，未添加审计忽略项或强制版本覆盖。
+
+| 依赖 | 更新前 | 更新后 | 依据 |
+| --- | --- | --- | --- |
+| `next` | `16.3.8` | `16.4.1` | [图片优化接口公告](https://github.com/advisories/GHSA-2464-fhr4-w9xw)、[Cache Components 公告](https://github.com/advisories/GHSA-673q-mjm6-r5xr) 和 [Server Actions 公告](https://github.com/advisories/GHSA-p3m5-59mp-jv5r) |
+| `zod` | `4.3.6` | `4.6.6` | [大集合校验内存消耗公告](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5) |
+| `sanitize-html` | `2.18.0` | `2.18.1` | [丢弃 iframe 后重新清洗导致递归溢出公告](https://github.com/advisories/GHSA-c9rx-x947-fp3h) |
+| `jsdom > undici` | `7.30.0` | `7.30.1` | [上游修复版本](https://github.com/nodejs/undici/releases/tag/v7.30.1) |
+
+Next.js 图片优化公告的 glibc 前提不符合仓库默认 Alpine 镜像，项目也未启用 Cache Components；这些条件仅用于判断当前部署路径，不能替代框架更新。HTML 清洗器和 Zod 实际处理外部内容或 API 输入，因此一并升级修复版本。jsdom 仍仅用于解析，不启用外部资源和脚本执行。
+
+旧锁文件中的低危告警来自 `sanitize-html > deepmerge`，[公告](https://github.com/advisories/GHSA-gcqx-w48m-w2h4) 暂无修复版本；新版 sanitize-html 已不依赖 deepmerge，因此通过更新清洗器移除这条依赖链。
+
+发布前验证：
+
+- `pnpm install --frozen-lockfile`：通过。
+- `pnpm audit --prod`：无已知漏洞。
+- `pnpm lint`、`pnpm type-check`、`pnpm build`：通过，生成 standalone 产物，产物版本与 `0.6.0` 一致。
+- `pnpm test:unit --maxWorkers=4`：249 个测试文件通过，1534 项测试通过；未配置独立测试数据库，7 个文件中的 28 项数据库集成测试跳过。
+
+复核范围限于当前仓库代码、锁文件及本地验证，不代表已验证真实数据库迁移、浏览器视觉交互、线上配置或镜像内全部系统库。
