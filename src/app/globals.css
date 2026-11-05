@@ -119,6 +119,9 @@
 
 @layer theme {
   @theme default {
+    /* 统一页面与 font-sans 正文的默认字体，直接使用当前操作系统的界面字体。 */
+    --font-sans: system-ui;
+
     --color-background: hsl(210 20% 98%);
     --color-foreground: hsl(222 47% 11%);
 

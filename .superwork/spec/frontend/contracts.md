@@ -8,6 +8,7 @@
 
 ## 状态与交互
 
+- 全局默认字体为 `system-ui`，通过 `src/app/globals.css` 的 `--font-sans` 统一页面及默认无衬线正文；显式选择的衬线正文和代码等宽字体保持独立。
 - 阅读器级交互先看 `src/app/(reader)/ReaderApp.tsx` 与 `src/features/reader/**`
 - 全局 reader 快捷键归 `src/features/reader/components/ReaderLayout.tsx` 管理；快捷键必须忽略输入框、`contenteditable`、`select` 和已打开的非快捷键弹窗，文章内动作可通过显式 reader command 交给 `ArticleView` 执行。
 - 新增或调整 reader 快捷键时，同步更新快捷键帮助弹窗，并在 `src/test/features/reader/ReaderLayout.test.tsx` 覆盖至少一个正向触发和一个弹窗/输入焦点保护场景。
