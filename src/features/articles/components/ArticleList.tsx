@@ -705,6 +705,28 @@ export default function ArticleList({
     [maybeLoadMore],
   );
 
+  const handleLoadNewArticles = async () => {
+    const container = scrollContainerRef.current;
+    await loadSnapshot({ view: selectedView, preserveArticles: true });
+
+    const state = useAppStore.getState();
+    // 失败时提示仍然保留；切换视图或卸载后也不能让旧请求改变当前列表的位置。
+    if (
+      !container ||
+      scrollContainerRef.current !== container ||
+      state.selectedView !== selectedView ||
+      state.newArticlesAvailable ||
+      state.newArticlesLoading ||
+      state.snapshotLoading
+    ) {
+      return;
+    }
+
+    // 成功合并后同时重置真实滚动位置和虚拟窗口，使顶部的新文章立即可见。
+    container.scrollTop = 0;
+    setScrollTop(0);
+  };
+
   const renderLoadMoreFooter = () => {
     if (articleListLoadingMore) {
       return (
@@ -1226,7 +1248,7 @@ export default function ArticleList({
               className="pointer-events-auto rounded-full shadow-sm"
               aria-label={newArticlesLoading ? "正在加载新文章" : "有新文章，点击加载"}
               disabled={newArticlesLoading}
-              onClick={() => { void loadSnapshot({ view: selectedView, preserveArticles: true }); }}
+              onClick={() => { void handleLoadNewArticles(); }}
             >
               <RefreshCw className={cn("h-3.5 w-3.5", newArticlesLoading && "animate-spin")} />
               {newArticlesLoading ? "正在加载…" : "有新文章"}

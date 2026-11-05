@@ -608,7 +608,7 @@ describe('ArticleList', () => {
     expectLoadMoreFooterCentered(hint.parentElement as HTMLElement);
   });
 
-  it('shows new articles without moving the list and loads them only on click', async () => {
+  it('keeps the list still until new articles are loaded on click, then returns to the top', async () => {
     useAppStore.setState({
       selectedView: 'feed-1',
       showUnreadOnly: false,
@@ -622,10 +622,15 @@ describe('ArticleList', () => {
     Object.defineProperty(scrollContainer, 'scrollHeight', { configurable: true, value: 12000 });
     scrollContainer.scrollTop = 1600;
     fireEvent.scroll(scrollContainer);
+    let finishLoading!: () => void;
+    const pendingLoad = new Promise<void>((resolve) => { finishLoading = resolve; });
     const loadSnapshot = vi.spyOn(useAppStore.getState(), 'loadSnapshot').mockImplementation(async () => {
+      useAppStore.setState({ newArticlesLoading: true });
+      await pendingLoad;
       useAppStore.setState(state => ({
         articles: [{ ...state.articles[0], id: 'new-article', title: '新文章', publishedAt: '2026-03-01T00:00:00.000Z' }, ...state.articles],
         newArticlesAvailable: false,
+        newArticlesLoading: false,
       }));
     });
 
@@ -634,11 +639,49 @@ describe('ArticleList', () => {
     expect(scrollContainer.scrollTop).toBe(1600);
     expect(loadSnapshot).not.toHaveBeenCalled();
     fireEvent.click(button);
+    expect(scrollContainer.scrollTop).toBe(1600);
+    expect(screen.getByRole('button', { name: '正在加载新文章' })).toBeDisabled();
+    await act(async () => { finishLoading(); });
 
-    await waitFor(() => { expect(scrollContainer.scrollTop).toBeGreaterThan(1600); });
+    await waitFor(() => { expect(scrollContainer.scrollTop).toBe(0); });
+    expect(screen.getByRole('button', { name: /新文章，/ })).toBeInTheDocument();
     expect(loadSnapshot).toHaveBeenCalledWith({ view: 'feed-1', preserveArticles: true });
     expect(useAppStore.getState().selectedArticleId).toBe('article-30');
     expect(screen.queryByRole('button', { name: '有新文章，点击加载' })).not.toBeInTheDocument();
+  });
+
+  it.each(['failure', 'view-change'] as const)('does not reset scrolling after a new-article load with %s', async (outcome) => {
+    let finishLoading!: () => void;
+    const pendingLoad = new Promise<void>((resolve) => { finishLoading = resolve; });
+    const loadSnapshot = vi.spyOn(useAppStore.getState(), 'loadSnapshot').mockImplementation(async () => {
+      await pendingLoad;
+    });
+    useAppStore.setState({
+      selectedView: 'feed-1',
+      showUnreadOnly: false,
+      articles: createSeedArticles(80),
+      newArticlesAvailable: true,
+    });
+    const { container } = renderWithNotifications();
+    const scrollContainer = getScrollContainer(container);
+    scrollContainer.scrollTop = 1600;
+    fireEvent.scroll(scrollContainer);
+
+    fireEvent.click(screen.getByRole('button', { name: '有新文章，点击加载' }));
+    expect(loadSnapshot).toHaveBeenCalledWith({ view: 'feed-1', preserveArticles: true });
+
+    if (outcome === 'view-change') {
+      act(() => { useAppStore.setState({ selectedView: 'all', newArticlesAvailable: false }); });
+      // 模拟用户已在新视图滚动，旧请求完成时不得覆盖这个位置。
+      scrollContainer.scrollTop = 800;
+      fireEvent.scroll(scrollContainer);
+    }
+    await act(async () => { finishLoading(); });
+
+    expect(scrollContainer.scrollTop).toBe(outcome === 'failure' ? 1600 : 800);
+    if (outcome === 'failure') {
+      expect(screen.getByRole('button', { name: '有新文章，点击加载' })).toBeEnabled();
+    }
   });
 
   it('keeps viewport stable when refreshed data prepends newer articles', async () => {
