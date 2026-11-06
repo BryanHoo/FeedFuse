@@ -10,6 +10,7 @@
 
 - 全局默认字体为 `system-ui`，通过 `src/app/globals.css` 的 `--font-sans` 统一页面及默认无衬线正文；显式选择的衬线正文和代码等宽字体保持独立。
 - 阅读器级交互先看 `src/app/(reader)/ReaderApp.tsx` 与 `src/features/reader/**`
+- 全局搜索更换关键词时立即移除旧结果，避免用新关键词打开旧命中；旧请求完成不能影响新一轮防抖的取消。选择文章时同步抛错和异步失败都必须显示错误并恢复可选择状态。回归覆盖 `src/test/features/reader/GlobalSearchDialog.test.tsx`。
 - 全局 reader 快捷键归 `src/features/reader/components/ReaderLayout.tsx` 管理；快捷键必须忽略输入框、`contenteditable`、`select` 和已打开的非快捷键弹窗，文章内动作可通过显式 reader command 交给 `ArticleView` 执行。
 - 新增或调整 reader 快捷键时，同步更新快捷键帮助弹窗，并在 `src/test/features/reader/ReaderLayout.test.tsx` 覆盖至少一个正向触发和一个弹窗/输入焦点保护场景。
 - 文章视图相关契约先看 `src/features/articles/components/ArticleView.tsx`、`src/features/articles/hooks/useStreamingAiSummary.ts`、`src/features/articles/hooks/useImmersiveTranslation.ts`

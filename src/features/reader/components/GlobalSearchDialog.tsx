@@ -110,9 +110,13 @@ export default function GlobalSearchDialog({
     const requestId = requestSequenceRef.current + 1;
     requestSequenceRef.current = requestId;
     setLoading(true);
+    // 输入已变化，旧结果不能继续用新关键词高亮或触发文章定位。
+    setResults([]);
     setErrorMessage(null);
 
     searchTimerRef.current = window.setTimeout(() => {
+      // 计时器触发后立即释放引用；请求完成时不能清除下一轮防抖的引用。
+      searchTimerRef.current = null;
       void searchArticles(
         { keyword: normalizedQuery, limit: SEARCH_RESULT_LIMIT },
         { notifyOnError: false },
@@ -133,11 +137,6 @@ export default function GlobalSearchDialog({
           setResults([]);
           setLoading(false);
           setErrorMessage('搜索失败，请稍后重试');
-        })
-        .finally(() => {
-          if (searchTimerRef.current !== null) {
-            searchTimerRef.current = null;
-          }
         });
     }, SEARCH_DEBOUNCE_MS);
   };
@@ -215,7 +214,9 @@ export default function GlobalSearchDialog({
                       onClick={() => {
                         setSelectingArticleId(result.id);
                         setErrorMessage(null);
-                        Promise.resolve(onSelectResult(result, trimmedQuery))
+                        // 将回调放进 Promise 链，同时捕获同步抛错和异步拒绝，确保恢复选择状态。
+                        Promise.resolve()
+                          .then(() => onSelectResult(result, trimmedQuery))
                           .then(() => {
                             onOpenChange(false);
                           })
