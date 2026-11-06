@@ -171,6 +171,8 @@ Vitest 配置见 [vitest.config.ts](../config/vitest/vitest.config.ts)，包含 
 
 `0.6.0` 的图片回归重点包括：无图片模式在点击前不请求 `img/srcset/picture` 资源、原文与翻译视图的逐张加载、1/2/4 秒退避重试、加载骨架与最终失败状态、切换文章时的清理，以及代理断流和取消传播。相关测试集中在 `src/test/features/articles`、`src/test/features/settings`、`src/test/server/http` 和 `src/test/app/api/media/image`；真实浏览器中的资源请求、焦点和布局仍需人工联调确认。
 
+`0.6.1` 的阅读器回归重点包括：点击 `有新文章` 成功后列表和虚拟窗口回到顶部，等待、失败、切换视图或卸载时不重置；全局搜索更换关键词后清空旧命中，旧请求不干扰新一轮防抖，文章选择的同步异常和异步失败均能恢复可选择状态。对应测试见 `src/test/features/articles/ArticleList.test.tsx` 和 `src/test/features/reader/GlobalSearchDialog.test.tsx`。默认无衬线字体由 `src/app/globals.css` 中的 `--font-sans: system-ui` 统一；真实浏览器中的滚动、焦点和字体显示仍需联调确认。
+
 本地联调健康探测时，Web 与 Worker 必须连接同一数据库，且已应用 `0038_worker_heartbeats.sql` 和 `0039_fever_batch_read.sql`。`GET /api/health` 仅在数据库可用且至少一个 Worker 心跳有效时返回 200；只运行 Web 会返回 503。Worker 初始化完成后每 15 秒更新心跳，超过 60 秒未更新即失活。
 
 项目长期规范见 [仓库地图](../.superwork/spec/guides/repo-map.md) 和 [验证策略](../.superwork/spec/guides/verification.md)。

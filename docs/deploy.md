@@ -4,7 +4,7 @@
 
 如果你是要本地改代码或调试实现，请改看 [开发指南](./development.md)。
 
-当前版本为 [`v0.6.0`](https://github.com/BryanHoo/FeedFuse/releases/tag/v0.6.0)，支持 `linux/amd64` 与 `linux/arm64`。Release 提供 `compose.yaml`、`.env.example` 和 `feedfuse-deploy-0.6.0.tar.gz` 部署附件。
+当前版本为 [`v0.6.1`](https://github.com/BryanHoo/FeedFuse/releases/tag/v0.6.1)，支持 `linux/amd64` 与 `linux/arm64`。Release 提供 `compose.yaml`、`.env.example` 和 `feedfuse-deploy-0.6.1.tar.gz` 部署附件。
 
 ## 推荐方式
 
@@ -168,12 +168,14 @@ docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB"' 
 
 从 `0.5.0` 升级到 `0.6.0` 没有新增数据库迁移或环境变量，保留现有配置即可。新增的 `无图片模式` 默认关闭，由各用户在 `设置中心 -> 通用` 中按需开启，详见 [正文图片与按需加载](./user-guide.md#11-正文图片与按需加载)。
 
+从 `0.6.0` 升级到 `0.6.1` 没有新增数据库迁移、依赖或环境变量。Web 与 Worker 同时升级到 `0.6.1`，保留现有配置；升级后点击 `有新文章` 加载成功会将文章列表回到顶部，当前选中文章仍保留。
+
 如果需要固定版本，把 `compose.yaml` 中两个镜像同时改为同一个已发布版本：
 
-- `ghcr.io/bryanhoo/feedfuse-web:0.6.0`
-- `ghcr.io/bryanhoo/feedfuse-worker:0.6.0`
+- `ghcr.io/bryanhoo/feedfuse-web:0.6.1`
+- `ghcr.io/bryanhoo/feedfuse-worker:0.6.1`
 
-默认的 `latest` 通道会跟随正式版本更新；固定版本时两个镜像都使用不带 `v` 的 `0.6.0` 标签。升级会自动应用数据库迁移；仅换回旧镜像不会撤销迁移，回退时需要同时评估数据库备份恢复。
+默认的 `latest` 通道会跟随正式版本更新；固定版本时两个镜像都使用不带 `v` 的 `0.6.1` 标签。升级会自动应用数据库迁移；仅换回旧镜像不会撤销迁移，回退时需要同时评估数据库备份恢复。
 
 完成配置修改后，拉取镜像并重建服务：
 
